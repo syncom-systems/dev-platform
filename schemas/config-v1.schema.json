@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/matssun/dev-platform/schemas/config-v1.schema.json",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/config-v1.schema.json",
   "title": "dev-platform.toml (schema_version 1)",
   "description": "Informational mirror for editors. The authoritative validator is dev_platform.config.parse, which also enforces cross-field semantics (docs/verification-model.md).",
   "type": "object",

@@ -87,3 +87,10 @@ run may consume it with `--previous` to carry evidence ([model](verification-mod
 - No cross-run evidence persistence service: `--previous` consumes a result file the caller stores.
 - Open: bootstrapping rule for releasing the platform itself; whether `periodic` needs a scheduler
   contract; how Bazel graph queries plug in as an impact provider (see investigation).
+
+## Infra contract conformance
+`contracts/infra/v1/` is the public conformance kit for `dev-platform.infra/v1`: valid and invalid profiles plus
+fail-closed routing cases, run by `tests/test_infra_contract.py` against `runners.validate_profile`. A private
+provider can run the same kit against its own generator without the platform reading anything private. The
+platform rejects (not ignores) unknown keys, duplicate runner ids, unknown os/arch/isolation/trust values, and
+credentials offered by a `public` runner.

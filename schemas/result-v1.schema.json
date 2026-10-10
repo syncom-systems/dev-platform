@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/matssun/dev-platform/schemas/result-v1.schema.json",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/result-v1.schema.json",
   "title": "dev-platform.result/v1",
   "type": "object",
   "additionalProperties": false,
