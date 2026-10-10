@@ -23,6 +23,19 @@ Supersedes the definition of "release" in [ADR 0002](0002-immutable-versions-and
   platform; their *declarations* in the consumer (e.g. `.bazelversion`) are reconciled against the
   manifest. Competing compiler paths are not introduced.
 
+## Identity strength (ratified)
+Version-prefix and version-only probes are **diagnostics**. They never establish exact executable
+identity and cannot satisfy release certification. A tool's identity is one of `none`,
+`version-only`, `bazel-declared` (weak) or `digest-verified`, `bazel-locked` (certifiable). It is
+assigned only by the check that actually ran (never by the manifest), failures assign `none`, and
+`environment.assurance` is `certifiable` only if every tool is conformant *and* strong; otherwise
+`diagnostic`, and certification is blocked with the weak tools named.
+- `digest-verified`: the resolved executable's sha256 equals the manifest digest for this platform.
+- `bazel-locked`: for a Bazel-managed tool, the declared version matches **and** every pinned
+  `integrity` input (e.g. a toolchain archive sha256) appears in the consumer's declaration with the
+  release's pinned value **and** in the consumer's resolved graph (lock file). Host executables are
+  never consulted for these tools.
+
 ## Consequences
 Tool identity is only as strong as the probe: `version-only` is weaker than `digest-verified`; results
 say which one applied. Hermetic Bazel toolchain digests (module lock files) are a planned

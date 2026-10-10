@@ -52,6 +52,12 @@ def validate(doc: dict) -> dict:
                     errs.append(f"{w}: bazel_managed tools need declared_in {{file, pattern}}")
                 elif re.compile(d["pattern"]).groups < 1:
                     errs.append(f"{w}.declared_in.pattern needs a capture group")
+                for j, ent in enumerate(t.get("integrity", [])):
+                    ok = all(ent.get(k) for k in ("name", "file", "pattern", "sha256"))
+                    if not ok or not re.fullmatch(r"[0-9a-f]{64}", str(ent.get("sha256", ""))):
+                        errs.append(f"{w}.integrity[{j}]: name, file, pattern, sha256(64 hex) required")
+                    elif re.compile(ent["pattern"]).groups < 1:
+                        errs.append(f"{w}.integrity[{j}].pattern needs a capture group")
             else:
                 p = t.get("probe") or {}
                 if not (p.get("argv") and p.get("pattern")):
@@ -66,6 +72,12 @@ def validate(doc: dict) -> dict:
     if errs:
         raise ConfigError([f"toolchain manifest: {e}" for e in errs])
     return doc
+
+
+# What the verification actually established, weakest to strongest. A tool's strength is assigned
+# only by the code path that performed the corresponding check; it is never read from the manifest.
+STRENGTH = {"none": 0, "version-only": 1, "bazel-declared": 1, "digest-verified": 2, "bazel-locked": 2}
+CERTIFIABLE_STRENGTH = 2
 
 
 def default_probe(argv: list[str]) -> tuple[int, str]:
@@ -97,6 +109,25 @@ def _expected_sha(spec: dict) -> str | None:
     return sha
 
 
+def _check_integrity(ent: dict, root: Path) -> dict:
+    """Pinned toolchain input: the consumer's declaration must carry the pinned sha256, and the
+    consumer's resolved graph (lock file) must contain it too."""
+    proof = {"name": ent["name"], "status": "mismatch"}
+    f = root / ent["file"]
+    m = re.search(ent["pattern"], f.read_text()) if f.is_file() else None
+    if not m or m.group(1) != ent["sha256"]:
+        proof["reason"] = "declared integrity differs from the release's pinned value"
+        return proof
+    lock = ent.get("lock_file")
+    if lock:
+        lf = root / lock
+        if not lf.is_file() or ent["sha256"] not in lf.read_text():
+            proof["reason"] = f"pinned digest not present in resolved graph {lock}"
+            return proof
+    proof["status"] = "ok"
+    return proof
+
+
 def verify_profile(manifest: dict, profile: str, root: Path, probe: Probe = default_probe) -> dict:
     """Return an environment record. conformant only if every required tool is proven."""
     prof = manifest["profiles"].get(profile)
@@ -118,30 +149,46 @@ def verify_profile(manifest: dict, profile: str, root: Path, probe: Probe = defa
         }
         if spec.get("bazel_managed"):
             d = spec["declared_in"]
-            entry["identity"] = "bazel-reconciled"
+            entry["identity"] = "none"
             f = root / d["file"]
             m = re.search(d["pattern"], f.read_text()) if f.is_file() else None
             if not m:
                 entry["status"] = "unreconciled"
             else:
                 entry["observed"] = m.group(1)
-                entry["status"] = "ok" if _version_ok(spec, m.group(1)) else "mismatch"
+                if not _version_ok(spec, m.group(1)):
+                    entry["status"] = "mismatch"
+                else:
+                    entry["identity"] = "bazel-declared"
+                    integ = spec.get("integrity", [])
+                    if integ:
+                        proofs = [_check_integrity(e, root) for e in integ]
+                        entry["integrity"] = proofs
+                        if all(p["status"] == "ok" for p in proofs):
+                            entry["identity"] = "bazel-locked"
+                        else:
+                            entry["status"] = "mismatch"
+                            entry["identity"] = "none"
         else:
             code, out = probe(spec["probe"]["argv"])
             m = re.search(spec["probe"]["pattern"], out) if code == 0 else None
             if not m:
                 entry["status"] = "unavailable"
+                entry["identity"] = "none"
             else:
                 entry["observed"] = m.group(1)
                 if not _version_ok(spec, m.group(1)):
                     entry["status"] = "mismatch"
                 want = _expected_sha(spec)
                 if want:
-                    entry["identity"] = "digest-verified"
-                    if _binary_digest(spec["probe"]["argv"][0]) != want:
+                    if _binary_digest(spec["probe"]["argv"][0]) == want:
+                        entry["identity"] = "digest-verified"
+                    else:
                         entry["status"] = "mismatch"
+                        entry["identity"] = "none"
         tools.append(entry)
     required_ok = all(t["status"] == "ok" for t in tools)
+    weak = [t["name"] for t in tools if STRENGTH[t["identity"]] < CERTIFIABLE_STRENGTH]
     identity = {
         "profile": profile,
         "tools": [{"name": t["name"], "observed": t["observed"], "identity": t["identity"]} for t in tools],
@@ -151,5 +198,8 @@ def verify_profile(manifest: dict, profile: str, root: Path, probe: Probe = defa
         "profile": profile,
         "conformant": required_ok,
         "identity_digest": digest.hexdigest(),
+        # "certifiable" only when every tool was proven conformant by a strong check.
+        "assurance": "certifiable" if required_ok and not weak else "diagnostic",
+        "weak_tools": weak,
         "tools": tools,
     }
