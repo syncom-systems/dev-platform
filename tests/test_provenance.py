@@ -8,7 +8,7 @@ from dev_platform import provenance, records
 from dev_platform.errors import ConfigError
 from tests.helpers import tmpdir
 
-SHA = lambda c: c * 64  # noqa: E731
+SHA = lambda c: c * 64
 
 
 def result(rev="a" * 40, tree=SHA("1"), ident=SHA("2"), **over):
