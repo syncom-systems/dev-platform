@@ -57,3 +57,22 @@ Roots, none of which is the artifact under verification:
 A previously accepted platform release is **continuity evidence** only: it may corroborate that the
 policy and signer are unchanged, but a release is never verified by code that arrives inside it, and no
 single previous release is the sole root.
+
+## Supported scope fails closed; environment evidence is not hermeticity (turn 5)
+- The first stable release supports only combinations that passed real qualification (python, rust-bazel;
+  linux-x86_64 and darwin-arm64; see docs/consumer-compatibility.md). A tool with no pinned closure for the
+  current platform, or a profile outside the manifest, can never yield `assurance = certifiable`; the
+  result is `diagnostic` and certification is blocked, naming the tools. There is no override.
+- Every environment record carries `platform` and `scope = {hermetic: false, limitations: [...]}`, and the
+  result's `certification.limitations` repeats them. The limitations always include that system libraries
+  are trusted by name, not by content, and that host kernel/CPU/filesystem are outside the evidence; for
+  Bazel-managed tools also that the Bazel repository cache, the host C toolchain and fetch-time network are
+  outside the evidence. Nothing in this repository claims a hermetic environment.
+- The build-environment record is attested together with the archive. `tools/verify_release.py
+  --environment` checks it against the release's own manifest (profile, certifiable, non-hermetic
+  statement, every tool `closure-verified` with the digest the manifest pins for the recorded platform,
+  same version, same tool set) and verifies its attestation under the signer policy. Policy key
+  `require_environment_evidence` makes the record mandatory.
+- Publishing reflects the verified state. A stable tag without an effective owner authorization is
+  published as `verified-unaccepted`: a GitHub pre-release titled "NOT accepted", with notes saying so.
+  The workflow never passes authorization records and so can never publish `accepted`.

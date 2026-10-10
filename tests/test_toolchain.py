@@ -516,3 +516,24 @@ class RealBazelIdentityTest(unittest.TestCase):
         f = tmpdir(self) / "x"
         f.write_bytes(b"abc")
         self.assertEqual(C.digest(f)[0], hashlib.sha256(b"abc").hexdigest())
+
+
+class EnvironmentScopeTest(unittest.TestCase):
+    def test_record_states_it_is_not_hermetic_and_names_the_limitations(self):
+        prefix = make_prefix(self)
+        m = closure_manifest(prefix, C.digest(prefix)[0])
+        rec = T.verify_profile(m, "p", tmpdir(self), probe_returning("tool 1.2.3"), lambda p: ["libc.so.6"])
+        self.assertEqual(rec["assurance"], "certifiable")
+        self.assertIs(rec["scope"]["hermetic"], False)
+        text = " ".join(rec["scope"]["limitations"])
+        self.assertIn("trusted by name or prefix, not by content", text)
+        self.assertIn("not byte-level hermetic", text)
+        self.assertEqual(rec["platform"], C.platform_key())
+
+    def test_unsupported_platform_cannot_be_certifiable(self):
+        prefix = make_prefix(self)
+        m = closure_manifest(prefix, C.digest(prefix)[0])
+        m["profiles"]["p"]["tools"]["tool"]["closure"]["sha256"] = {"linux-aarch64": "a" * 64}
+        rec = T.verify_profile(m, "p", tmpdir(self), probe_returning("tool 1.2.3"), lambda p: [])
+        self.assertEqual(rec["assurance"], "diagnostic")
+        self.assertIn("tool", " ".join(rec["scope"]["limitations"]))

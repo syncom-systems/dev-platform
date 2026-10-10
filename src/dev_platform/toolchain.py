@@ -373,6 +373,8 @@ def verify_profile(
     digest = hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode())
     return {
         "profile": profile,
+        "platform": _closure.platform_key(),
+        "scope": scope_for(tools),
         "conformant": required_ok,
         "identity_digest": digest.hexdigest(),
         # "certifiable" only when every tool was proven conformant by a strong check.
@@ -380,6 +382,33 @@ def verify_profile(
         "weak_tools": weak,
         "tools": tools,
     }
+
+
+def scope_for(tools: list[dict]) -> dict:
+    """What the environment evidence does and does not establish. Never claims hermeticity."""
+    lim = [
+        "tool identity is not complete execution-environment identity: the host kernel, CPU, "
+        "filesystem and anything not listed above are not part of the evidence"
+    ]
+    if any(t.get("closure", {}).get("status") == "ok" for t in tools):
+        lim.append(
+            "system libraries named in closure.system_libs are trusted by name or prefix, not by content; "
+            "the environment is not byte-level hermetic"
+        )
+    if any(t["identity"] == "bazel-locked" for t in tools):
+        lim.append(
+            "Bazel-managed toolchains are identified through the pinned Bazel binary digest and the "
+            "resolved module graph; the Bazel repository cache, host C toolchain and network at fetch "
+            "time are outside the evidence"
+        )
+    unverified = sorted(
+        t["name"]
+        for t in tools
+        if t["identity"] in ("none", "version-only", "bazel-declared", "digest-verified")
+    )
+    if unverified:
+        lim.append(f"tools without closure-level identity: {', '.join(unverified)}")
+    return {"hermetic": False, "limitations": lim}
 
 
 def measure(manifest: dict, profile: str, linkage=_closure.default_linkage) -> dict:

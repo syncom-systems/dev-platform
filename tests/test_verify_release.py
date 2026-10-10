@@ -5,6 +5,7 @@ import importlib.util
 import json
 import re
 import unittest
+from pathlib import Path
 
 from dev_platform.digest import tree_digest
 from tests.helpers import ROOT, tmpdir
@@ -15,7 +16,9 @@ V = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(V)
 
 REV = "c" * 40
-POLICY = json.loads((ROOT / "trust" / "policy.json").read_text())
+REAL_POLICY = json.loads((ROOT / "trust" / "policy.json").read_text())
+# Most tests exercise other properties; environment evidence has its own tests below.
+POLICY = {**REAL_POLICY, "require_environment_evidence": False}
 REPO = "syncom-systems/dev-platform"
 
 
@@ -47,7 +50,9 @@ def fake_gh(archive_sha, version, *, code=0, cert=None, predicate=None, subject=
             return code or sbom_code, "", "verification failed"
         stmt = {
             "predicateType": predicate or want,
-            "subject": [{"digest": {"sha256": subject or archive_sha}}],
+            "subject": [
+                {"digest": {"sha256": subject or hashlib.sha256(Path(argv[3]).read_bytes()).hexdigest()}}
+            ],
         }
         if want == V.CYCLONEDX:
             stmt["predicate"] = sbom if sbom is not None else archive_sbom(argv[3])
@@ -79,11 +84,12 @@ def auth(archive_sha, **over):
     return d
 
 
-def build_candidate(test, version, revision=REV):
+def build_candidate(test, version, revision=REV, manifest=None):
     import shutil
 
     from dev_platform import pack, release
-    from tests.test_toolchain import MANIFEST
+
+    MANIFEST = manifest or MANIFEST_PLAIN
 
     out = tmpdir(test)
     test.addCleanup(shutil.rmtree, out, ignore_errors=True)
@@ -102,6 +108,9 @@ def build_candidate(test, version, revision=REV):
     arc = out / "a.tar.gz"
     sha = pack.pack(d, arc)
     return arc, sha
+
+
+from tests.test_toolchain import MANIFEST as MANIFEST_PLAIN  # noqa: E402
 
 
 class VerifierTest(unittest.TestCase):
@@ -330,6 +339,98 @@ class VerifierTest(unittest.TestCase):
         sbom = R.make_sbom("1.0.0", "c" * 64, tc)
         sbom["components"][0]["externalReferences"][0]["hashes"][0]["content"] = "e" * 64
         self.assertTrue(V.sbom_matches_manifest(sbom, tc))
+
+    def env_case(self, **over):
+        """A release whose manifest has one closure-pinned tool, plus a matching environment record."""
+        digest = "d" * 64
+        mf = json.loads(json.dumps(MANIFEST_PLAIN))
+        mf["profiles"]["p"]["tools"]["tool"]["closure"] = {
+            "kind": "file",
+            "sha256": {"linux-x86_64": digest},
+            "system_libs": ["libc.so.6"],
+        }
+        arc, sha = build_candidate(self, "1.0.0-rc.1", manifest=mf)
+        env = {
+            "profile": "p",
+            "platform": "linux-x86_64",
+            "conformant": True,
+            "assurance": "certifiable",
+            "scope": {"hermetic": False, "limitations": ["system libraries trusted by name"]},
+            "tools": [
+                {
+                    "name": "tool",
+                    "identity": "closure-verified",
+                    "observed": "1.2.3",
+                    "closure": {"digest": digest},
+                }
+            ],
+        }
+        env.update(over)
+        f = tmpdir(self) / "env.json"
+        f.write_text(json.dumps(env))
+        return arc, sha, f
+
+    def verify_env(self, arc, sha, env_file, policy=REAL_POLICY):
+        exp = {**self.exp, "archive_sha256": sha}
+        return V.verify(arc, exp, policy, gh=fake_gh(sha, "1.0.0-rc.1"), environment=env_file)
+
+    def test_environment_evidence_must_match_manifest_and_state_its_limits(self):
+        arc, sha, f = self.env_case()
+        doc = self.verify_env(arc, sha, f)
+        self.assertEqual(self.failed(doc), set())
+        self.assertEqual(doc["acceptance"]["state"], "pre-release")
+        ids = [c["id"] for c in doc["checks"]]
+        self.assertIn("environment-evidence", ids)
+        self.assertIn("environment-attestation-matches-policy", ids)
+
+    def test_environment_evidence_failures(self):
+        cases = {
+            "not certifiable": {"assurance": "diagnostic"},
+            "claims hermetic": {"scope": {"hermetic": True, "limitations": ["x"]}},
+            "no limitations": {"scope": {"hermetic": False, "limitations": []}},
+            "unknown profile": {"profile": "other"},
+            "wrong closure": {
+                "tools": [
+                    {
+                        "name": "tool",
+                        "identity": "closure-verified",
+                        "observed": "1.2.3",
+                        "closure": {"digest": "e" * 64},
+                    }
+                ]
+            },
+            "weak identity": {
+                "tools": [
+                    {
+                        "name": "tool",
+                        "identity": "version-only",
+                        "observed": "1.2.3",
+                        "closure": {"digest": "d" * 64},
+                    }
+                ]
+            },
+            "wrong version": {
+                "tools": [
+                    {
+                        "name": "tool",
+                        "identity": "closure-verified",
+                        "observed": "9",
+                        "closure": {"digest": "d" * 64},
+                    }
+                ]
+            },
+            "tool set differs": {"tools": []},
+        }
+        for name, over in cases.items():
+            arc, sha, f = self.env_case(**over)
+            doc = self.verify_env(arc, sha, f)
+            self.assertIn("environment-evidence", self.failed(doc), name)
+            self.assertEqual(doc["acceptance"]["state"], "failed", name)
+
+    def test_policy_requiring_evidence_fails_without_it(self):
+        arc, sha, _ = self.env_case()
+        doc = self.verify_env(arc, sha, None)
+        self.assertIn("environment-evidence", self.failed(doc))
 
     def test_independent_tree_digest_agrees_with_platform_implementation(self):
         self.assertEqual(V.tree_digest(self.d), tree_digest(self.d))

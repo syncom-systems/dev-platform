@@ -95,6 +95,7 @@ jobs:
             --version "$VERSION" --source-revision "$GITHUB_SHA" \
             --archive-sha256 "${{ needs.build.outputs.archive_sha256 }}" \
             --tree-digest "${{ needs.build.outputs.tree_digest }}" \
+            --environment "out/dev-platform-$VERSION.build-environment.json" \
             --policy trust/policy.json --out "out/dev-platform-$VERSION.verification.json"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with: {name: verification, path: "out/dev-platform-*.verification.json"}
@@ -112,16 +113,25 @@ jobs:
         with: {name: release-out, path: out}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with: {name: verification, path: out}
-      - name: Publish (draft first, so assets are complete before it becomes visible)
+      - name: Publish (state is taken from the verification record; publishing never implies acceptance)
         run: |
-          flag=""; case "$VERSION" in *-*) flag="--prerelease";; esac
-          notes="Archive sha256: ${{ needs.build.outputs.archive_sha256 }}
+          state=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["acceptance"]["state"])' \
+            "out/dev-platform-$VERSION.verification.json")
+          case "$state" in
+            accepted) flag="--latest"; title="dev-platform $VERSION" ;;
+            pre-release) flag="--prerelease"; title="dev-platform $VERSION (pre-release, not accepted)" ;;
+            verified-unaccepted) flag="--prerelease"; title="dev-platform $VERSION (verified, NOT accepted)" ;;
+            *) echo "::error::unexpected acceptance state $state"; exit 1 ;;
+          esac
+          notes="Acceptance state: $state. Verified by the release workflow's independent verification job;
+          this is not owner acceptance and not certification of the release.
+          Archive sha256: ${{ needs.build.outputs.archive_sha256 }}
           Tree digest (consumer pin): ${{ needs.build.outputs.tree_digest }}
           Source revision: $GITHUB_SHA
-          Acceptance: see dev-platform-$VERSION.verification.json. Pre-releases are never accepted;
-          stable releases require an owner authorization record."
+          Record: dev-platform-$VERSION.verification.json. Stable acceptance requires an owner authorization
+          record bound to the archive digest; this workflow never creates one."
           gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --verify-tag $flag \
-            --title "dev-platform $VERSION" --notes "$notes"
+            --title "$title" --notes "$notes"
       - name: Verify the published release is immutable and its assets match
         run: |
           imm=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .immutable)
