@@ -105,3 +105,12 @@ jobs:
           stable releases require an owner authorization record."
           gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --verify-tag $flag \
             --title "dev-platform $VERSION" --notes "$notes"
+      - name: Verify the published release is immutable and its assets match
+        run: |
+          imm=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .immutable)
+          if [ "$imm" != "true" ]; then
+            echo "::error::release is not immutable (repository setting missing); do not use or accept it"
+            exit 1
+          fi
+          gh release verify "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+          gh release verify-asset "$GITHUB_REF_NAME" "out/dev-platform-$VERSION.tar.gz" --repo "$GITHUB_REPOSITORY"

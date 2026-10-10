@@ -56,3 +56,12 @@ accepted when (a) the workflow attested it at a protected tag, and (b) pinned re
 by running the full stage over N's source. The first release has no N-1; its acceptance is an owner
 action (verify the attestation, pin the digest) and must be recorded as such. **No release has been
 built, attested or accepted yet.**
+
+## Immutable releases (observed behavior)
+See `releases/probes/immutability-2026-10-10.md` for the probe, including failure cases. Summary: a
+published release rejects asset upload, overwrite and deletion and tag move/delete; but deleting the
+release (admin) then permits deleting the tag, so the `v*` tag ruleset is required alongside immutable
+releases. `release.yml` ends by asserting the new release is immutable and by running
+`gh release verify` / `verify-asset`; if the repository setting is missing it fails loudly after
+publication (the release must then not be used or accepted). A failed publication leaves the tag and
+its diagnostics in place as history (`releases/<version>/ATTEMPT.md`); the version is never reused.
