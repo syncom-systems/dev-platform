@@ -31,9 +31,10 @@ evidence that any compiler or build-system integration works. Support is claimed
 | Profile | Fixture | Real tools | Platforms | Identity established |
 |---|---|---|---|---|
 | `python` | `fixtures/python-only` | pinned CPython (python-build-standalone) | linux-x86_64, darwin-arm64 | `closure-verified` |
+| `rust-cargo` | `fixtures-real/rust-cargo` | rustc/cargo 1.85.0 official dist (assembled from the pinned tarball's component manifests, not install.sh) | linux-x86_64, darwin-arm64 | `closure-verified`; `cargo test --locked` (rejects an out-of-date lock); host linker outside the evidence |
 | `rust-bazel` | `fixtures-real/rust-bazel` | Bazelisk 1.29.0 -> Bazel 8.4.2 -> rules_rust 0.61.0 -> rustc 1.85.0 | linux-x86_64, darwin-arm64 | launcher `closure-verified`; Bazel binary digest enforced by Bazelisk at execution; rules_rust source pinned through the resolved `MODULE.bazel.lock`; `--lockfile_mode=error` |
 
 Each qualification also runs must-be-rejected scenarios (tampered resolved graph, undeclared module
 change, declared Bazel/Rust version drift, failing test) and requires every one to be rejected.
-Not claimed (no shipped profile, only synthetic evidence): the `cargo` adapter, Python-in-Bazel
+`rust-cargo` is qualified in CI after v0.1.0: the v0.1.0 manifest does not contain it. Not claimed (no shipped profile, only synthetic evidence): Python-in-Bazel
 (`rules_python`) and mixed consumers, Windows, Linux aarch64.
