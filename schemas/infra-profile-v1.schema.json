@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/matssun/dev-platform/schemas/infra-profile-v1.schema.json",
+  "title": "dev-platform.infra/v1",
+  "description": "The public/private boundary: runner inventory offered by an infrastructure provider.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "runners"],
+  "properties": {
+    "schema": {"const": "dev-platform.infra/v1"},
+    "runners": {"type": "array", "items": {
+      "type": "object",
+      "required": ["id", "labels", "os", "arch", "isolation", "trust"],
+      "properties": {
+        "id": {"type": "string"},
+        "labels": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "os": {"enum": ["linux", "macos"]},
+        "arch": {"enum": ["x86_64", "arm64"]},
+        "isolation": {"enum": ["ephemeral", "persistent"]},
+        "trust": {"enum": ["public", "trusted"]},
+        "credentials": {"type": "array", "items": {"type": "string"}}}}}
+  }
+}

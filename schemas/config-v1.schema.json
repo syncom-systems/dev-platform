@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/matssun/dev-platform/schemas/config-v1.schema.json",
+  "title": "dev-platform.toml (schema_version 1)",
+  "description": "Informational mirror for editors. The authoritative validator is dev_platform.config.parse, which also enforces cross-field semantics (docs/verification-model.md).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "platform", "project", "check"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "platform": {"type": "object", "additionalProperties": false, "properties": {
+      "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.]+)?$"},
+      "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "self_hosted": {"type": "boolean"}}},
+    "project": {"type": "object", "additionalProperties": false, "required": ["name"], "properties": {
+      "name": {"type": "string"}, "bazel_only": {"type": "boolean"},
+      "assurance": {"enum": ["standard", "security-critical"]},
+      "languages": {"type": "array", "items": {"type": "string"}}}},
+    "impact": {"type": "object", "additionalProperties": false, "properties": {
+      "global": {"type": "array", "items": {"type": "string"}},
+      "ignore": {"type": "array", "items": {"type": "string"}}}},
+    "runner": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": false, "properties": {
+      "os": {"enum": ["any", "linux", "macos"]}, "arch": {"enum": ["any", "x86_64", "arm64"]},
+      "isolation": {"enum": ["any", "ephemeral"]}, "credentials": {"type": "array", "items": {"type": "string"}},
+      "fallback": {"enum": ["hosted", "none"]}}}},
+    "check": {"type": "array", "minItems": 1, "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "adapter", "stages"], "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]*$"},
+        "adapter": {"enum": ["python", "bazel", "cargo", "exec"]},
+        "stages": {"type": "array", "minItems": 1, "items": {"enum": ["edit", "pre-commit", "pre-merge", "full"]}},
+        "obligation": {"enum": ["always", "change", "periodic"]},
+        "cost": {"enum": ["fast", "slow"]},
+        "inputs": {"type": "array", "items": {"type": "string"}},
+        "targets": {"type": "array", "items": {"type": "string"}},
+        "argv": {"type": "array", "items": {"type": "string"}},
+        "runner": {"type": "string"}, "description": {"type": "string"}}}}
+  }
+}
