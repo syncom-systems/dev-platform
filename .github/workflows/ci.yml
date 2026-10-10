@@ -46,7 +46,7 @@ jobs:
         run: PYTHONPATH=src python -m dev_platform toolchain measure --profile dev-platform-release | tee measure.json
       - name: Verify closures against the manifest
         run: |
-          PYTHONPATH=src python -m dev_platform toolchain verify --profile dev-platform-release | tee verify.json
+          PYTHONPATH=src python -m dev_platform toolchain verify --profile dev-platform-release --require-certifiable | tee verify.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with: {name: "environment-${{ matrix.os }}", path: "*.json"}

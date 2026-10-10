@@ -101,7 +101,8 @@
           "closure": {
             "kind": "file",
             "sha256": {
-              "darwin-arm64": "5db922251f29fb535f8762a03d4bea05d8552f2af134837ec3db9ddbcc754de9"
+              "darwin-arm64": "5db922251f29fb535f8762a03d4bea05d8552f2af134837ec3db9ddbcc754de9",
+              "linux-x86_64": "6f050122e8397304e878c97f1b5f647573dae29cee051e0a8506322b7ab0330d"
             },
             "system_libs": [
               "/usr/lib/",
