@@ -10,5 +10,6 @@
     }
   ],
   "require_github_hosted_runner": true,
+  "require_environment_evidence": true,
   "stable_requires_authorization": true
 }

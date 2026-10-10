@@ -175,7 +175,7 @@ def build(
         blockers.append("environment does not conform to a platform toolchain profile")
     if env_rec.get("conformant") and env_rec.get("assurance") != "certifiable":
         blockers.append(
-            "tool identity too weak for certification (version-level only): "
+            "tool identity too weak for certification (below closure level; unsupported platform?): "
             + ", ".join(env_rec.get("weak_tools", []))
         )
     if dirty:
@@ -203,6 +203,12 @@ def build(
         "unsatisfied_obligations": unsatisfied,
         "regressions": regressions,
         "admission": admission,
-        "certification": {"certified": certified, "release_eligible": certified, "blockers": blockers},
+        "certification": {
+            "certified": certified,
+            "release_eligible": certified,
+            "blockers": blockers,
+            # Certification attests the checks and tool identities above; it is not a hermeticity claim.
+            "limitations": env_rec.get("scope", {}).get("limitations", []),
+        },
         "exit": 1 if (execute and unsatisfied) else 0,
     }

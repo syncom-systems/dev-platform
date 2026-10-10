@@ -84,7 +84,20 @@ def resolve_revision(repo_url: str, version: str) -> str:
 def download(repo: str, version: str, dest: Path) -> Path:
     name = f"dev-platform-{version}.tar.gz"
     r = subprocess.run(
-        ["gh", "release", "download", f"v{version}", "--repo", repo, "--pattern", name, "--dir", str(dest)],
+        [
+            "gh",
+            "release",
+            "download",
+            f"v{version}",
+            "--repo",
+            repo,
+            "--pattern",
+            name,
+            "--pattern",
+            f"dev-platform-{version}.build-environment.json",
+            "--dir",
+            str(dest),
+        ],
         capture_output=True,
         text=True,
         timeout=600,
@@ -152,6 +165,7 @@ def install(
     sbom_bundle=None,
     allow_prerelease=False,
     allow_unaccepted=False,
+    environment=None,
     expect_tree: str | None = None,
     previous_record: dict | None = None,
 ) -> tuple[Path, dict]:
@@ -163,6 +177,7 @@ def install(
         authorizations=list(authorizations),
         bundle=bundle,
         sbom_bundle=sbom_bundle,
+        environment=environment,
         **kw,
     )
     state = record["acceptance"]["state"]
@@ -233,6 +248,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--previous-record", type=Path, help="verification record of a previously installed release"
     )
+    ap.add_argument(
+        "--environment", type=Path, help="build-environment record (default: next to the archive)"
+    )
     ap.add_argument("--allow-prerelease", action="store_true")
     ap.add_argument("--allow-unaccepted", action="store_true")
     a = ap.parse_args(argv)
@@ -243,6 +261,7 @@ def main(argv: list[str] | None = None) -> int:
             raise Refused("policy schema not understood", 2)
         with tempfile.TemporaryDirectory(prefix="dp-install-") as tmp:
             archive = a.archive or download(a.repo, a.version, Path(tmp))
+            env_file = a.environment or archive.parent / f"dev-platform-{a.version}.build-environment.json"
             rev = a.source_revision or resolve_revision(f"https://github.com/{a.repo}", a.version)
             exp = {
                 "version": a.version,
@@ -262,6 +281,7 @@ def main(argv: list[str] | None = None) -> int:
                 authorizations=a.authorization,
                 allow_prerelease=a.allow_prerelease,
                 allow_unaccepted=a.allow_unaccepted,
+                environment=env_file if env_file.is_file() else None,
                 expect_tree=a.tree_sha256,
                 previous_record=prev,
             )

@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- 0.1.0 stable candidate (published verified-unaccepted; acceptance needs an owner authorization record):
+  environment evidence states non-hermetic scope and limitations (also copied into certification);
+  verifier checks the attested build-environment record against the manifest pins; policy requires
+  it; workflow publishes by verified state, never implying acceptance. Supported scope is exactly the
+  qualified combinations; others fail closed to diagnostic.
 - 0.1.0-rc.4 candidate (0.1.0-rc.3 failed at the build-environment gate, see releases/0.1.0-rc.3): tool identity by runtime closure (`closure-verified`; a bare executable digest no
   longer certifies), pinned hash-locked release-profile environment, SBOM correspondence and SBOM
   attestation verification, trusted installer (`tools/install_release.py`), real Bazel/rules_rust and

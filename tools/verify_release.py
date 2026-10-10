@@ -239,6 +239,46 @@ def sbom_matches_manifest(sbom: dict, toolchains: dict) -> list[str]:
     return problems
 
 
+def check_environment(
+    rec: Record, env_path: Path | None, manifest: dict | None, exp: dict, policy: dict, gh: GhRunner
+) -> None:
+    """Release-environment evidence: the record the build produced about its own toolchain."""
+    if env_path is None:
+        if policy.get("require_environment_evidence", False):
+            rec.add("environment-evidence", False, "policy requires the build-environment record")
+        return
+    try:
+        env = json.loads(Path(env_path).read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        rec.add("environment-evidence", False, f"unreadable: {e}")
+        return
+    problems = []
+    prof = ((manifest or {}).get("profiles") or {}).get(env.get("profile"))
+    if prof is None:
+        problems.append("profile is not in the release's toolchain manifest")
+    if env.get("conformant") is not True or env.get("assurance") != "certifiable":
+        problems.append("environment was not conformant and certifiable")
+    scope = env.get("scope") or {}
+    if scope.get("hermetic") is not False or not scope.get("limitations"):
+        problems.append("evidence must state it is not hermetic and list its limitations")
+    for t in env.get("tools", []):
+        spec = (prof or {}).get("tools", {}).get(t.get("name"))
+        pin = ((spec or {}).get("closure") or {}).get("sha256", {}).get(env.get("platform"))
+        if (
+            t.get("identity") != "closure-verified"
+            or not pin
+            or (t.get("closure") or {}).get("digest") != pin
+        ):
+            problems.append(f"tool {t.get('name')}: closure not verified against the manifest pin")
+        if spec and t.get("observed") != spec["version"]:
+            problems.append(f"tool {t.get('name')}: version differs from the manifest")
+    if prof and {t.get("name") for t in env.get("tools", [])} != set(prof["tools"]):
+        problems.append("tool set differs from the manifest profile")
+    rec.add("environment-evidence", not problems, "; ".join(problems))
+    path = Path(env_path)
+    check_attestation(rec, path, sha256_file(path), exp, policy, gh, None, label="environment-attestation")
+
+
 def effective_authorization(paths: list[Path], archive_sha: str) -> dict | None:
     docs = [json.loads(Path(p).read_text()) for p in paths]
     mine = [
@@ -267,9 +307,11 @@ def verify(
     authorizations: list[Path] = (),
     bundle: Path | None = None,
     sbom_bundle: Path | None = None,
+    environment: Path | None = None,
 ) -> dict:
     rec = Record()
     sbom_doc = None
+    manifest = None
     archive_sha = sha256_file(archive)
     rec.add("archive-digest", archive_sha == exp["archive_sha256"], f"actual {archive_sha}")
     subject = {"archive": archive.name, "archive_sha256": archive_sha, "tree_digest": None, "version": None}
@@ -293,6 +335,7 @@ def verify(
                 rec.add("release-json", False, str(e))
                 rel = None
             if rel is not None:
+                manifest = rel.get("toolchains")
                 rec.add("release-json", rel.get("schema") == "dev-platform.release/v1")
                 rec.add("release-version", rel["platform"]["version"] == exp["version"])
                 rec.add("source-digest", tree_digest(d / "src") == rel["platform"]["source_digest"])
@@ -354,6 +397,7 @@ def verify(
         "the attested SBOM must be exactly the SBOM inside the archive",
     )
 
+    check_environment(rec, environment, manifest, exp, policy, gh)
     prerelease = "-" in exp["version"]
     auth = None if prerelease else effective_authorization(list(authorizations), archive_sha)
     if not rec.all_passed:
@@ -389,6 +433,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--authorization", type=Path, action="append", default=[])
     ap.add_argument("--bundle", type=Path, help="offline provenance attestation bundle")
     ap.add_argument("--sbom-bundle", type=Path, help="offline SBOM attestation bundle")
+    ap.add_argument("--environment", type=Path, help="release build-environment record (attested)")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     policy = json.loads(a.policy.read_text())
@@ -404,7 +449,13 @@ def main(argv: list[str] | None = None) -> int:
     if a.tree_digest:
         exp["tree_digest"] = a.tree_digest
     doc = verify(
-        a.archive, exp, policy, authorizations=a.authorization, bundle=a.bundle, sbom_bundle=a.sbom_bundle
+        a.archive,
+        exp,
+        policy,
+        authorizations=a.authorization,
+        bundle=a.bundle,
+        sbom_bundle=a.sbom_bundle,
+        environment=a.environment,
     )
     text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
     if a.out:
