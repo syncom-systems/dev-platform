@@ -90,6 +90,23 @@ def install_binary(src: dict, bindir: Path, dl: Path) -> Path:
     return target
 
 
+def version_dir(dev: Path, name: str, version: str) -> Path:
+    """Every pinned version of a tool lives in its own directory, so versions coexist and installing
+    one never modifies another."""
+    return dev / "tools" / name / version
+
+
+def activate(link: Path, target: Path) -> None:
+    """Point the stable name (`.devenv/<name>`, `.devenv/bin/<exe>`) at one installed version. The link is
+    only a selector: verification resolves real paths, so identity is always that of the version directory."""
+    if link.is_symlink() or link.is_file():
+        link.unlink()
+    elif link.is_dir():
+        shutil.rmtree(link)
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(target.resolve())
+
+
 def main(argv: list[str] | None = None) -> int:
     profile = (argv if argv is not None else sys.argv[1:] or [PROFILE])[0]
     manifest = json.loads((ROOT / "toolchains" / "manifest.json").read_text())
@@ -103,25 +120,34 @@ def main(argv: list[str] | None = None) -> int:
             if name == "python":
                 raise SystemExit(f"no pinned python source for {platform_key()}")
             continue
+        vdir = version_dir(dev, name, spec["version"])
         if src.get("type") == "binary":
-            install_binary(src, dev / "bin", dev / "dl")
+            install_binary(src, vdir / "bin", dev / "dl")
+            activate(dev / "bin" / src["as"], vdir / "bin" / src["as"])
             continue
-        prefix = dev / name
-        shutil.rmtree(prefix, ignore_errors=True)
-        prefix.mkdir()
+        shutil.rmtree(vdir, ignore_errors=True)
+        vdir.mkdir(parents=True)
         if src.get("type") == "rust-dist":
-            archive = dev / "dl" / f"{name}.tar.xz"
+            archive = dev / "dl" / f"{name}-{spec['version']}.tar.xz"
             fetch(src["url"], src["sha256"], archive)
-            install_rust_dist(src, prefix, archive)
-            continue
-        archive = dev / "dl" / f"{name}.tar.gz"
-        fetch(src["url"], src["sha256"], archive)
-        extract(archive, prefix, src.get("strip", ""))
+            install_rust_dist(src, vdir, archive)
+        else:
+            archive = dev / "dl" / f"{name}-{spec['version']}.tar.gz"
+            fetch(src["url"], src["sha256"], archive)
+            extract(archive, vdir, src.get("strip", ""))
+        activate(dev / name, vdir)
     if "ruff" in tools:  # the python venv carrying the hash-locked ruff wheel
         venv = dev / "venv"
         shutil.rmtree(venv, ignore_errors=True)
         subprocess.run(
-            [str(dev / "python" / "bin" / "python3"), "-m", "venv", "--without-pip", str(venv)], check=True
+            [
+                str(version_dir(dev, "python", tools["python"]["version"]) / "bin" / "python3"),
+                "-m",
+                "venv",
+                "--without-pip",
+                str(venv),
+            ],
+            check=True,
         )
         subprocess.run(
             ["uv", "pip", "install", "--python", str(venv / "bin" / "python"), "--require-hashes", "--no-deps",

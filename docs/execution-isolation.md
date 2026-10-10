@@ -14,3 +14,11 @@ Status: qualified for the `python` profile only (`tools/qualify.py --isolate-env
 Bazel and Cargo profiles are not claimed under scrubbed mode (Bazelisk and Cargo caches live under HOME; their
 behaviour under a private HOME is untested). Making scrubbed mode mandatory for certification is a policy decision
 and is not made here. Nothing in this changes v0.1.0, which predates it.
+
+## Multi-version toolchain provisioning
+`tools/setup_env.py` installs each pinned tool version into `.devenv/tools/<name>/<version>/`. Versions coexist;
+installing one never rewrites another. `.devenv/<name>` and `.devenv/bin/<exe>` are only selector links to the
+version of the profile last realized. Identity is always that of the real path (closure verification resolves
+symlinks), and the python venv is built from the versioned directory, so selecting another version cannot
+silently change an existing venv. Selection per project is the profile pinned in `dev-platform.toml`; there is
+still one active selection per name per workspace at a time.
