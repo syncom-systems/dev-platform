@@ -49,9 +49,7 @@ def extract(archive: Path, dest: Path, strip: str) -> None:
             parts = Path(m.name).parts
             if m.name.startswith("/") or ".." in parts or not (m.isfile() or m.isdir() or m.issym()):
                 raise SystemExit(f"unsafe archive member {m.name!r}")
-            if m.issym() and (m.linkname.startswith("/") or ".." in Path(m.linkname).parts):
-                raise SystemExit(f"unsafe symlink {m.name!r} -> {m.linkname!r}")
-        tar.extractall(dest, filter="tar")  # 'tar' filter: no absolute paths, no device nodes
+        tar.extractall(dest, filter="data")  # rejects absolute/escaping links, special files, setuid
     if strip:
         inner = dest / strip
         for child in inner.iterdir():
