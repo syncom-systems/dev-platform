@@ -1,0 +1,90 @@
+{
+  "admission": "admitted",
+  "certification": {
+    "blockers": [],
+    "certified": true,
+    "release_eligible": true
+  },
+  "change_set": {
+    "known": false,
+    "paths": []
+  },
+  "checks": [
+    {
+      "adapter": "python",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ],
+      "cost": "fast",
+      "exit_code": 0,
+      "id": "python.unittest",
+      "obligation": "change",
+      "outcome": "passed",
+      "reasons": [
+        "full validation runs every check"
+      ],
+      "selected": true,
+      "state": "verified"
+    }
+  ],
+  "environment": {
+    "assurance": "certifiable",
+    "conformant": true,
+    "identity_digest": "d2239c46a85ad95826cc2c98d770288aaecc059d9502160f7dbd7485db3de0ce",
+    "profile": "python",
+    "release": {
+      "sbom_sha256": "af4409a836fa7767ff4048f7b5ab4bf77deef9998c3ce168699fbc49ab121ee8",
+      "source_digest": "7cba3b4a99f118a90cd1696ef8ecbc36adb6c85f0bab5347970f7398667d66b9",
+      "synthesized": false,
+      "tree_digest": "1c678d7e528502d987f519685499f09383824fe93ee6cd92bc42d80c03069741",
+      "version": "0.1.0-rc.4"
+    },
+    "tools": [
+      {
+        "closure": {
+          "digest": "bc602f3eeaca659ab7cec5f741d44971d53021b625fa6dc994f567fc92440b18",
+          "files": 1694,
+          "kind": "prefix",
+          "linkage": {
+            "native_objects": 10,
+            "unknown": [],
+            "violations": []
+          },
+          "platform": "darwin-arm64",
+          "root": "/Users/mats/dev/dev-platform/.devenv/python",
+          "scope": "closure bytes pinned; native dependencies limited to the closure and declared system libraries, which are trusted by name, not by content",
+          "status": "ok"
+        },
+        "expected": "3.14.7",
+        "identity": "closure-verified",
+        "name": "python",
+        "observed": "3.14.7",
+        "status": "ok"
+      }
+    ],
+    "weak_tools": []
+  },
+  "executed": true,
+  "exit": 0,
+  "platform": {
+    "digest": "1c678d7e528502d987f519685499f09383824fe93ee6cd92bc42d80c03069741",
+    "mode": "pinned",
+    "pinned_version": "0.1.0-rc.4",
+    "running_version": "0.1.0-rc.4"
+  },
+  "project": {
+    "assurance": "standard",
+    "bazel_only": false,
+    "name": "consumer"
+  },
+  "regressions": [],
+  "revision": "3bb52b7ed81f8b40aec38c0fd5e5d988c46a7937",
+  "schema": "dev-platform.result/v1",
+  "stage": "full",
+  "unsatisfied_obligations": []
+}
