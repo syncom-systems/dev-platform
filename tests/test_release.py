@@ -26,6 +26,10 @@ class ReleaseTest(unittest.TestCase):
         self.assertEqual(doc["provenance"]["source_revision"], "abc")
         sbom = json.loads((build(self).parent / "1.0.0" / "sbom.cdx.json").read_text())
         self.assertEqual(sbom["bomFormat"], "CycloneDX")
+        # attest-sbom refuses a CycloneDX document without these (found by the rc.1 attempt)
+        self.assertTrue(sbom["serialNumber"].startswith("urn:uuid:") and sbom["specVersion"])
+        again = json.loads((build(self).parent / "1.0.0" / "sbom.cdx.json").read_text())
+        self.assertEqual(sbom["serialNumber"], again["serialNumber"])
         self.assertIn(("tool", "1.2.3"), {(c["name"], c["version"]) for c in sbom["components"]})
 
     def test_releases_are_write_once(self):
