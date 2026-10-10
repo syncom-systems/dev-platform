@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/verification-v1.schema.json",
+  "title": "dev-platform.verification/v1",
+  "description": "Record of an independent verification of a release archive. Retained with the release.",
+  "type": "object",
+  "required": [
+    "schema",
+    "subject",
+    "expected",
+    "policy_sha256",
+    "checks",
+    "acceptance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dev-platform.verification/v1"
+    },
+    "subject": {
+      "type": "object",
+      "required": [
+        "archive",
+        "archive_sha256",
+        "tree_digest",
+        "version"
+      ]
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "detail"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "passed",
+              "failed"
+            ]
+          }
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "required": [
+        "state",
+        "reasons",
+        "authorization"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "failed",
+            "pre-release",
+            "verified-unaccepted",
+            "accepted"
+          ]
+        }
+      }
+    }
+  }
+}

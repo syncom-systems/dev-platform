@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -72,12 +73,19 @@ def build(
     *,
     source_uri: str | None = None,
     source_revision: str | None = None,
+    strict_version: bool = True,
 ) -> Path:
     """Create out_dir/<version>/. Refuses to overwrite: releases are write-once."""
     dest = Path(out_dir) / version
     if dest.exists():
         raise ConfigError([f"{dest} exists; releases are immutable (use a new version)"])
     manifest = toolchain.validate(json.loads(Path(toolchains).read_text()))
+    if strict_version:
+        m = re.search(
+            r'^__version__ = "([^"]+)"', (Path(src_root) / "dev_platform" / "__init__.py").read_text(), re.M
+        )
+        if not m or m.group(1) != version:
+            raise ConfigError([f"source __version__ {m and m.group(1)!r} != release version {version!r}"])
     shutil.copytree(src_root, dest / "src", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     source_digest = tree_digest(dest / "src")
     sbom = _dump(make_sbom(version, source_digest, manifest))

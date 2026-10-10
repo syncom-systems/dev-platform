@@ -1,0 +1,14 @@
+{
+  "schema": "dev-platform.trust/v1",
+  "description": "Who may produce a dev-platform release. A valid signature is necessary but not sufficient: the signer identity must match this policy, and stable releases additionally require an owner authorization record (docs/release-trust.md).",
+  "oidc_issuer": "https://token.actions.githubusercontent.com",
+  "signers": [
+    {
+      "repo": "syncom-systems/dev-platform",
+      "workflow": ".github/workflows/release.yml",
+      "ref_pattern": "^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.]+)?$"
+    }
+  ],
+  "require_github_hosted_runner": true,
+  "stable_requires_authorization": true
+}

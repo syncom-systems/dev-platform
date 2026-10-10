@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dev_platform import __version__, engine, records, release, toolchain
+from dev_platform import __version__, engine, pack, records, release, toolchain
 from dev_platform.config import CONFIG_FILENAME, SCHEMA_VERSION, load
 from dev_platform.detect import detect, is_bazel_workspace
 from dev_platform.digest import tree_digest
@@ -70,6 +70,14 @@ def build_parser() -> argparse.ArgumentParser:
     rb.add_argument("--src", type=Path, default=None)
     rb.add_argument("--source-uri")
     rb.add_argument("--source-revision")
+    rp = rsub.add_parser("pack", help="write a deterministic .tar.gz of a release directory")
+    rp.add_argument("path", type=Path)
+    rp.add_argument("--out", type=Path, required=True)
+    ri = rsub.add_parser("install", help="verify an archive and install it write-once into the store")
+    ri.add_argument("archive", type=Path)
+    ri.add_argument("--archive-sha256", required=True)
+    ri.add_argument("--tree-sha256", help="expected pin digest (recommended: your consumer's pin)")
+    ri.add_argument("--store", type=Path, default=None)
     rv = rsub.add_parser("verify", help="verify a release directory and print its pin digest")
     rv.add_argument("path", type=Path)
     va = sub.add_parser("validate", help="validate an app-release, authorization or advisory record")
@@ -330,6 +338,18 @@ def cmd_release(args) -> int:
             source_revision=args.source_revision,
         )
         print(f"built {dest}\npin sha256 = {tree_digest(dest)}")
+        return EXIT_OK
+    if args.rcmd == "pack":
+        print(f"archive sha256 = {pack.pack(args.path, args.out)}")
+        return EXIT_OK
+    if args.rcmd == "install":
+        dest = pack.install(
+            args.archive,
+            args.store or default_store(),
+            expect_archive_sha256=args.archive_sha256,
+            expect_tree_sha256=args.tree_sha256,
+        )
+        print(f"installed {dest}\npin sha256 = {tree_digest(dest)}")
         return EXIT_OK
     doc = release.load(args.path)
     print(

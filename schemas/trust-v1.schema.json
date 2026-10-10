@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/trust-v1.schema.json",
+  "title": "dev-platform.trust/v1",
+  "description": "Who may produce a release. A valid signature does not imply trust; the signer must match this policy.",
+  "type": "object",
+  "required": [
+    "schema",
+    "oidc_issuer",
+    "signers"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dev-platform.trust/v1"
+    },
+    "oidc_issuer": {
+      "type": "string"
+    },
+    "signers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "repo",
+          "workflow",
+          "ref_pattern"
+        ]
+      }
+    },
+    "require_github_hosted_runner": {
+      "type": "boolean"
+    },
+    "stable_requires_authorization": {
+      "type": "boolean"
+    }
+  }
+}

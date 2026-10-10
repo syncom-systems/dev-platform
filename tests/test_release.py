@@ -12,7 +12,7 @@ def build(test, version="1.0.0", out=None, **kw):
     out = out or tmpdir(test)
     tc = out / "tc.json"
     tc.write_text(json.dumps(MANIFEST))
-    return release.build(ROOT / "src", tc, out / "store", version, **kw)
+    return release.build(ROOT / "src", tc, out / "store", version, strict_version=False, **kw)
 
 
 class ReleaseTest(unittest.TestCase):
@@ -51,7 +51,7 @@ class ReleaseTest(unittest.TestCase):
         newer = json.loads(json.dumps(MANIFEST))
         newer["profiles"]["p"]["tools"]["tool"]["version"] = "1.2.4"  # e.g. a security-fix toolchain bump
         tc.write_text(json.dumps(newer))
-        b = release.build(ROOT / "src", tc, out / "store", "1.0.1")
+        b = release.build(ROOT / "src", tc, out / "store", "1.0.1", strict_version=False)
         self.assertNotEqual(tree_digest(a), tree_digest(b))
         self.assertTrue(a.exists())  # the old release is untouched
 

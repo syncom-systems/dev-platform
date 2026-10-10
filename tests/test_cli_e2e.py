@@ -39,7 +39,7 @@ def make_store(test):
     out = tmpdir(test)
     tc = out / "toolchains.json"
     tc.write_text(json.dumps(TOOLCHAINS))
-    vdir = release.build(ROOT / "src", tc, out / "store", "0.1.0")
+    vdir = release.build(ROOT / "src", tc, out / "store", "0.1.0", strict_version=False)
     init = vdir / "src" / "dev_platform" / "__init__.py"
     init.write_text(init.read_text().replace('"0.1.0"', '"0.1.0+store"'))  # prove which code runs
     # Re-seal: the manifest digest of src changed, so rebuild release.json/SBOM around it.
