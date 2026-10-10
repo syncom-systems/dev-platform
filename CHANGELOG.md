@@ -1,6 +1,7 @@
 # Changelog
 
 ## Unreleased
+- 0.1.0-rc.1 pre-release: first exercise of the release pipeline (never accepted; see docs/release-trust.md).
 - Revision 2: releases are environments (toolchain manifest + profiles + SBOM, `release build|verify`);
   environment verification recorded in results (`environment`, breaking pre-release change to
   `dev-platform.result/v1`); verified-snapshot launcher closes the verify/exec race; self-hosted
