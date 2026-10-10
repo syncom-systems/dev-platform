@@ -1,0 +1,161 @@
+{
+  "acceptance": {
+    "authorization": null,
+    "reasons": [
+      "no effective owner authorization for this archive digest"
+    ],
+    "state": "verified-unaccepted"
+  },
+  "checks": [
+    {
+      "detail": "actual f3ef0e50e23efc063e45041d6608ad87a7ea6150280529cd5bb969d168464dc2",
+      "id": "archive-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "safe-extract",
+      "status": "passed"
+    },
+    {
+      "detail": "archive root 0.1.0, expected 0.1.0",
+      "id": "version-binding",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "release-json",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "release-version",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "source-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "source-version-matches",
+      "status": "passed"
+    },
+    {
+      "detail": "release.json says 279cd6d28e18df4293b3aa09d3f0224d58f30e38",
+      "id": "source-revision",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "missing []",
+      "id": "sbom-covers-toolchains",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-matches-manifest",
+      "status": "passed"
+    },
+    {
+      "detail": "SBOM root component must be this version and source digest",
+      "id": "sbom-describes-artifact",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "tree-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.1.0 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "attestation-matches-policy",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.1.0 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "sbom-attestation-matches-policy",
+      "status": "passed"
+    },
+    {
+      "detail": "the attested SBOM must be exactly the SBOM inside the archive",
+      "id": "sbom-attestation-content",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "environment-evidence",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.1.0 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "environment-attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "environment-attestation-matches-policy",
+      "status": "passed"
+    }
+  ],
+  "expected": {
+    "archive_sha256": "f3ef0e50e23efc063e45041d6608ad87a7ea6150280529cd5bb969d168464dc2",
+    "ref": "refs/tags/v0.1.0",
+    "source_revision": "279cd6d28e18df4293b3aa09d3f0224d58f30e38",
+    "tree_digest": "09adc0d2f1b3b6eba9c423b6cd258cd64b75899b5005e371d2b0692a8ccc4e4b",
+    "version": "0.1.0"
+  },
+  "policy_sha256": "a2e7a1ba9f50456c24901be6054e7b7291cad4a5d3b335d62924265f9e85b81c",
+  "schema": "dev-platform.verification/v1",
+  "subject": {
+    "archive": "dev-platform-0.1.0.tar.gz",
+    "archive_sha256": "f3ef0e50e23efc063e45041d6608ad87a7ea6150280529cd5bb969d168464dc2",
+    "tree_digest": "09adc0d2f1b3b6eba9c423b6cd258cd64b75899b5005e371d2b0692a8ccc4e4b",
+    "version": "0.1.0"
+  }
+}

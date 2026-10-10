@@ -1,0 +1,59 @@
+{
+  "assurance": "certifiable",
+  "conformant": true,
+  "identity_digest": "a31eef599f21ed869d53a15911593302630a695b1db840e0ba856164029895a6",
+  "platform": "linux-x86_64",
+  "profile": "dev-platform-release",
+  "scope": {
+    "hermetic": false,
+    "limitations": [
+      "tool identity is not complete execution-environment identity: the host kernel, CPU, filesystem and anything not listed above are not part of the evidence",
+      "system libraries named in closure.system_libs are trusted by name or prefix, not by content; the environment is not byte-level hermetic"
+    ]
+  },
+  "tools": [
+    {
+      "closure": {
+        "digest": "520d9d6ebeba77ece9d776110bb89845d6b7560394038f2b6438ff244e7ba538",
+        "files": 4565,
+        "kind": "prefix",
+        "linkage": {
+          "native_objects": 9,
+          "unknown": [],
+          "violations": []
+        },
+        "platform": "linux-x86_64",
+        "root": "/home/runner/work/dev-platform/dev-platform/.devenv/python",
+        "scope": "closure bytes pinned; native dependencies limited to the closure and declared system libraries, which are trusted by name, not by content",
+        "status": "ok"
+      },
+      "expected": "3.14.7",
+      "identity": "closure-verified",
+      "name": "python",
+      "observed": "3.14.7",
+      "status": "ok"
+    },
+    {
+      "closure": {
+        "digest": "4ca9f3d98bc6e23e2b5a7e9f8ef50b4c2a3a96ff89a23b02a33347c954e7e10d",
+        "files": 1,
+        "kind": "file",
+        "linkage": {
+          "native_objects": 1,
+          "unknown": [],
+          "violations": []
+        },
+        "platform": "linux-x86_64",
+        "root": "/home/runner/work/dev-platform/dev-platform/.devenv/venv/bin/ruff",
+        "scope": "closure bytes pinned; native dependencies limited to the closure and declared system libraries, which are trusted by name, not by content",
+        "status": "ok"
+      },
+      "expected": "0.17.0",
+      "identity": "closure-verified",
+      "name": "ruff",
+      "observed": "0.17.0",
+      "status": "ok"
+    }
+  ],
+  "weak_tools": []
+}
