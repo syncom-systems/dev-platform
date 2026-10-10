@@ -1,0 +1,29 @@
+{
+  "_comment": "TEMPLATE. NOT a decision, NOT valid, NOT created by the platform or its agent. The owner copies this to authorizations/platform-release-0.1.0.json, replaces every <...> value, and commits it with their own signing key. Every placeholder below fails validation until replaced.",
+  "schema": "dev-platform.authorization/v1",
+  "id": "<unique id chosen by the owner>",
+  "subject": {
+    "kind": "platform-release",
+    "digest": "f3ef0e50e23efc063e45041d6608ad87a7ea6150280529cd5bb969d168464dc2"
+  },
+  "decision": "<approved|rejected>",
+  "decided_by": {
+    "id": "<owner identifier>",
+    "role": "owner",
+    "identity_assertion": {
+      "provider": "github-signed-commit",
+      "login": "<owner GitHub login>",
+      "reference": "<owner GitHub login>"
+    }
+  },
+  "basis": {
+    "kind": "acceptance-packet",
+    "reference": "releases/0.1.0/ACCEPTANCE-PACKET.md"
+  },
+  "decided_at": "<UTC timestamp, e.g. 2026-10-11T09:30:00Z>",
+  "supersedes": [],
+  "retention": {
+    "class": "permanent",
+    "until": null
+  }
+}

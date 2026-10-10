@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
-from dev_platform import __version__, engine, pack, provenance, records, release, toolchain
+from dev_platform import __version__, engine, isolation, pack, provenance, records, release, toolchain
 from dev_platform.config import CONFIG_FILENAME, SCHEMA_VERSION, load
 from dev_platform.detect import detect, is_bazel_workspace
 from dev_platform.digest import tree_digest
@@ -61,6 +63,12 @@ def build_parser() -> argparse.ArgumentParser:
     _plan_args(ck)
     ck.add_argument("--dry-run", action="store_true")
     ck.add_argument("--result", type=Path, help="write the result record here")
+    ck.add_argument(
+        "--isolate-env",
+        action="store_true",
+        help="run checks with a scrubbed environment (allowlist, verified-tool PATH, private HOME/TMPDIR)",
+    )
+    ck.add_argument("--isolate-keep", action="append", default=[], metavar="NAME", help="also pass NAME")
     rl = sub.add_parser("release", help="build or verify an immutable platform release")
     rsub = rl.add_subparsers(dest="rcmd", required=True)
     rb = rsub.add_parser("build", help="create <out>/<version>/ with toolchain manifest and SBOM")
@@ -300,6 +308,19 @@ def _plan(args, execute: bool) -> tuple[dict, int]:
     cfg = load(args.project)
     res = _resolve_and_delegate(cfg, args)
     previous = json.loads(args.previous.read_text()) if args.previous else None
+    execution, executor, scratch = None, engine.subprocess_executor, None
+    if getattr(args, "isolate_env", False):
+        profile = (
+            res.release["toolchains"]["profiles"].get(cfg.platform.profile or "", {}) if res.release else {}
+        )
+        scratch = Path(tempfile.mkdtemp(prefix="dp-exec-"))
+        env, execution = isolation.scrub(
+            dict(os.environ),
+            path_dirs=isolation.tool_dirs(sorted(profile.get("tools", {}))),
+            scratch=scratch,
+            keep=tuple(args.isolate_keep),
+        )
+        executor = engine.make_executor(env)
     doc = engine.build(
         cfg,
         args.project.resolve(),
@@ -314,7 +335,11 @@ def _plan(args, execute: bool) -> tuple[dict, int]:
         dirty=engine.git_dirty(args.project),
         environment=environment_for(cfg, res, args.project.resolve()),
         exec_env=exec_env_for(cfg, res),
+        executor=executor,
+        execution=execution,
     )
+    if scratch:
+        shutil.rmtree(scratch, ignore_errors=True)
     return doc, doc["exit"]
 
 

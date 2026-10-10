@@ -8,6 +8,12 @@
                "environment", "checks", "unsatisfied_obligations", "regressions", "admission", "certification", "exit"],
   "properties": {
     "schema": {"const": "dev-platform.result/v1"},
+    "execution": {"type": "object", "required": ["environment", "limits"],
+                  "properties": {"environment": {"enum": ["scrubbed", "inherited"]},
+                                 "variables": {"type": ["array", "null"], "items": {"type": "string"}},
+                                 "inherited_dropped": {"type": "integer"},
+                                 "path": {"type": ["array", "null"], "items": {"type": "string"}},
+                                 "limits": {"type": "array", "items": {"type": "string"}}}},
     "platform": {"type": "object", "required": ["running_version", "mode", "pinned_version", "digest"],
                  "properties": {"running_version": {"type": "string"},
                                 "mode": {"enum": ["pinned", "override", "self"]},

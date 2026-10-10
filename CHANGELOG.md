@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Owner acceptance packet for 0.1.0 (releases/0.1.0/ACCEPTANCE-PACKET.md), unsigned authorization template, and
+  tools/validate_authorization.py (pinned-owner signed-commit validation). No authorization exists; 0.1.0 stays
+  verified-unaccepted.
 - 0.1.0 stable candidate (published verified-unaccepted; acceptance needs an owner authorization record):
   environment evidence states non-hermetic scope and limitations (also copied into certification);
   verifier checks the attested build-environment record against the manifest pins; policy requires
