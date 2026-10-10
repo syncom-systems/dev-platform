@@ -1,1 +1,4 @@
 module(name = "demo", version = "0.1.0")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(versions = ["1.85.0"], sha256 = "178492c5c6cef1d38a86c79f48fb8e4164ba0dbaaa9dcd0aa0bb4ff383c22ab9")

@@ -26,4 +26,4 @@ Exit codes: 0 ok, 1 unsatisfied, 2 config/usage, 3 platform resolution/integrity
 [Architecture](docs/architecture.md) · [Verification model](docs/verification-model.md) ·
 [Distribution](docs/distribution.md) · [ADRs](docs/adr/README.md) ·
 [Supply chain](docs/supply-chain.md) · [Provenance & governance](docs/provenance-and-governance.md) ·
-[Release trust](docs/release-trust.md) · [Investigation](docs/investigation.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Release trust](docs/release-trust.md) · [Consumer compatibility](docs/consumer-compatibility.md) · [Investigation](docs/investigation.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

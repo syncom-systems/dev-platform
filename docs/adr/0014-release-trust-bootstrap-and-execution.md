@@ -20,3 +20,19 @@ override rules there stand) and the TOCTOU limitation recorded in the architectu
   (pinned) re-running its full stage over N's source, and attested. The first release has no N-1: it
   is bootstrapped by owner verification of the attestation and manual digest pin, and is documented
   as such. This is **not yet performed**; no release has been signed.
+
+## Owner ratifications (2026-10-10)
+1. The first release may be accepted through an explicit owner authorization record, but only after
+   independent verification of source revision, artifact digest, toolchain manifest, build
+   provenance, signing identity and release process. The authorization is the initial trust anchor and
+   never replaces technical verification (`tools/verify_release.py` computes acceptance in that order).
+2. `dev-platform.result/v1` is retained. After the first public release, incompatible changes require
+   a new schema version.
+3. Version-prefix probes are development diagnostics only (ADR 0010, identity strength).
+
+## Implemented
+Deterministic archive, write-once verified installer, independent verifier with trust policy,
+three-job release workflow with Sigstore provenance and SBOM attestations, SHA-pinned actions, tag
+ruleset (`v*` cannot be deleted or moved) and repository immutable releases. First exercise:
+`0.1.0-rc.2` (see `releases/0.1.0-rc.2/`); `0.1.0-rc.1` failed at SBOM attestation and was retained
+as evidence (`releases/0.1.0-rc.1/ATTEMPT.md`).
