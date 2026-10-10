@@ -137,6 +137,12 @@ def environment_for(cfg, res, root: Path) -> dict | None:
     return toolchain.verify_profile(res.release["toolchains"], profile, root)
 
 
+def exec_env_for(cfg, res) -> dict[str, str]:
+    if not cfg.platform.profile or not res.release:
+        return {}
+    return toolchain.runtime_env(res.release["toolchains"], cfg.platform.profile)
+
+
 def cmd_detect(args) -> int:
     facts = detect(args.project)
     lines = [f"languages: {facts['languages'] or '(none)'}"] + [
@@ -286,6 +292,7 @@ def _plan(args, execute: bool) -> tuple[dict, int]:
         revision=engine.git_revision(args.project),
         dirty=engine.git_dirty(args.project),
         environment=environment_for(cfg, res, args.project.resolve()),
+        exec_env=exec_env_for(cfg, res),
     )
     return doc, doc["exit"]
 

@@ -57,29 +57,48 @@ def extract(archive: Path, dest: Path, strip: str) -> None:
         inner.rmdir()
 
 
-def main() -> int:
+def install_binary(src: dict, bindir: Path, dl: Path) -> Path:
+    target = bindir / src["as"]
+    bindir.mkdir(parents=True, exist_ok=True)
+    fetch(src["url"], src["sha256"], target)
+    target.chmod(0o755)
+    return target
+
+
+def main(argv: list[str] | None = None) -> int:
+    profile = (argv if argv is not None else sys.argv[1:] or [PROFILE])[0]
     manifest = json.loads((ROOT / "toolchains" / "manifest.json").read_text())
-    spec = manifest["profiles"][PROFILE]["tools"]["python"]
-    src = spec["source"].get(platform_key())
-    if not src:
-        raise SystemExit(f"no pinned python source for {platform_key()}")
+    tools = manifest["profiles"][profile]["tools"]
     dev = ROOT / ".devenv"
-    shutil.rmtree(dev, ignore_errors=True)
-    (dev / "dl").mkdir(parents=True)
-    archive = dev / "dl" / "python.tar.gz"
-    fetch(src["url"], src["sha256"], archive)
-    prefix = dev / "python"
-    prefix.mkdir()
-    extract(archive, prefix, src.get("strip", ""))
-    venv = dev / "venv"
-    py = prefix / "bin" / "python3"
-    subprocess.run([str(py), "-m", "venv", "--without-pip", str(venv)], check=True)
-    subprocess.run(
-        ["uv", "pip", "install", "--python", str(venv / "bin" / "python"), "--require-hashes", "--no-deps",
-         "--no-cache", "-r", str(ROOT / "tools" / "requirements.txt")],
-        check=True,
-    )  # fmt: skip
-    print(f"environment ready: PATH={venv / 'bin'}:$PATH")
+    dev.mkdir(exist_ok=True)
+    (dev / "dl").mkdir(exist_ok=True)
+    for name, spec in sorted(tools.items()):
+        src = (spec.get("source") or {}).get(platform_key())
+        if not src:
+            if name == "python":
+                raise SystemExit(f"no pinned python source for {platform_key()}")
+            continue
+        if src.get("type") == "binary":
+            install_binary(src, dev / "bin", dev / "dl")
+            continue
+        prefix = dev / name
+        shutil.rmtree(prefix, ignore_errors=True)
+        prefix.mkdir()
+        archive = dev / "dl" / f"{name}.tar.gz"
+        fetch(src["url"], src["sha256"], archive)
+        extract(archive, prefix, src.get("strip", ""))
+    if "ruff" in tools:  # the python venv carrying the hash-locked ruff wheel
+        venv = dev / "venv"
+        shutil.rmtree(venv, ignore_errors=True)
+        subprocess.run(
+            [str(dev / "python" / "bin" / "python3"), "-m", "venv", "--without-pip", str(venv)], check=True
+        )
+        subprocess.run(
+            ["uv", "pip", "install", "--python", str(venv / "bin" / "python"), "--require-hashes", "--no-deps",
+             "--no-cache", "-r", str(ROOT / "tools" / "requirements.txt")],
+            check=True,
+        )  # fmt: skip
+    print(f"environment ready: PATH={dev / 'venv' / 'bin'}:{dev / 'bin'}:$PATH")
     return 0
 
 

@@ -22,3 +22,18 @@ in two explicit steps (pin, then its own declaration).
 
 Not covered: real Bazel/Cargo execution, Bazel repository-rule resolution beyond declared inputs,
 Windows, and application-release rollback (milestone M4).
+
+## Qualification (real execution) versus adoption-contract tests
+`tests/test_compat.py` above exercises the adoption contract with emulated tools. It is **not**
+evidence that any compiler or build-system integration works. Support is claimed only for profiles that
+`tools/qualify.py` passes in CI (`qualify` job) on real tools, on the platforms listed:
+
+| Profile | Fixture | Real tools | Platforms | Identity established |
+|---|---|---|---|---|
+| `python` | `fixtures/python-only` | pinned CPython (python-build-standalone) | linux-x86_64, darwin-arm64 | `closure-verified` |
+| `rust-bazel` | `fixtures-real/rust-bazel` | Bazelisk 1.29.0 -> Bazel 8.4.2 -> rules_rust 0.61.0 -> rustc 1.85.0 | linux-x86_64, darwin-arm64 | launcher `closure-verified`; Bazel binary digest enforced by Bazelisk at execution; rules_rust source pinned through the resolved `MODULE.bazel.lock`; `--lockfile_mode=error` |
+
+Each qualification also runs must-be-rejected scenarios (tampered resolved graph, undeclared module
+change, declared Bazel/Rust version drift, failing test) and requires every one to be rejected.
+Not claimed (no shipped profile, only synthetic evidence): the `cargo` adapter, Python-in-Bazel
+(`rules_python`) and mixed consumers, Windows, Linux aarch64.

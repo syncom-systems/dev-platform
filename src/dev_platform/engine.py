@@ -95,6 +95,7 @@ def build(
     revision: str | None = None,
     dirty: bool = False,
     environment: dict | None = None,
+    exec_env: dict[str, str] | None = None,
 ) -> dict:
     prev_state = {c["id"]: EvidenceState(c["state"]) for c in (previous or {}).get("checks", [])}
     offered = load_profile(infra_profile)
@@ -127,6 +128,8 @@ def build(
             }
         if s is not None and s.selected:
             cmd = command_for(c, root)
+            if exec_env:
+                cmd = Command(cmd.argv, (*cmd.env, *sorted(exec_env.items())))
             entry["command"] = list(cmd.argv)
             if execute:
                 if entry.get("runner") and not entry["runner"]["routed"]:

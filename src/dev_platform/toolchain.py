@@ -54,14 +54,32 @@ def validate(doc: dict) -> dict:
                 elif re.compile(d["pattern"]).groups < 1:
                     errs.append(f"{w}.declared_in.pattern needs a capture group")
                 for j, ent in enumerate(t.get("integrity", [])):
+                    if ent.get("kind") == "bazel_module":
+                        ok = all(ent.get(k) for k in ("name", "version")) and re.fullmatch(
+                            r"[0-9a-f]{64}", str(ent.get("source_json_sha256", ""))
+                        )
+                        if not ok:
+                            errs.append(
+                                f"{w}.integrity[{j}]: bazel_module needs name, version, source_json_sha256"
+                            )
+                        continue
                     ok = all(ent.get(k) for k in ("name", "file", "pattern", "sha256"))
                     if not ok or not re.fullmatch(r"[0-9a-f]{64}", str(ent.get("sha256", ""))):
                         errs.append(f"{w}.integrity[{j}]: name, file, pattern, sha256(64 hex) required")
                     elif re.compile(ent["pattern"]).groups < 1:
                         errs.append(f"{w}.integrity[{j}].pattern needs a capture group")
+                bsha = t.get("binary_sha256")
+                if bsha is not None:
+                    vals = bsha.values() if isinstance(bsha, dict) else []
+                    if not vals or not all(re.fullmatch(r"[0-9a-f]{64}", str(v)) for v in vals):
+                        errs.append(f"{w}.binary_sha256: map of '<sys.platform>-<machine>' to 64 hex chars")
+                    if t.get("launcher") not in tools:
+                        errs.append(f"{w}.launcher: must name another tool of this profile")
             else:
                 p = t.get("probe") or {}
-                if not (p.get("argv") and p.get("pattern")):
+                if not p and "closure" in t and t.get("executable"):
+                    pass  # identified by closure digest alone (stronger than any version probe)
+                elif not (p.get("argv") and p.get("pattern")):
                     errs.append(f"{w}: probe {{argv, pattern}} required for non-Bazel tools")
                 elif re.compile(p["pattern"]).groups < 1:
                     errs.append(f"{w}.probe.pattern needs a capture group")
@@ -179,7 +197,33 @@ def _expected_sha(spec: dict) -> str | None:
     return sha
 
 
+def _check_bazel_module(ent: dict, root: Path) -> dict:
+    """A BCR module pinned by the release: the consumer declares exactly this bazel_dep version and
+    the consumer's resolved graph (MODULE.bazel.lock) holds the pinned registry source.json hash."""
+    proof = {"name": ent["name"], "status": "mismatch"}
+    mod = root / ent.get("file", "MODULE.bazel")
+    pat = rf'bazel_dep\(\s*name\s*=\s*"{re.escape(ent["name"])}"\s*,\s*version\s*=\s*"([^"]+)"'
+    m = re.search(pat, mod.read_text()) if mod.is_file() else None
+    if not m or m.group(1) != ent["version"]:
+        proof["reason"] = f"consumer does not declare {ent['name']}@{ent['version']}"
+        return proof
+    lock = root / ent.get("lock_file", "MODULE.bazel.lock")
+    try:
+        hashes = json.loads(lock.read_text()).get("registryFileHashes", {})
+    except (OSError, json.JSONDecodeError):
+        proof["reason"] = "resolved graph (MODULE.bazel.lock) missing or unreadable"
+        return proof
+    key = f"https://bcr.bazel.build/modules/{ent['name']}/{ent['version']}/source.json"
+    if hashes.get(key) != ent["source_json_sha256"]:
+        proof["reason"] = "resolved graph does not hold the pinned source.json hash"
+        return proof
+    proof["status"] = "ok"
+    return proof
+
+
 def _check_integrity(ent: dict, root: Path) -> dict:
+    if ent.get("kind") == "bazel_module":
+        return _check_bazel_module(ent, root)
     """Pinned toolchain input: the consumer's declaration must carry the pinned sha256, and the
     consumer's resolved graph (lock file) must contain it too."""
     proof = {"name": ent["name"], "status": "mismatch"}
@@ -196,6 +240,39 @@ def _check_integrity(ent: dict, root: Path) -> dict:
             return proof
     proof["status"] = "ok"
     return proof
+
+
+def _bind_launcher(entry: dict, spec: dict, verified: list[dict], root: Path) -> None:
+    """The Bazel binary itself is pinned by digest and the platform enforces that pin at execution
+    (BAZELISK_VERIFY_SHA256, see runtime_env). That is only meaningful if the launcher is itself
+    closure-verified and the consumer does not pin a different binary; otherwise demote."""
+    key = _closure.platform_key()
+    want = spec["binary_sha256"].get(key)
+    launcher = next((t for t in verified if t["name"] == spec["launcher"]), None)
+    rc = root / ".bazeliskrc"
+    declared = (
+        re.search(r"BAZELISK_VERIFY_SHA256\s*=\s*([0-9a-f]{64})", rc.read_text()) if rc.is_file() else None
+    )
+    if declared and want and declared.group(1) != want:
+        entry["status"], entry["identity"] = "mismatch", "none"
+        entry["binary"] = {"status": "mismatch", "reason": ".bazeliskrc pins a different Bazel binary"}
+    elif want and launcher and launcher["identity"] == "closure-verified" and launcher["status"] == "ok":
+        entry["binary"] = {"status": "enforced-at-execution", "sha256": want, "launcher": spec["launcher"]}
+    else:
+        entry["identity"] = "bazel-declared"
+        why = "no pinned Bazel binary digest for " + key if not want else "launcher is not closure-verified"
+        entry["binary"] = {"status": "unbound", "reason": why}
+
+
+def runtime_env(manifest: dict, profile: str) -> dict[str, str]:
+    """Environment the platform adds to every check so tools enforce the release's pins themselves."""
+    env: dict[str, str] = {}
+    prof = manifest["profiles"].get(profile) or {"tools": {}}
+    for spec in prof["tools"].values():
+        pin = (spec.get("binary_sha256") or {}).get(_closure.platform_key())
+        if spec.get("bazel_managed") and pin:
+            env["BAZELISK_VERIFY_SHA256"] = pin
+    return env
 
 
 def verify_profile(
@@ -215,7 +292,9 @@ def verify_profile(
             ]
         )
     tools = []
-    for name, spec in sorted(prof["tools"].items()):
+    # Launchers (executed tools) are verified before the Bazel-managed tools that depend on them.
+    order = sorted(prof["tools"].items(), key=lambda kv: (bool(kv[1].get("bazel_managed")), kv[0]))
+    for name, spec in order:
         entry = {
             "name": name,
             "expected": spec["version"],
@@ -237,6 +316,8 @@ def verify_profile(
                 else:
                     entry["identity"] = "bazel-declared"
                     integ = spec.get("integrity", [])
+                    if not integ and spec.get("binary_sha256"):
+                        entry["identity"] = "bazel-locked"  # pending the launcher binding below
                     if integ:
                         proofs = [_check_integrity(e, root) for e in integ]
                         entry["integrity"] = proofs
@@ -245,15 +326,22 @@ def verify_profile(
                         else:
                             entry["status"] = "mismatch"
                             entry["identity"] = "none"
+                    if entry["identity"] == "bazel-locked" and spec.get("binary_sha256"):
+                        _bind_launcher(entry, spec, tools, root)
         else:
-            code, out = probe(spec["probe"]["argv"])
-            m = re.search(spec["probe"]["pattern"], out) if code == 0 else None
-            if not m:
+            if "probe" in spec:
+                code, out = probe(spec["probe"]["argv"])
+                m = re.search(spec["probe"]["pattern"], out) if code == 0 else None
+                observed = m.group(1) if m else None
+            else:  # closure-only tool: present or absent; the pinned digest says which version it is
+                observed = spec["version"] if _executable(spec) else None
+                entry["observed_via"] = "closure"
+            if observed is None:
                 entry["status"] = "unavailable"
                 entry["identity"] = "none"
             else:
-                entry["observed"] = m.group(1)
-                if not _version_ok(spec, m.group(1)):
+                entry["observed"] = observed
+                if not _version_ok(spec, observed):
                     entry["status"] = "mismatch"
                 if entry["status"] != "ok":
                     entry["identity"] = "none"
@@ -265,7 +353,10 @@ def verify_profile(
                     elif proof["status"] == "mismatch":
                         entry["status"] = "mismatch"
                         entry["identity"] = "none"
-                    # unpinned/unverifiable: nothing beyond the version was established
+                    elif entry.get("observed_via") == "closure":
+                        # no probe and no pin for this platform: nothing at all was established
+                        entry["status"], entry["identity"], entry["observed"] = "unavailable", "none", None
+                    # otherwise unpinned/unverifiable: nothing beyond the probed version was established
                 elif _expected_sha(spec):
                     if _binary_digest(spec["probe"]["argv"][0]) == _expected_sha(spec):
                         entry["identity"] = "digest-verified"
