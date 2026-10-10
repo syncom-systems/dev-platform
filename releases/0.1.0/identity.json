@@ -1,0 +1,32 @@
+{
+  "version": "0.1.0",
+  "state": "verified-unaccepted (stable candidate; NOT accepted; release not certified)",
+  "git_tag": "v0.1.0",
+  "source_revision": "279cd6d28e18df4293b3aa09d3f0224d58f30e38",
+  "archive": "dev-platform-0.1.0.tar.gz",
+  "archive_sha256": "f3ef0e50e23efc063e45041d6608ad87a7ea6150280529cd5bb969d168464dc2",
+  "tree_digest_pin": "09adc0d2f1b3b6eba9c423b6cd258cd64b75899b5005e371d2b0692a8ccc4e4b",
+  "release_workflow_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38071871979",
+  "signer": "syncom-systems/dev-platform/.github/workflows/release.yml@refs/tags/v0.1.0",
+  "attestations": [
+    "https://slsa.dev/provenance/v1 (archive, build-environment.json)",
+    "https://cyclonedx.org/bom"
+  ],
+  "github_release": {
+    "immutable": true,
+    "prerelease": true,
+    "title": "dev-platform 0.1.0 (verified, NOT accepted)"
+  },
+  "verifier_pins": {
+    "verify_release.py_sha256": "49ff13fdfa2a7811b0fd7c523472dfda247516bb09c7d537aa8cf0acf53836f9",
+    "trust_policy_sha256": "957acd7635f343acda9fae9bf23e26b123d765846d0ad2443f92ee3c6f7d88b4"
+  },
+  "build_environment": {
+    "profile": "dev-platform-release",
+    "platform": "linux-x86_64",
+    "assurance": "certifiable",
+    "hermetic": false,
+    "identity_digest": "a31eef599f21ed869d53a15911593302630a695b1db840e0ba856164029895a6"
+  },
+  "owner_authorization": "none"
+}

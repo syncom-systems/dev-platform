@@ -1,0 +1,102 @@
+{
+  "admission": "admitted",
+  "certification": {
+    "blockers": [],
+    "certified": true,
+    "limitations": [
+      "tool identity is not complete execution-environment identity: the host kernel, CPU, filesystem and anything not listed above are not part of the evidence",
+      "system libraries named in closure.system_libs are trusted by name or prefix, not by content; the environment is not byte-level hermetic"
+    ],
+    "release_eligible": true
+  },
+  "change_set": {
+    "known": false,
+    "paths": []
+  },
+  "checks": [
+    {
+      "adapter": "python",
+      "command": [
+        "{python}",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests"
+      ],
+      "cost": "fast",
+      "exit_code": 0,
+      "id": "python.unittest",
+      "obligation": "change",
+      "outcome": "passed",
+      "reasons": [
+        "full validation runs every check"
+      ],
+      "selected": true,
+      "state": "verified"
+    }
+  ],
+  "environment": {
+    "assurance": "certifiable",
+    "conformant": true,
+    "identity_digest": "d2239c46a85ad95826cc2c98d770288aaecc059d9502160f7dbd7485db3de0ce",
+    "platform": "darwin-arm64",
+    "profile": "python",
+    "release": {
+      "sbom_sha256": "de1914ffc31a1521b7a35b655aac72f12ff530fe5acf23dc0849dd6d87906b7f",
+      "source_digest": "023fe0e855d1caf436998c5bdbd2464cfc53467ef593755a3596dca20b34e16a",
+      "synthesized": false,
+      "tree_digest": "09adc0d2f1b3b6eba9c423b6cd258cd64b75899b5005e371d2b0692a8ccc4e4b",
+      "version": "0.1.0"
+    },
+    "scope": {
+      "hermetic": false,
+      "limitations": [
+        "tool identity is not complete execution-environment identity: the host kernel, CPU, filesystem and anything not listed above are not part of the evidence",
+        "system libraries named in closure.system_libs are trusted by name or prefix, not by content; the environment is not byte-level hermetic"
+      ]
+    },
+    "tools": [
+      {
+        "closure": {
+          "digest": "bc602f3eeaca659ab7cec5f741d44971d53021b625fa6dc994f567fc92440b18",
+          "files": 1694,
+          "kind": "prefix",
+          "linkage": {
+            "native_objects": 10,
+            "unknown": [],
+            "violations": []
+          },
+          "platform": "darwin-arm64",
+          "root": "/Users/mats/dev/dev-platform/.devenv/python",
+          "scope": "closure bytes pinned; native dependencies limited to the closure and declared system libraries, which are trusted by name, not by content",
+          "status": "ok"
+        },
+        "expected": "3.14.7",
+        "identity": "closure-verified",
+        "name": "python",
+        "observed": "3.14.7",
+        "status": "ok"
+      }
+    ],
+    "weak_tools": []
+  },
+  "executed": true,
+  "exit": 0,
+  "platform": {
+    "digest": "09adc0d2f1b3b6eba9c423b6cd258cd64b75899b5005e371d2b0692a8ccc4e4b",
+    "mode": "pinned",
+    "pinned_version": "0.1.0",
+    "running_version": "0.1.0"
+  },
+  "project": {
+    "assurance": "standard",
+    "bazel_only": false,
+    "name": "c"
+  },
+  "regressions": [],
+  "revision": "b303fb8d87fd50ed5b2c6e5ff1998aa12a434728",
+  "schema": "dev-platform.result/v1",
+  "stage": "full",
+  "unsatisfied_obligations": []
+}

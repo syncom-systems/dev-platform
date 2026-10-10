@@ -1,0 +1,161 @@
+{
+  "acceptance": {
+    "authorization": null,
+    "reasons": [
+      "pre-releases are never accepted; they are verified artifacts only"
+    ],
+    "state": "pre-release"
+  },
+  "checks": [
+    {
+      "detail": "actual bea41786efc184169033338beca9c0b9d07c039e0b7d1d15301d242e161bd400",
+      "id": "archive-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "safe-extract",
+      "status": "passed"
+    },
+    {
+      "detail": "archive root 0.1.0-rc.5, expected 0.1.0-rc.5",
+      "id": "version-binding",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "release-json",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "release-version",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "source-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "source-version-matches",
+      "status": "passed"
+    },
+    {
+      "detail": "release.json says 2e15ff687d69bfebcb94a38df4c7f82b032c4da8",
+      "id": "source-revision",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "missing []",
+      "id": "sbom-covers-toolchains",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-matches-manifest",
+      "status": "passed"
+    },
+    {
+      "detail": "SBOM root component must be this version and source digest",
+      "id": "sbom-describes-artifact",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "tree-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.1.0-rc.5 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "attestation-matches-policy",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.1.0-rc.5 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "sbom-attestation-matches-policy",
+      "status": "passed"
+    },
+    {
+      "detail": "the attested SBOM must be exactly the SBOM inside the archive",
+      "id": "sbom-attestation-content",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "environment-evidence",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.1.0-rc.5 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "environment-attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "environment-attestation-matches-policy",
+      "status": "passed"
+    }
+  ],
+  "expected": {
+    "archive_sha256": "bea41786efc184169033338beca9c0b9d07c039e0b7d1d15301d242e161bd400",
+    "ref": "refs/tags/v0.1.0-rc.5",
+    "source_revision": "2e15ff687d69bfebcb94a38df4c7f82b032c4da8",
+    "tree_digest": "7f2d6f2f5f6fc276536c2aef24c2cc7ca24eb9f860f5acb467d3ef87f8c2a06e",
+    "version": "0.1.0-rc.5"
+  },
+  "policy_sha256": "a2e7a1ba9f50456c24901be6054e7b7291cad4a5d3b335d62924265f9e85b81c",
+  "schema": "dev-platform.verification/v1",
+  "subject": {
+    "archive": "dev-platform-0.1.0-rc.5.tar.gz",
+    "archive_sha256": "bea41786efc184169033338beca9c0b9d07c039e0b7d1d15301d242e161bd400",
+    "tree_digest": "7f2d6f2f5f6fc276536c2aef24c2cc7ca24eb9f860f5acb467d3ef87f8c2a06e",
+    "version": "0.1.0-rc.5"
+  }
+}
