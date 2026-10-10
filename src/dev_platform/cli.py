@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from dev_platform import __version__, engine, pack, records, release, toolchain
+from dev_platform import __version__, engine, pack, provenance, records, release, toolchain
 from dev_platform.config import CONFIG_FILENAME, SCHEMA_VERSION, load
 from dev_platform.detect import detect, is_bazel_workspace
 from dev_platform.digest import tree_digest
@@ -96,6 +96,27 @@ def build_parser() -> argparse.ArgumentParser:
     tv.add_argument("--manifest", type=Path, default=Path("toolchains/manifest.json"))
     tv.add_argument("--profile", required=True)
     tv.add_argument("--require-certifiable", action="store_true", help="exit 1 unless every tool is strong")
+    pv = sub.add_parser("provenance", help="assemble an application-release record from a certified result")
+    psub = pv.add_subparsers(dest="pcmd", required=True)
+    pa = psub.add_parser("assemble")
+    pa.add_argument("--result", type=Path, required=True)
+    pa.add_argument("--name", required=True)
+    pa.add_argument("--app-version", required=True)
+    pa.add_argument("--source-uri", required=True)
+    pa.add_argument("--artifact", action="append", default=[], metavar="NAME=SHA256")
+    pa.add_argument("--lock", type=Path, action="append", default=[], help="dependency resolution file")
+    pa.add_argument("--root", type=Path, default=Path("."))
+    pa.add_argument("--out", type=Path)
+    rb = sub.add_parser("rollback", help="select a previously approved application release")
+    rsub2 = rb.add_subparsers(dest="rbcmd", required=True)
+    rs = rsub2.add_parser("select")
+    rs.add_argument("--application", required=True)
+    rs.add_argument("--current", required=True)
+    rs.add_argument("--release", type=Path, action="append", default=[], help="app-release records")
+    rs.add_argument("--result", type=Path, action="append", default=[], help="result records (evidence)")
+    rs.add_argument("--authorization", type=Path, action="append", default=[])
+    rs.add_argument("--advisory", type=Path, action="append", default=[])
+    rs.add_argument("--store", type=Path, default=None, help="platform release store (for advisories)")
     dg = sub.add_parser("digest", help="print the release tree digest of a directory")
     dg.add_argument("path", type=Path)
     return ap
@@ -419,6 +440,56 @@ def cmd_toolchain(args) -> int:
     return EXIT_OK
 
 
+def _load_json(paths):
+    return [json.loads(Path(p).read_text()) for p in paths]
+
+
+def cmd_provenance(args) -> int:
+    result = json.loads(args.result.read_text())
+    arts = []
+    for a in args.artifact:
+        name, _, sha = a.partition("=")
+        arts.append({"name": name, "sha256": sha})
+    if not args.lock:
+        raise ConfigError(["at least one --lock (dependency resolution file) is required"])
+    doc = provenance.assemble(
+        result,
+        name=args.name,
+        version=args.app_version,
+        source_uri=args.source_uri,
+        artifacts=arts,
+        resolution=provenance.resolution_digest(args.lock, args.root),
+    )
+    text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
+    if args.out:
+        args.out.write_text(text)
+    print(text, end="")
+    return EXIT_OK
+
+
+def cmd_rollback(args) -> int:
+    results = {records.canonical_digest(r): r for r in _load_json(args.result)}
+    plat = {}
+    store = args.store or default_store()
+    if args.advisory and store.is_dir():
+        for d in sorted(store.iterdir()):
+            if (d / "release.json").is_file():
+                doc = release.load(d)
+                doc["sbom_doc"] = json.loads((d / doc["sbom"]["path"]).read_text())
+                plat[d.name] = doc
+    out = provenance.select_rollback(
+        args.application,
+        args.current,
+        _load_json(args.release),
+        results,
+        _load_json(args.authorization),
+        advisories=_load_json(args.advisory),
+        platform_releases=plat,
+    )
+    print(json.dumps(out, indent=2, sort_keys=True))
+    return EXIT_OK if out["eligible"] else EXIT_UNSATISFIED
+
+
 def cmd_digest(args) -> int:
     print(tree_digest(args.path))
     return EXIT_OK
@@ -432,6 +503,8 @@ _COMMANDS = {
     "check": cmd_check,
     "digest": cmd_digest,
     "toolchain": cmd_toolchain,
+    "provenance": cmd_provenance,
+    "rollback": cmd_rollback,
     "release": cmd_release,
     "validate": cmd_validate,
     "affected": cmd_affected,
