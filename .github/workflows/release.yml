@@ -39,7 +39,11 @@ jobs:
           export PATH="$PWD/.devenv/venv/bin:$PATH" PYTHONPATH=src
           mkdir out
           python -m dev_platform toolchain verify --profile dev-platform-release --require-certifiable \
-            > "out/dev-platform-$VERSION.build-environment.json"
+            > "out/dev-platform-$VERSION.build-environment.json" || {
+              echo "::error::build environment is not certifiable; diagnostics follow"
+              cat "out/dev-platform-$VERSION.build-environment.json"
+              exit 1
+            }
       - name: Unit tests (pinned interpreter)
         run: PATH="$PWD/.devenv/venv/bin:$PATH" python -m unittest discover -t . -s tests
       - id: pack

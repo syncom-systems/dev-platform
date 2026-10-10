@@ -45,6 +45,7 @@ jobs:
       - name: Measure closures
         run: PYTHONPATH=src python -m dev_platform toolchain measure --profile dev-platform-release | tee measure.json
       - name: Verify closures against the manifest
+        shell: bash  # -eo pipefail: a non-certifiable environment must fail this step even through tee
         run: |
           PYTHONPATH=src python -m dev_platform toolchain verify --profile dev-platform-release --require-certifiable | tee verify.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

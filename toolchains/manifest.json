@@ -71,7 +71,8 @@
               "libm.so.6",
               "libpthread.so.0",
               "librt.so.1",
-              "libutil.so.1"
+              "libutil.so.1",
+              "libgcc_s.so.1"
             ]
           },
           "source": {
@@ -113,7 +114,8 @@
               "libm.so.6",
               "libpthread.so.0",
               "librt.so.1",
-              "libutil.so.1"
+              "libutil.so.1",
+              "libgcc_s.so.1"
             ]
           }
         }
@@ -148,7 +150,8 @@
               "libm.so.6",
               "libpthread.so.0",
               "librt.so.1",
-              "libutil.so.1"
+              "libutil.so.1",
+              "libgcc_s.so.1"
             ]
           },
           "source": {
@@ -187,7 +190,8 @@
               "libm.so.6",
               "libpthread.so.0",
               "librt.so.1",
-              "libutil.so.1"
+              "libutil.so.1",
+              "libgcc_s.so.1"
             ]
           },
           "source": {
