@@ -1,5 +1,6 @@
 import unittest
 
+from dev_platform import closure as C
 from dev_platform import toolchain as T
 from dev_platform.errors import ConfigError
 from tests.helpers import tmpdir
@@ -175,32 +176,25 @@ class IdentityStrengthTest(unittest.TestCase):
             (rec["conformant"], rec["assurance"], rec["weak_tools"]), (True, "diagnostic", ["tool"])
         )
 
-    def test_digest_verified_requires_matching_binary(self):
+    def test_binary_digest_alone_is_not_certifiable(self):
         import hashlib
         import sys
         from pathlib import Path
 
         real = hashlib.sha256(Path(sys.executable).resolve().read_bytes()).hexdigest()
-        m = {
-            "schema": T.SCHEMA,
-            "profiles": {
-                "p": {
-                    "tools": {
-                        "py": {
-                            "version": "3",
-                            "compare": "prefix",
-                            "sha256": real,
-                            "probe": {"argv": ["{python}", "--version"], "pattern": "Python (\\S+)"},
-                        }
-                    }
-                }
-            },
+        spec = {
+            "version": "3",
+            "compare": "prefix",
+            "sha256": real,
+            "probe": {"argv": ["{python}", "--version"], "pattern": "Python (\\S+)"},
         }
+        m = {"schema": T.SCHEMA, "profiles": {"p": {"tools": {"py": spec}}}}
         rec = T.verify_profile(m, "p", tmpdir(self))
-        self.assertEqual((rec["tools"][0]["identity"], rec["assurance"]), ("digest-verified", "certifiable"))
-        m["profiles"]["p"]["tools"]["py"]["sha256"] = "0" * 64
+        self.assertEqual((rec["tools"][0]["identity"], rec["assurance"]), ("digest-verified", "diagnostic"))
+        spec["sha256"] = "0" * 64
         rec = T.verify_profile(m, "p", tmpdir(self))
         self.assertEqual((rec["tools"][0]["identity"], rec["assurance"]), ("none", "diagnostic"))
+        self.assertFalse(rec["conformant"])
 
     def test_unavailable_tool_claims_nothing(self):
         rec = T.verify_profile(MANIFEST, "p", tmpdir(self), probe_returning("", 127))
@@ -270,3 +264,123 @@ class IdentityStrengthTest(unittest.TestCase):
         }
         with self.assertRaises(ConfigError):
             T.validate(bad)
+
+
+def make_prefix(test, files=None):
+    d = tmpdir(test) / "tool"
+    (d / "bin").mkdir(parents=True)
+    (d / "lib").mkdir()
+    exe = d / "bin" / "tool"
+    exe.write_bytes(b"\x7fELF" + b"exe")
+    exe.chmod(0o755)
+    (d / "lib" / "stdlib.txt").write_text("stdlib")
+    (d / "bin" / "tool3").symlink_to("tool")
+    return d
+
+
+def closure_manifest(prefix, digest, libs=("libc.so.6",)):
+    return {
+        "schema": T.SCHEMA,
+        "profiles": {
+            "p": {
+                "tools": {
+                    "tool": {
+                        "version": "1.2.3",
+                        "executable": str(prefix / "bin" / "tool3"),
+                        "probe": PROBE,
+                        "closure": {
+                            "kind": "prefix",
+                            "prefix_up": 2,
+                            "sha256": {C.platform_key(): digest},
+                            "system_libs": list(libs),
+                        },
+                    }
+                }
+            }
+        },
+    }
+
+
+class ClosureIdentityTest(unittest.TestCase):
+    def setUp(self):
+        self.prefix = make_prefix(self)
+        self.digest = C.digest(self.prefix)[0]
+
+    def run_profile(self, m, deps=("libc.so.6",)):
+        return T.verify_profile(m, "p", tmpdir(self), probe_returning("tool 1.2.3"), lambda p: list(deps))
+
+    def test_matching_closure_is_certifiable_and_scoped(self):
+        rec = self.run_profile(closure_manifest(self.prefix, self.digest))
+        t = rec["tools"][0]
+        self.assertEqual((t["identity"], rec["assurance"]), ("closure-verified", "certifiable"))
+        self.assertEqual(t["closure"]["files"], 3)
+        self.assertIn("trusted by name, not by content", t["closure"]["scope"])
+
+    def test_any_changed_byte_in_the_closure_fails(self):
+        (self.prefix / "lib" / "stdlib.txt").write_text("stdlib!")
+        rec = self.run_profile(closure_manifest(self.prefix, self.digest))
+        self.assertEqual((rec["conformant"], rec["tools"][0]["identity"]), (False, "none"))
+
+    def test_added_file_and_mode_change_fail(self):
+        (self.prefix / "lib" / "extra.py").write_text("x")
+        self.assertNotEqual(C.digest(self.prefix)[0], self.digest)
+        (self.prefix / "lib" / "extra.py").unlink()
+        self.assertEqual(C.digest(self.prefix)[0], self.digest)
+        (self.prefix / "bin" / "tool").chmod(0o644)
+        self.assertNotEqual(C.digest(self.prefix)[0], self.digest)
+
+    def test_bytecode_caches_do_not_change_identity(self):
+        (self.prefix / "lib" / "__pycache__").mkdir()
+        (self.prefix / "lib" / "__pycache__" / "a.pyc").write_bytes(b"x")
+        self.assertEqual(C.digest(self.prefix)[0], self.digest)
+
+    def test_symlink_leaving_the_closure_is_rejected(self):
+        (self.prefix / "lib" / "evil").symlink_to("../../outside")
+        with self.assertRaises(ConfigError):
+            C.digest(self.prefix)
+        (self.prefix / "lib" / "evil").unlink()
+        (self.prefix / "lib" / "abs").symlink_to("/etc/passwd")
+        with self.assertRaises(ConfigError):
+            C.digest(self.prefix)
+
+    def test_native_dependency_outside_closure_fails(self):
+        rec = self.run_profile(closure_manifest(self.prefix, self.digest), deps=("libevil.so",))
+        self.assertEqual((rec["conformant"], rec["tools"][0]["identity"]), (False, "none"))
+        self.assertIn("libevil.so", rec["tools"][0]["closure"]["linkage"]["violations"][0])
+
+    def test_dependency_satisfied_inside_the_closure(self):
+        (self.prefix / "lib" / "libown.so").write_bytes(b"data")
+        digest = C.digest(self.prefix)[0]
+        rec = self.run_profile(closure_manifest(self.prefix, digest), deps=("@rpath/libown.so",))
+        self.assertEqual(rec["tools"][0]["identity"], "closure-verified")
+
+    def test_unlistable_linkage_fails_closed(self):
+        m = closure_manifest(self.prefix, self.digest)
+        rec = T.verify_profile(m, "p", tmpdir(self), probe_returning("tool 1.2.3"), lambda p: None)
+        self.assertEqual((rec["conformant"], rec["tools"][0]["identity"]), (False, "none"))
+
+    def test_platform_without_a_pinned_digest_claims_only_the_version(self):
+        m = closure_manifest(self.prefix, self.digest)
+        m["profiles"]["p"]["tools"]["tool"]["closure"]["sha256"] = {"plan9-mips": self.digest}
+        rec = self.run_profile(m)
+        t = rec["tools"][0]
+        self.assertEqual((t["identity"], t["closure"]["status"]), ("version-only", "unpinned"))
+        self.assertEqual((rec["conformant"], rec["assurance"]), (True, "diagnostic"))
+
+    def test_wrong_version_never_claims_closure(self):
+        rec = T.verify_profile(
+            closure_manifest(self.prefix, self.digest),
+            "p",
+            tmpdir(self),
+            probe_returning("tool 9.9.9"),
+            lambda p: [],
+        )
+        self.assertEqual(rec["tools"][0]["identity"], "none")
+
+    def test_closure_spec_is_validated(self):
+        m = closure_manifest(self.prefix, "xyz")
+        m["profiles"]["p"]["tools"]["tool"]["closure"]["prefix_up"] = 0
+        with self.assertRaises(ConfigError) as cm:
+            T.validate(m)
+        self.assertIn("prefix_up", str(cm.exception))
+        self.assertIn("64 hex", str(cm.exception))

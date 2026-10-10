@@ -87,6 +87,15 @@ def build_parser() -> argparse.ArgumentParser:
     af.add_argument("--store", type=Path, default=None)
     af.add_argument("--json", action="store_true")
     af.add_argument("consumers", type=Path, nargs="*", help="dev-platform.toml, result or app-release files")
+    tc = sub.add_parser("toolchain", help="inspect toolchain closures")
+    tsub = tc.add_subparsers(dest="tcmd", required=True)
+    tm = tsub.add_parser("measure", help="measure installed tool closures (to author manifest pins)")
+    tm.add_argument("--manifest", type=Path, default=Path("toolchains/manifest.json"))
+    tm.add_argument("--profile", required=True)
+    tv = tsub.add_parser("verify", help="verify the installed environment against a manifest profile")
+    tv.add_argument("--manifest", type=Path, default=Path("toolchains/manifest.json"))
+    tv.add_argument("--profile", required=True)
+    tv.add_argument("--require-certifiable", action="store_true", help="exit 1 unless every tool is strong")
     dg = sub.add_parser("digest", help="print the release tree digest of a directory")
     dg.add_argument("path", type=Path)
     return ap
@@ -392,6 +401,17 @@ def cmd_affected(args) -> int:
     return EXIT_UNSATISFIED if hit else EXIT_OK
 
 
+def cmd_toolchain(args) -> int:
+    manifest = toolchain.validate(json.loads(args.manifest.read_text()))
+    if args.tcmd == "verify":
+        rec = toolchain.verify_profile(manifest, args.profile, Path.cwd())
+        print(json.dumps(rec, indent=2, sort_keys=True))
+        bad = not rec["conformant"] or (args.require_certifiable and rec["assurance"] != "certifiable")
+        return EXIT_UNSATISFIED if bad else EXIT_OK
+    print(json.dumps(toolchain.measure(manifest, args.profile), indent=2, sort_keys=True))
+    return EXIT_OK
+
+
 def cmd_digest(args) -> int:
     print(tree_digest(args.path))
     return EXIT_OK
@@ -404,6 +424,7 @@ _COMMANDS = {
     "explain": cmd_explain,
     "check": cmd_check,
     "digest": cmd_digest,
+    "toolchain": cmd_toolchain,
     "release": cmd_release,
     "validate": cmd_validate,
     "affected": cmd_affected,

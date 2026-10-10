@@ -29,25 +29,43 @@ def _dump(doc: dict) -> str:
 
 
 def make_sbom(version: str, source_digest: str, manifest: dict) -> dict:
-    components, seen = [], set()
+    """One component per (tool, version), merging every pin any profile declares for it."""
+    by_key: dict[tuple[str, str], dict] = {}
     for pname in sorted(manifest["profiles"]):
         for tname, spec in sorted(manifest["profiles"][pname]["tools"].items()):
-            key = (tname, spec["version"])
-            if key in seen:
-                continue
-            seen.add(key)
-            comp = {
-                "type": "application",
-                "name": tname,
-                "version": spec["version"],
-                "bom-ref": f"tool:{tname}@{spec['version']}",
-            }
+            comp = by_key.setdefault(
+                (tname, spec["version"]),
+                {
+                    "type": "application",
+                    "name": tname,
+                    "version": spec["version"],
+                    "bom-ref": f"tool:{tname}@{spec['version']}",
+                },
+            )
             if spec.get("purl"):
                 comp["purl"] = spec["purl"]
             sha = spec.get("sha256")
             if isinstance(sha, str):
                 comp["hashes"] = [{"alg": "SHA-256", "content": sha}]
-            components.append(comp)
+            # Identity claims travel with the component so the SBOM can be checked against the
+            # manifest (tools/verify_release.py recomputes this independently).
+            props = {p["name"]: p for p in comp.get("properties", [])}
+            for plat, digest in spec.get("closure", {}).get("sha256", {}).items():
+                name = f"dev-platform:closure-sha256:{plat}"
+                props[name] = {"name": name, "value": digest}
+            if props:
+                comp["properties"] = [props[k] for k in sorted(props)]
+            refs = {r["comment"]: r for r in comp.get("externalReferences", [])}
+            for plat, src in spec.get("source", {}).items():
+                refs[plat] = {
+                    "type": "distribution",
+                    "url": src["url"],
+                    "comment": plat,
+                    "hashes": [{"alg": "SHA-256", "content": src["sha256"]}],
+                }
+            if refs:
+                comp["externalReferences"] = [refs[k] for k in sorted(refs)]
+    components = [by_key[k] for k in sorted(by_key)]
     return {
         "bomFormat": "CycloneDX",
         # Deterministic serial (required by attest-sbom): derived from the identity it describes.

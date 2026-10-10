@@ -72,6 +72,67 @@
                 },
                 "purl": {
                   "type": "string"
+                },
+                "executable": {
+                  "type": "string"
+                },
+                "closure": {
+                  "type": "object",
+                  "required": [
+                    "kind",
+                    "sha256",
+                    "system_libs"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "file",
+                        "prefix"
+                      ]
+                    },
+                    "prefix_up": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "sha256": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "additionalProperties": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$"
+                      }
+                    },
+                    "system_libs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                },
+                "source": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "required": [
+                      "url",
+                      "sha256"
+                    ],
+                    "properties": {
+                      "url": {
+                        "type": "string",
+                        "pattern": "^https://"
+                      },
+                      "sha256": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$"
+                      },
+                      "strip": {
+                        "type": "string"
+                      }
+                    }
+                  }
                 }
               }
             }

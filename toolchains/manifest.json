@@ -3,16 +3,120 @@
   "profiles": {
     "dev-platform": {
       "tools": {
-        "python": {"version": "3.14.", "compare": "prefix",
-                   "probe": {"argv": ["{python}", "--version"], "pattern": "Python (\\S+)"},
-                   "purl": "pkg:generic/python"},
-        "uv": {"version": "0.12.3",
-               "probe": {"argv": ["uv", "--version"], "pattern": "uv (\\S+)"},
-               "purl": "pkg:pypi/uv@0.12.3"},
-        "ruff": {"version": "0.17.0",
-                 "probe": {"argv": ["uvx", "--from", "ruff==0.17.0", "ruff", "--version"],
-                           "pattern": "ruff (\\S+)"},
-                 "purl": "pkg:pypi/ruff@0.17.0"}
+        "python": {
+          "version": "3.14.",
+          "compare": "prefix",
+          "probe": {
+            "argv": [
+              "{python}",
+              "--version"
+            ],
+            "pattern": "Python (\\S+)"
+          },
+          "purl": "pkg:generic/python"
+        },
+        "uv": {
+          "version": "0.12.3",
+          "probe": {
+            "argv": [
+              "uv",
+              "--version"
+            ],
+            "pattern": "uv (\\S+)"
+          },
+          "purl": "pkg:pypi/uv@0.12.3"
+        },
+        "ruff": {
+          "version": "0.17.0",
+          "probe": {
+            "argv": [
+              "uvx",
+              "--from",
+              "ruff==0.17.0",
+              "ruff",
+              "--version"
+            ],
+            "pattern": "ruff (\\S+)"
+          },
+          "purl": "pkg:pypi/ruff@0.17.0"
+        }
+      }
+    },
+    "dev-platform-release": {
+      "tools": {
+        "python": {
+          "version": "3.14.7",
+          "executable": "{python}",
+          "probe": {
+            "argv": [
+              "{python}",
+              "--version"
+            ],
+            "pattern": "Python (\\S+)"
+          },
+          "purl": "pkg:generic/cpython@3.14.7",
+          "closure": {
+            "kind": "prefix",
+            "prefix_up": 2,
+            "sha256": {
+              "darwin-arm64": "bc602f3eeaca659ab7cec5f741d44971d53021b625fa6dc994f567fc92440b18",
+              "linux-x86_64": "520d9d6ebeba77ece9d776110bb89845d6b7560394038f2b6438ff244e7ba538"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260807/cpython-3.14.7%2B20260807-aarch64-apple-darwin-install_only_stripped.tar.gz",
+              "sha256": "532645be202d3df8510ab318ca5faed92060a694c8327144e14fa81f31af0f6d",
+              "strip": "python"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260807/cpython-3.14.7%2B20260807-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+              "sha256": "a2478d654ed51d443bae21ec20ad927f116b4f5aae4094ab74918a6aa38f0575",
+              "strip": "python"
+            }
+          }
+        },
+        "ruff": {
+          "version": "0.17.0",
+          "executable": "ruff",
+          "probe": {
+            "argv": [
+              "ruff",
+              "--version"
+            ],
+            "pattern": "ruff (\\S+)"
+          },
+          "purl": "pkg:pypi/ruff@0.17.0",
+          "closure": {
+            "kind": "file",
+            "sha256": {
+              "darwin-arm64": "5db922251f29fb535f8762a03d4bea05d8552f2af134837ec3db9ddbcc754de9",
+              "linux-x86_64": "6f050122e8397304e878c97f1b5f647573dae29cee051e0a8506322b7ab0330d"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1"
+            ]
+          }
+        }
       }
     }
   }
