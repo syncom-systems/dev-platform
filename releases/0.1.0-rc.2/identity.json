@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0-rc.2",
+  "state": "pre-release (verified; not accepted; not certified)",
+  "git_tag": "v0.1.0-rc.2",
+  "source_revision": "65665e9fef8d4c6a8142f0558cef9ac5b787be69",
+  "archive": "dev-platform-0.1.0-rc.2.tar.gz",
+  "archive_sha256": "c734392fc5c84b77d39ffb588c69a11dba9392301be1e363186950b89dcca1ac",
+  "tree_digest_pin": "6635c18e303d144b6313735dad5272680402698499eeaca28b1e9988db68307b",
+  "release_workflow_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38052808924",
+  "signer": "syncom-systems/dev-platform/.github/workflows/release.yml@refs/tags/v0.1.0-rc.2",
+  "attestations": ["https://slsa.dev/provenance/v1", "https://cyclonedx.org/bom"],
+  "stable_acceptance": "none: no owner authorization exists"
+}

@@ -1,0 +1,101 @@
+{
+  "acceptance": {
+    "authorization": null,
+    "reasons": [
+      "pre-releases are never accepted; they are verified artifacts only"
+    ],
+    "state": "pre-release"
+  },
+  "checks": [
+    {
+      "detail": "actual c734392fc5c84b77d39ffb588c69a11dba9392301be1e363186950b89dcca1ac",
+      "id": "archive-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "safe-extract",
+      "status": "passed"
+    },
+    {
+      "detail": "archive root 0.1.0-rc.2, expected 0.1.0-rc.2",
+      "id": "version-binding",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "release-json",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "release-version",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "source-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "source-version-matches",
+      "status": "passed"
+    },
+    {
+      "detail": "release.json says 65665e9fef8d4c6a8142f0558cef9ac5b787be69",
+      "id": "source-revision",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "missing []",
+      "id": "sbom-covers-toolchains",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "tree-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.1.0-rc.2 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "attestation-matches-policy",
+      "status": "passed"
+    }
+  ],
+  "expected": {
+    "archive_sha256": "c734392fc5c84b77d39ffb588c69a11dba9392301be1e363186950b89dcca1ac",
+    "ref": "refs/tags/v0.1.0-rc.2",
+    "source_revision": "65665e9fef8d4c6a8142f0558cef9ac5b787be69",
+    "tree_digest": "6635c18e303d144b6313735dad5272680402698499eeaca28b1e9988db68307b",
+    "version": "0.1.0-rc.2"
+  },
+  "policy_sha256": "04a528636553363ffb65e5e51c9ebda34827e984b826da8aa4afdca4b938dcc4",
+  "schema": "dev-platform.verification/v1",
+  "subject": {
+    "archive": "dev-platform-0.1.0-rc.2.tar.gz",
+    "archive_sha256": "c734392fc5c84b77d39ffb588c69a11dba9392301be1e363186950b89dcca1ac",
+    "tree_digest": "6635c18e303d144b6313735dad5272680402698499eeaca28b1e9988db68307b",
+    "version": "0.1.0-rc.2"
+  }
+}
