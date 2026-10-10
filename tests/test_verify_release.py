@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 import unittest
 
 from dev_platform.digest import tree_digest
@@ -92,7 +93,7 @@ class VerifierTest(unittest.TestCase):
         )
         # the verifier also checks the source __version__ matches
         init = d / "src" / "dev_platform" / "__init__.py"
-        init.write_text(init.read_text().replace('__version__ = "0.1.0"', f'__version__ = "{version}"'))
+        init.write_text(re.sub(r'__version__ = "[^"]+"', f'__version__ = "{version}"', init.read_text()))
         doc = json.loads((d / "release.json").read_text())
         doc["platform"]["source_digest"] = tree_digest(d / "src")
         (d / "release.json").write_text(json.dumps(doc))
