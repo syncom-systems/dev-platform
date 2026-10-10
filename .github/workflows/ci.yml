@@ -41,11 +41,11 @@ jobs:
       - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with: {version: "0.12.3"}
       - run: python tools/setup_env.py
+      - run: echo "$PWD/.devenv/venv/bin" >> "$GITHUB_PATH"
       - name: Measure closures
-        run: PYTHONPATH=src .devenv/venv/bin/python -m dev_platform toolchain measure --profile dev-platform-release | tee measure.json
+        run: PYTHONPATH=src python -m dev_platform toolchain measure --profile dev-platform-release | tee measure.json
       - name: Verify closures against the manifest
         run: |
-          export PATH="$PWD/.devenv/venv/bin:$PATH"
           PYTHONPATH=src python -m dev_platform toolchain verify --profile dev-platform-release | tee verify.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()

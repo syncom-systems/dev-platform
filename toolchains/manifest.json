@@ -59,11 +59,19 @@
             "kind": "prefix",
             "prefix_up": 2,
             "sha256": {
-              "darwin-arm64": "bc602f3eeaca659ab7cec5f741d44971d53021b625fa6dc994f567fc92440b18"
+              "darwin-arm64": "bc602f3eeaca659ab7cec5f741d44971d53021b625fa6dc994f567fc92440b18",
+              "linux-x86_64": "520d9d6ebeba77ece9d776110bb89845d6b7560394038f2b6438ff244e7ba538"
             },
             "system_libs": [
               "/usr/lib/",
-              "/System/Library/"
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1"
             ]
           },
           "source": {
@@ -97,7 +105,14 @@
             },
             "system_libs": [
               "/usr/lib/",
-              "/System/Library/"
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1"
             ]
           }
         }

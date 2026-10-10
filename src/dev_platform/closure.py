@@ -140,7 +140,7 @@ def check_linkage(root: Path, system_libs: list[str], linkage: Linkage = default
         for dep in deps:
             if any(dep.startswith(s) or dep == s for s in system_libs):
                 continue
-            if os.path.basename(dep) in inside and (dep.startswith("@") or "/" not in dep):
+            if os.path.basename(dep) in inside and (dep.startswith(("@", "$ORIGIN")) or "/" not in dep):
                 continue
             if os.path.isabs(dep) and Path(dep).resolve().is_relative_to(base.resolve()):
                 continue  # install name / dependency that points back into the closure
