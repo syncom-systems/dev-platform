@@ -1,7 +1,7 @@
 # Changelog
 
 ## Unreleased
-- 0.1.0-rc.3 candidate: tool identity by runtime closure (`closure-verified`; a bare executable digest no
+- 0.1.0-rc.4 candidate (0.1.0-rc.3 failed at the build-environment gate, see releases/0.1.0-rc.3): tool identity by runtime closure (`closure-verified`; a bare executable digest no
   longer certifies), pinned hash-locked release-profile environment, SBOM correspondence and SBOM
   attestation verification, trusted installer (`tools/install_release.py`), real Bazel/rules_rust and
   CPython qualification in CI, Bazel binary pinned and enforced at execution, Dependabot for Actions and
