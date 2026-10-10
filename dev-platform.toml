@@ -1,0 +1,48 @@
+# dev-platform checks itself with its own verification model (docs/verification-model.md).
+schema_version = 1
+
+[platform]
+self_hosted = true  # this repository IS the platform; see docs/adr/0014
+profile = "dev-platform"  # toolchain profile from toolchains/manifest.json
+
+[project]
+name = "dev-platform"
+assurance = "standard"
+languages = ["python"]
+
+[impact]
+global = ["pyproject.toml", "dev-platform.toml"]
+ignore = ["LICENSE", "docs/**", "*.md"]
+
+[[check]]
+id = "unit"
+description = "Stdlib unittest suite: config, resolution, impact, evidence, runners, end-to-end milestone"
+adapter = "python"
+targets = ["tests"]
+stages = ["pre-commit", "pre-merge", "full"]
+obligation = "change"
+inputs = ["src/**", "tests/**", "fixtures/**", "schemas/**"]
+
+[[check]]
+id = "lint"
+adapter = "exec"
+argv = ["uvx", "--from", "ruff==0.17.0", "ruff", "check", "."]
+stages = ["edit", "pre-commit", "pre-merge", "full"]
+obligation = "change"
+inputs = ["**/*.py"]
+
+[[check]]
+id = "format"
+adapter = "exec"
+argv = ["uvx", "--from", "ruff==0.17.0", "ruff", "format", "--check", "."]
+stages = ["pre-commit", "pre-merge", "full"]
+obligation = "change"
+inputs = ["**/*.py"]
+
+[[check]]
+id = "docs"
+description = "ADR index, relative links and schema parseability"
+adapter = "exec"
+argv = ["python3", "tools/check_docs.py"]
+stages = ["pre-commit", "pre-merge", "full"]
+obligation = "always"

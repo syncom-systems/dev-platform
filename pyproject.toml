@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dev-platform"
+version = "0.1.0"
+description = "A deterministic development control plane"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = []  # stdlib only, by design (docs/adr/0006)
+
+[project.scripts]
+dev-platform = "dev_platform.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "RUF"]
+ignore = ["S101", "S603", "S607", "RUF012"]  # asserts in tests; subprocess is the product
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "B"]

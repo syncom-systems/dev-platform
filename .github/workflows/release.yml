@@ -1,0 +1,39 @@
+# Release workflow (UNTESTED: written for review, first run will be the first test).
+# Produces an immutable release directory, publishes it with GitHub artifact attestations
+# (Sigstore-signed SLSA build provenance) and a CycloneDX SBOM attestation. Consumers verify with:
+#   gh attestation verify <archive> --repo syncom-systems/dev-platform
+# See docs/release-trust.md for the trust model. Nothing here is "signed" until this has run.
+name: release
+on:
+  push:
+    tags: ["v*.*.*"]
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.14"}
+      - id: v
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Build release directory
+        env: {version: "${{ steps.v.outputs.version }}"}
+        run: |
+          PYTHONPATH=src python -m dev_platform release build --version "$version" --out dist \
+            --source-uri "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --source-revision "$GITHUB_SHA" | tee build.log
+          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -czf "dev-platform-$version.tar.gz" -C dist "$version"
+          sha256sum "dev-platform-$version.tar.gz" > "dev-platform-$version.tar.gz.sha256"
+      - uses: actions/attest-build-provenance@v2
+        with: {subject-path: "dev-platform-*.tar.gz"}
+      - uses: actions/attest-sbom@v2
+        with:
+          subject-path: "dev-platform-*.tar.gz"
+          sbom-path: "dist/${{ steps.v.outputs.version }}/sbom.cdx.json"
+      - name: Publish
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: gh release create "$GITHUB_REF_NAME" dev-platform-*.tar.gz* build.log --verify-tag --notes-file build.log

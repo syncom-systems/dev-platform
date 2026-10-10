@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/app-release-v1.schema.json",
+  "title": "dev-platform.app-release/v1",
+  "description": "Portable provenance for one application release: the atomic unit of deployment and rollback. References, never embeds, other records.",
+  "type": "object",
+  "required": [
+    "schema",
+    "application",
+    "source",
+    "dependencies",
+    "platform",
+    "artifacts",
+    "evidence"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dev-platform.app-release/v1"
+    },
+    "application": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "uri",
+        "revision"
+      ]
+    },
+    "dependencies": {
+      "type": "object",
+      "required": [
+        "resolution_digest"
+      ],
+      "properties": {
+        "resolution_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "platform": {
+      "type": "object",
+      "required": [
+        "release_version",
+        "release_tree_digest",
+        "profile",
+        "toolchain_identity_digest"
+      ]
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "sha256"
+        ],
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "kind",
+          "sha256"
+        ],
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    },
+    "authorizations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "record_sha256"
+        ],
+        "properties": {
+          "record_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  }
+}

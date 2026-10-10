@@ -1,0 +1,22 @@
+# Reusable workflow for consumers. Reference it by commit SHA:
+#   uses: matssun/dev-platform/.github/workflows/check.yml@<full-commit-sha>
+# The consumer's dev-platform.toml pins the platform version and digest; the runner is chosen by
+# the caller (public hosted by default). No private infrastructure is required.
+name: dev-platform check
+on:
+  workflow_call:
+    inputs:
+      stage: {type: string, default: pre-merge}
+      runs-on: {type: string, default: ubuntu-24.04}
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - name: Run pinned platform
+        # TODO(distribution.md): bootstrap step that fetches and verifies the pinned release into
+        # DEV_PLATFORM_STORE. Until it exists this workflow fails closed (exit 3: not installed).
+        run: dev-platform check --stage "${{ inputs.stage }}" --base "origin/${{ github.event.repository.default_branch }}" --event-trust untrusted --result result.json

@@ -1,0 +1,26 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: verify (dev-platform checks itself)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.14"}
+      - uses: astral-sh/setup-uv@v5
+        with: {version: "0.12.3"}
+      - name: Full-stage self verification
+        run: PYTHONPATH=src python -m dev_platform check --stage full --result result.json
+      - name: Oldest supported Python (3.11) unit tests
+        run: |
+          uv run --python 3.11 --no-project env PYTHONPATH=src python -m unittest discover -s tests
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: result, path: result.json}
