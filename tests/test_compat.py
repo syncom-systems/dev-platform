@@ -16,7 +16,7 @@ import sys
 import unittest
 from pathlib import Path
 
-from dev_platform import pack, release
+from dev_platform import closure, pack, release
 from dev_platform.digest import tree_digest
 from tests.helpers import ROOT, copy_fixture, tmpdir
 from tests.test_pack import rmtree_rw
@@ -24,7 +24,12 @@ from tests.test_pack import rmtree_rw
 RUSTC = "178492c5c6cef1d38a86c79f48fb8e4164ba0dbaaa9dcd0aa0bb4ff383c22ab9"
 CPYTHON = "c90d47a795a62032128d98c74b4c3d64cbabf93684dc582ee27255be64193711"
 BAZELISK = "70a8ed978aefe7116ab7ba18380a0acd6e7d84b1eca0c151b90f85f5c1adfec3"
-PYSHA = hashlib.sha256(Path(sys.executable).resolve().read_bytes()).hexdigest()
+PYCLOSURE = {
+    "kind": "file",
+    "sha256": {closure.platform_key(): closure.digest(Path(sys.executable).resolve())[0]},
+    # Test-only: the host interpreter links host libraries; the real manifests list real system libs.
+    "system_libs": ["/", "lib"],
+}
 PYVER = "{}.{}.".format(*sys.version_info[:2])
 
 
@@ -85,7 +90,7 @@ def manifest(bazel_version="8.1.0"):
         "profiles": {
             "python": {
                 "tools": {
-                    "python": {"version": PYVER, "compare": "prefix", "sha256": PYSHA, "probe": py_probe}
+                    "python": {"version": PYVER, "compare": "prefix", "closure": PYCLOSURE, "probe": py_probe}
                 }
             },
             "python-weak": {"tools": {"python": {"version": PYVER, "compare": "prefix", "probe": py_probe}}},
@@ -184,7 +189,7 @@ class PythonConsumerTest(CompatBase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(doc["platform"]["running_version"], "1.0.0")
         env = doc["environment"]
-        self.assertEqual((env["assurance"], env["tools"][0]["identity"]), ("certifiable", "digest-verified"))
+        self.assertEqual((env["assurance"], env["tools"][0]["identity"]), ("certifiable", "closure-verified"))
         self.assertTrue(doc["certification"]["certified"], doc["certification"])
 
     def test_weak_profile_validates_but_cannot_certify(self):

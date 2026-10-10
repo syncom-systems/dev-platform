@@ -18,6 +18,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from dev_platform import closure as _closure
 from dev_platform.errors import ConfigError
 
 SCHEMA = "dev-platform.toolchains/v1"
@@ -64,6 +65,11 @@ def validate(doc: dict) -> dict:
                     errs.append(f"{w}: probe {{argv, pattern}} required for non-Bazel tools")
                 elif re.compile(p["pattern"]).groups < 1:
                     errs.append(f"{w}.probe.pattern needs a capture group")
+            if "closure" in t:
+                if managed:
+                    errs.append(f"{w}: closure applies to executed tools, not Bazel-managed ones")
+                else:
+                    errs.extend(_closure.validate(w, t["closure"]))
             sha = t.get("sha256")
             if sha is not None:
                 vals = sha.values() if isinstance(sha, dict) else [sha]
@@ -76,7 +82,16 @@ def validate(doc: dict) -> dict:
 
 # What the verification actually established, weakest to strongest. A tool's strength is assigned
 # only by the code path that performed the corresponding check; it is never read from the manifest.
-STRENGTH = {"none": 0, "version-only": 1, "bazel-declared": 1, "digest-verified": 2, "bazel-locked": 2}
+# digest-verified: the executable's own bytes only. closure-verified: the whole runtime closure
+# (see closure.py). Only closure-verified and bazel-locked can certify.
+STRENGTH = {
+    "none": 0,
+    "version-only": 1,
+    "bazel-declared": 1,
+    "digest-verified": 1,
+    "closure-verified": 2,
+    "bazel-locked": 2,
+}
 CERTIFIABLE_STRENGTH = 2
 
 
@@ -95,11 +110,45 @@ def _version_ok(spec: dict, observed: str) -> bool:
     return observed == spec["version"]
 
 
+def _executable(spec: dict) -> str | None:
+    argv0 = spec.get("executable") or spec["probe"]["argv"][0]
+    return sys.executable if argv0 == PYTHON_TOKEN else shutil.which(argv0)
+
+
 def _binary_digest(argv0: str) -> str | None:
     path = sys.executable if argv0 == PYTHON_TOKEN else shutil.which(argv0)
     if not path:
         return None
     return hashlib.sha256(Path(path).resolve().read_bytes()).hexdigest()
+
+
+def _verify_closure(spec: dict, linkage) -> dict:
+    """Outcome of the closure checks: {'status': ok|mismatch|unpinned|unverifiable, ...}."""
+    c = spec["closure"]
+    key = _closure.platform_key()
+    want = c["sha256"].get(key)
+    if want is None:
+        return {"status": "unpinned", "reason": f"no closure digest pinned for {key}"}
+    root = _closure.resolve_root(c, _executable(spec))
+    if root is None:
+        return {"status": "unverifiable", "reason": "executable not found"}
+    try:
+        got, files = _closure.digest(root)
+    except (ConfigError, OSError) as e:
+        return {"status": "mismatch", "reason": str(e)}
+    out = {"kind": c["kind"], "root": str(root), "platform": key, "digest": got, "files": files}
+    if got != want:
+        return {**out, "status": "mismatch", "reason": f"closure digest {got} != pinned {want}"}
+    link = _closure.check_linkage(root, c["system_libs"], linkage)
+    out["linkage"] = link
+    if link["violations"] or link["unknown"]:
+        return {**out, "status": "mismatch", "reason": "native objects link outside the closure"}
+    out["status"] = "ok"
+    out["scope"] = (
+        "closure bytes pinned; native dependencies limited to the closure and declared system "
+        "libraries, which are trusted by name, not by content"
+    )
+    return out
 
 
 def _expected_sha(spec: dict) -> str | None:
@@ -128,7 +177,13 @@ def _check_integrity(ent: dict, root: Path) -> dict:
     return proof
 
 
-def verify_profile(manifest: dict, profile: str, root: Path, probe: Probe = default_probe) -> dict:
+def verify_profile(
+    manifest: dict,
+    profile: str,
+    root: Path,
+    probe: Probe = default_probe,
+    linkage=_closure.default_linkage,
+) -> dict:
     """Return an environment record. conformant only if every required tool is proven."""
     prof = manifest["profiles"].get(profile)
     if prof is None:
@@ -179,9 +234,19 @@ def verify_profile(manifest: dict, profile: str, root: Path, probe: Probe = defa
                 entry["observed"] = m.group(1)
                 if not _version_ok(spec, m.group(1)):
                     entry["status"] = "mismatch"
-                want = _expected_sha(spec)
-                if want:
-                    if _binary_digest(spec["probe"]["argv"][0]) == want:
+                if entry["status"] != "ok":
+                    entry["identity"] = "none"
+                elif "closure" in spec:
+                    proof = _verify_closure(spec, linkage)
+                    entry["closure"] = proof
+                    if proof["status"] == "ok":
+                        entry["identity"] = "closure-verified"
+                    elif proof["status"] == "mismatch":
+                        entry["status"] = "mismatch"
+                        entry["identity"] = "none"
+                    # unpinned/unverifiable: nothing beyond the version was established
+                elif _expected_sha(spec):
+                    if _binary_digest(spec["probe"]["argv"][0]) == _expected_sha(spec):
                         entry["identity"] = "digest-verified"
                     else:
                         entry["status"] = "mismatch"
@@ -203,3 +268,35 @@ def verify_profile(manifest: dict, profile: str, root: Path, probe: Probe = defa
         "weak_tools": weak,
         "tools": tools,
     }
+
+
+def measure(manifest: dict, profile: str, linkage=_closure.default_linkage) -> dict:
+    """Measure the closures of the tools as installed here, to author the manifest's pinned digests.
+
+    This only reports; pinning a measured value is a reviewed change to the manifest, never
+    something the verifier does on its own.
+    """
+    prof = manifest["profiles"].get(profile)
+    if prof is None:
+        raise ConfigError([f"profile {profile!r} is not defined"])
+    out = {}
+    for name, spec in sorted(prof["tools"].items()):
+        c = spec.get("closure")
+        if not c:
+            continue
+        root = _closure.resolve_root(c, _executable(spec))
+        if root is None:
+            out[name] = {"error": "executable not found"}
+            continue
+        d, files = _closure.digest(root)
+        deps = set()
+        for obj in _closure.native_objects(root):
+            deps.update(linkage(obj) or ["<unlistable>"])
+        out[name] = {
+            "platform": _closure.platform_key(),
+            "root": str(root),
+            "sha256": d,
+            "files": files,
+            "external_dependencies": sorted(deps),
+        }
+    return out
