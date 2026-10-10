@@ -132,6 +132,7 @@ def main(argv=None) -> int:
     ap.add_argument("--fixture", type=Path, required=True)
     ap.add_argument("--profile", required=True)
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--isolate-env", action="store_true", help="run the checks with a scrubbed environment")
     ap.add_argument("--negative", action="store_true", help="also run the must-be-rejected scenarios")
     a = ap.parse_args(argv)
     WORK.mkdir(parents=True, exist_ok=True)
@@ -153,7 +154,8 @@ def main(argv=None) -> int:
         run(["git", *cmd], consumer, genv)
     result = consumer.parent / f"{a.profile}.result.json"
     r = run(
-        [*py, "check", "--project", str(consumer), "--stage", "full", "--result", str(result)],
+        [*py, "check", "--project", str(consumer), "--stage", "full", "--result", str(result)]
+        + (["--isolate-env"] if a.isolate_env else []),
         ROOT,
         env,
         check=False,
@@ -173,6 +175,7 @@ def main(argv=None) -> int:
             "tools": {t["name"]: t["identity"] for t in env_rec["tools"]},
             "identity_digest": env_rec["identity_digest"],
         },
+        "execution": doc.get("execution"),
         "certified": cert["certified"],
         "blockers": cert["blockers"],
     }

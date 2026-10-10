@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from dev_platform import __version__
+from dev_platform import __version__, isolation
 from dev_platform.adapters import PYTHON, Command, command_for
 from dev_platform.config import Config
 from dev_platform.impact import select
@@ -20,13 +20,23 @@ RESULT_SCHEMA = "dev-platform.result/v1"
 Executor = Callable[[Command, Path], int]
 
 
-def subprocess_executor(cmd: Command, cwd: Path) -> int:
-    argv = [sys.executable if a == PYTHON else a for a in cmd.argv]
-    try:
-        env = {**os.environ, **dict(cmd.env)}
-        return subprocess.run(argv, cwd=cwd, env=env, stdout=sys.stderr, stdin=subprocess.DEVNULL).returncode
-    except FileNotFoundError:
-        return 127
+def make_executor(base_env: dict[str, str] | None = None) -> Executor:
+    """Executor whose commands see `base_env` (default: the inherited environment) plus the command's own."""
+
+    def run(cmd: Command, cwd: Path) -> int:
+        argv = [sys.executable if a == PYTHON else a for a in cmd.argv]
+        try:
+            env = {**(os.environ if base_env is None else base_env), **dict(cmd.env)}
+            return subprocess.run(
+                argv, cwd=cwd, env=env, stdout=sys.stderr, stdin=subprocess.DEVNULL
+            ).returncode
+        except FileNotFoundError:
+            return 127
+
+    return run
+
+
+subprocess_executor = make_executor()
 
 
 def git_revision(root: Path) -> str | None:
@@ -96,6 +106,7 @@ def build(
     dirty: bool = False,
     environment: dict | None = None,
     exec_env: dict[str, str] | None = None,
+    execution: dict | None = None,
 ) -> dict:
     prev_state = {c["id"]: EvidenceState(c["state"]) for c in (previous or {}).get("checks", [])}
     offered = load_profile(infra_profile)
@@ -199,6 +210,7 @@ def build(
         "environment": {"release": _release_identity(resolution), **env_rec},
         "change_set": {"known": changed is not None, "paths": list(changed) if changed else []},
         "executed": execute,
+        "execution": execution or isolation.INHERITED,
         "checks": checks,
         "unsatisfied_obligations": unsatisfied,
         "regressions": regressions,
