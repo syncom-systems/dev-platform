@@ -1,0 +1,13 @@
+{
+  "schema": "dev-platform.infra/v1",
+  "runners": [
+    {
+      "id": "r1",
+      "labels": [],
+      "os": "linux",
+      "arch": "x86_64",
+      "isolation": "ephemeral",
+      "trust": "public"
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Infra contract conformance kit (contracts/infra/v1) and strict profile validation; schema $ids use the real org.
+- Version-keyed toolchain store; scrubbed-environment execution mode (docs/execution-isolation.md).
 - Owner acceptance packet for 0.1.0 (releases/0.1.0/ACCEPTANCE-PACKET.md), unsigned authorization template, and
   tools/validate_authorization.py (pinned-owner signed-commit validation). No authorization exists; 0.1.0 stays
   verified-unaccepted.

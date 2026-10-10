@@ -1,0 +1,108 @@
+{
+  "description": "Conformance kit for dev-platform.infra/v1: a provider's profile must pass the same validation the platform applies. Routing cases pin fail-closed behaviour.",
+  "profiles": [
+    {
+      "file": "valid-empty.json",
+      "valid": true
+    },
+    {
+      "file": "valid-trusted-credentials.json",
+      "valid": true
+    },
+    {
+      "file": "invalid-schema.json",
+      "valid": false,
+      "error": "schema must be"
+    },
+    {
+      "file": "invalid-duplicate-id.json",
+      "valid": false,
+      "error": "duplicate"
+    },
+    {
+      "file": "invalid-public-credentials.json",
+      "valid": false,
+      "error": "credentials must have trust"
+    },
+    {
+      "file": "invalid-unknown-key.json",
+      "valid": false,
+      "error": "unknown keys"
+    },
+    {
+      "file": "invalid-os.json",
+      "valid": false,
+      "error": "os: one of"
+    },
+    {
+      "file": "invalid-empty-labels.json",
+      "valid": false,
+      "error": "labels"
+    },
+    {
+      "file": "invalid-not-object.json",
+      "valid": false,
+      "error": "must be an object"
+    }
+  ],
+  "routing": [
+    {
+      "profile": "valid-trusted-credentials.json",
+      "spec": {
+        "os": "linux",
+        "credentials": [
+          "deploy"
+        ],
+        "fallback": "none"
+      },
+      "event": "trusted",
+      "ok": true,
+      "runner": "deploy"
+    },
+    {
+      "profile": "valid-trusted-credentials.json",
+      "spec": {
+        "os": "linux",
+        "credentials": [
+          "deploy"
+        ],
+        "fallback": "none"
+      },
+      "event": "untrusted",
+      "ok": false,
+      "runner": null
+    },
+    {
+      "profile": "valid-trusted-credentials.json",
+      "spec": {
+        "os": "linux",
+        "credentials": [
+          "other"
+        ],
+        "fallback": "none"
+      },
+      "event": "trusted",
+      "ok": false,
+      "runner": null
+    },
+    {
+      "profile": "valid-empty.json",
+      "spec": {
+        "os": "linux",
+        "fallback": "none"
+      },
+      "event": "untrusted",
+      "ok": false,
+      "runner": null
+    },
+    {
+      "profile": "valid-empty.json",
+      "spec": {
+        "os": "linux"
+      },
+      "event": "untrusted",
+      "ok": true,
+      "runner": "github-ubuntu"
+    }
+  ]
+}

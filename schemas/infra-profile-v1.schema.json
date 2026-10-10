@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/matssun/dev-platform/schemas/infra-profile-v1.schema.json",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/infra-profile-v1.schema.json",
   "title": "dev-platform.infra/v1",
-  "description": "The public/private boundary: runner inventory offered by an infrastructure provider.",
+  "description": "The public/private boundary: runner inventory offered by an infrastructure provider. Runner ids are unique; a runner that offers credentials must have trust \"trusted\" (checked in code: JSON Schema cannot express uniqueness by property). Conformance kit: contracts/infra/v1.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "runners"],
@@ -10,14 +10,17 @@
     "schema": {"const": "dev-platform.infra/v1"},
     "runners": {"type": "array", "items": {
       "type": "object",
+      "additionalProperties": false,
       "required": ["id", "labels", "os", "arch", "isolation", "trust"],
+      "if": {"required": ["credentials"], "properties": {"credentials": {"minItems": 1}}},
+      "then": {"properties": {"trust": {"const": "trusted"}}},
       "properties": {
-        "id": {"type": "string"},
-        "labels": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "id": {"type": "string", "minLength": 1},
+        "labels": {"type": "array", "items": {"type": "string", "minLength": 1}, "minItems": 1},
         "os": {"enum": ["linux", "macos"]},
         "arch": {"enum": ["x86_64", "arm64"]},
         "isolation": {"enum": ["ephemeral", "persistent"]},
         "trust": {"enum": ["public", "trusted"]},
-        "credentials": {"type": "array", "items": {"type": "string"}}}}}
+        "credentials": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}}}
   }
 }
