@@ -57,6 +57,31 @@ def extract(archive: Path, dest: Path, strip: str) -> None:
         inner.rmdir()
 
 
+def install_rust_dist(src: dict, prefix: Path, archive: Path) -> None:
+    """Assemble a Rust toolchain from the official dist tarball without running its install.sh: copy
+    exactly the files each component's manifest.in lists, so the tree is deterministic (install.sh
+    writes logs and path-dependent metadata)."""
+    stage = prefix.parent / (prefix.name + ".stage")
+    shutil.rmtree(stage, ignore_errors=True)
+    stage.mkdir(parents=True)
+    with tarfile.open(archive, "r:xz") as tar:
+        tar.extractall(stage, filter="data")
+    top = next(stage.iterdir())
+    for comp in src["components"]:
+        cdir = top / comp
+        for line in (cdir / "manifest.in").read_text().splitlines():
+            kind, _, rel = line.partition(":")
+            if kind not in ("file", "dir") or not rel or ".." in Path(rel).parts:
+                raise SystemExit(f"unexpected manifest line {line!r} in {comp}")
+            target = prefix / rel
+            if kind == "dir":
+                shutil.copytree(cdir / rel, target, symlinks=True, dirs_exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(cdir / rel, target, follow_symlinks=False)
+    shutil.rmtree(stage)
+
+
 def install_binary(src: dict, bindir: Path, dl: Path) -> Path:
     target = bindir / src["as"]
     bindir.mkdir(parents=True, exist_ok=True)
@@ -84,6 +109,11 @@ def main(argv: list[str] | None = None) -> int:
         prefix = dev / name
         shutil.rmtree(prefix, ignore_errors=True)
         prefix.mkdir()
+        if src.get("type") == "rust-dist":
+            archive = dev / "dl" / f"{name}.tar.xz"
+            fetch(src["url"], src["sha256"], archive)
+            install_rust_dist(src, prefix, archive)
+            continue
         archive = dev / "dl" / f"{name}.tar.gz"
         fetch(src["url"], src["sha256"], archive)
         extract(archive, prefix, src.get("strip", ""))

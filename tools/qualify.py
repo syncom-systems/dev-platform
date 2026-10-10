@@ -91,6 +91,10 @@ NEGATIVE = {
         ("declared rust version differs", lambda c: _sub(c / "MODULE.bazel", "1.85.0", "1.84.0"), "environment"),
         ("failing test", lambda c: _sub(c / "src/lib.rs", "assert_eq!(super::add(2, 3), 5)", "assert_eq!(super::add(2, 3), 6)"), "check"),
     ],
+    "rust-cargo": [
+        ("failing test", lambda c: _sub(c / "src/lib.rs", "assert_eq!(super::add(2, 3), 5)", "assert_eq!(super::add(2, 3), 6)"), "check"),
+        ("lock file out of date (--locked)", lambda c: _sub(c / "Cargo.toml", 'edition = "2021"', 'edition = "2021"\n\n[dependencies]\nsmallvec = "1"'), "check"),
+    ],
     "python": [
         ("failing test", lambda c: _sub(c / "app.py", "a + b", "a - b"), "check"),
     ],

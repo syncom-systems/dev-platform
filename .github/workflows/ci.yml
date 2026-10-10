@@ -61,10 +61,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15]
-        profile: [python, rust-bazel]
+        profile: [python, rust-bazel, rust-cargo]
         include:
           - {profile: python, fixture: fixtures/python-only}
           - {profile: rust-bazel, fixture: fixtures-real/rust-bazel}
+          - {profile: rust-cargo, fixture: fixtures-real/rust-cargo}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with: {persist-credentials: false}
@@ -74,8 +75,10 @@ jobs:
         with: {version: "0.12.3"}
       - run: python tools/setup_env.py ${{ matrix.profile }}
       - name: Qualify (real execution, then must-be-rejected scenarios)
+        shell: bash
         run: |
-          export PATH="$PWD/.devenv/bin:$PATH"
+          export PATH="$PWD/.devenv/bin:$PWD/.devenv/rust/bin:$PATH"
+          PYTHONPATH=src python -m dev_platform toolchain measure --profile ${{ matrix.profile }} || true
           PY=python; [ -x .devenv/python/bin/python3 ] && PY=.devenv/python/bin/python3
           "$PY" tools/qualify.py --fixture ${{ matrix.fixture }} --profile ${{ matrix.profile }} --negative --out qualification.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
