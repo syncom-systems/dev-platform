@@ -39,3 +39,10 @@ attested digest and a recoverable copy) as long as any application release refer
 supersession rather than editing. Unaddressed here: signing of authorization records (planned
 milestone), electronic-signature requirements of specific regulations, validation (IQ/OQ/PQ) of the
 platform itself. No claim of regulatory compliance is made.
+
+## Evidence store
+`dev-platform evidence put|verify --store DIR` keeps result records in a write-once store addressed by
+canonical digest (`src/dev_platform/evidence.py`). Reads and scans re-derive the digest, so a modified or
+misnamed file is reported, never served. `rollback select --evidence-store DIR` resolves an application
+release's evidence digests from it (a corrupt store aborts selection). It is tamper-evident to anyone who
+holds the digests; it is not a trust anchor and does not replace owner authorization.

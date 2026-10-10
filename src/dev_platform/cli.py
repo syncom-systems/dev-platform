@@ -11,7 +11,17 @@ import sys
 import tempfile
 from pathlib import Path
 
-from dev_platform import __version__, engine, isolation, pack, provenance, records, release, toolchain
+from dev_platform import (
+    __version__,
+    engine,
+    evidence,
+    isolation,
+    pack,
+    provenance,
+    records,
+    release,
+    toolchain,
+)
 from dev_platform.config import CONFIG_FILENAME, SCHEMA_VERSION, load
 from dev_platform.detect import detect, is_bazel_workspace
 from dev_platform.digest import tree_digest
@@ -125,6 +135,14 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--authorization", type=Path, action="append", default=[])
     rs.add_argument("--advisory", type=Path, action="append", default=[])
     rs.add_argument("--store", type=Path, default=None, help="platform release store (for advisories)")
+    rs.add_argument("--evidence-store", type=Path, help="content-addressed evidence store (results)")
+    ev = sub.add_parser("evidence", help="write-once content-addressed evidence store")
+    esub = ev.add_subparsers(dest="ecmd", required=True)
+    ep = esub.add_parser("put")
+    ep.add_argument("--store", type=Path, required=True)
+    ep.add_argument("record", type=Path, nargs="+")
+    ev2 = esub.add_parser("verify", help="re-derive every stored digest; exit 1 on any mismatch")
+    ev2.add_argument("--store", type=Path, required=True)
     dg = sub.add_parser("digest", help="print the release tree digest of a directory")
     dg.add_argument("path", type=Path)
     return ap
@@ -492,8 +510,23 @@ def cmd_provenance(args) -> int:
     return EXIT_OK
 
 
+def cmd_evidence(args) -> int:
+    if args.ecmd == "put":
+        for f in args.record:
+            print(f"{evidence.put(args.store, json.loads(f.read_text()))}  {f}")
+        return EXIT_OK
+    good, bad = evidence.scan(args.store)
+    print(json.dumps({"records": len(good), "problems": bad}, indent=2))
+    return EXIT_OK if not bad else EXIT_UNSATISFIED
+
+
 def cmd_rollback(args) -> int:
     results = {records.canonical_digest(r): r for r in _load_json(args.result)}
+    if args.evidence_store:
+        stored, bad = evidence.scan(args.evidence_store)
+        if bad:
+            raise ConfigError([f"evidence store: {b}" for b in bad])
+        results |= {d: r for d, r in stored.items() if r.get("schema") == engine.RESULT_SCHEMA}
     plat = {}
     store = args.store or default_store()
     if args.advisory and store.is_dir():
@@ -530,6 +563,7 @@ _COMMANDS = {
     "toolchain": cmd_toolchain,
     "provenance": cmd_provenance,
     "rollback": cmd_rollback,
+    "evidence": cmd_evidence,
     "release": cmd_release,
     "validate": cmd_validate,
     "affected": cmd_affected,
