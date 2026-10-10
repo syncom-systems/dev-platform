@@ -14,6 +14,7 @@ CHECKS = [
 ]
 CFG = parse(tomllib.loads(cfg_text(CHECKS)))
 PINNED = Resolution("pinned", "0.1.0", None, "d")
+CONFORMANT = {"profile": "p", "conformant": True, "tools": []}
 
 
 def fake(codes):
@@ -24,6 +25,7 @@ def fake(codes):
 
 
 def build(stage, changed, codes=None, res=PINNED, execute=True, **kw):
+    kw.setdefault("environment", CONFORMANT)
     cfg = kw.pop("cfg", CFG)
     return engine.build(
         cfg,
@@ -101,6 +103,13 @@ class EnginePolicyTest(unittest.TestCase):
         self.assertFalse(build(Stage.PRE_MERGE, ("src/a.py",), revision="abc")["certification"]["certified"])
         self.assertFalse(build(Stage.FULL, (), revision=None)["certification"]["certified"])
         self.assertFalse(build(Stage.FULL, (), {"rc": 1}, revision="abc")["certification"]["certified"])
+        selfmode = Resolution("self", "0.1.0", None, None)
+        self.assertFalse(build(Stage.FULL, (), res=selfmode, revision="abc")["certification"]["certified"])
+        bad = {"profile": "p", "conformant": False, "tools": []}
+        doc = build(Stage.FULL, (), revision="abc", environment=bad)
+        self.assertFalse(doc["certification"]["certified"])
+        self.assertIn("environment", doc["unsatisfied_obligations"])
+        self.assertEqual(doc["admission"], "blocked")
         override = Resolution("override", None, None, None)
         cert = build(Stage.FULL, (), res=override, revision="abc")["certification"]
         self.assertFalse(cert["certified"])

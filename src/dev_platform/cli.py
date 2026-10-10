@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
-from dev_platform import __version__, engine
+from dev_platform import __version__, engine, records, release, toolchain
 from dev_platform.config import CONFIG_FILENAME, SCHEMA_VERSION, load
 from dev_platform.detect import detect, is_bazel_workspace
 from dev_platform.digest import tree_digest
@@ -50,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     ip = sub.add_parser("init", parents=[c], help="write a starter dev-platform.toml")
     ip.add_argument("--platform-version", default=__version__)
     ip.add_argument("--sha256", help="digest of the release tree (default: computed from the store)")
+    ip.add_argument("--profile", required=True, help="toolchain profile of the pinned release")
     ip.add_argument("--force", action="store_true")
     sub.add_parser("detect", parents=[c], help="report discovered facts")
     sub.add_parser("doctor", parents=[c], help="diagnose configuration, pin and environment")
@@ -59,6 +61,24 @@ def build_parser() -> argparse.ArgumentParser:
     _plan_args(ck)
     ck.add_argument("--dry-run", action="store_true")
     ck.add_argument("--result", type=Path, help="write the result record here")
+    rl = sub.add_parser("release", help="build or verify an immutable platform release")
+    rsub = rl.add_subparsers(dest="rcmd", required=True)
+    rb = rsub.add_parser("build", help="create <out>/<version>/ with toolchain manifest and SBOM")
+    rb.add_argument("--version", dest="rversion", required=True)
+    rb.add_argument("--out", type=Path, required=True)
+    rb.add_argument("--toolchains", type=Path, default=Path("toolchains/manifest.json"))
+    rb.add_argument("--src", type=Path, default=None)
+    rb.add_argument("--source-uri")
+    rb.add_argument("--source-revision")
+    rv = rsub.add_parser("verify", help="verify a release directory and print its pin digest")
+    rv.add_argument("path", type=Path)
+    va = sub.add_parser("validate", help="validate an app-release, authorization or advisory record")
+    va.add_argument("file", type=Path, nargs="+")
+    af = sub.add_parser("affected", help="which releases and consumers does an advisory affect")
+    af.add_argument("--advisory", type=Path, required=True)
+    af.add_argument("--store", type=Path, default=None)
+    af.add_argument("--json", action="store_true")
+    af.add_argument("consumers", type=Path, nargs="*", help="dev-platform.toml, result or app-release files")
     dg = sub.add_parser("digest", help="print the release tree digest of a directory")
     dg.add_argument("path", type=Path)
     return ap
@@ -76,12 +96,28 @@ def _changed(args, root: Path):
     return None  # unknown: fail closed
 
 
-def _resolve_and_maybe_exec(cfg, args):
+class _Delegated(Exception):
+    def __init__(self, code: int):
+        self.code = code
+
+
+def _resolve_and_delegate(cfg, args):
+    """Resolve the pinned release; if we are not running it, run it (from its private snapshot)."""
     res = resolve(cfg, protected=protected_context(os.environ, getattr(args, "protected", False)))
     if needs_reexec(res):
-        env = reexec_env(res)
-        os.execve(sys.executable, [sys.executable, "-m", "dev_platform", *args._argv], env)  # noqa: S606 - launcher re-exec into the verified pin
+        try:
+            child = subprocess.run([sys.executable, "-m", "dev_platform", *args._argv], env=reexec_env(res))
+        finally:
+            res.dispose()
+        raise _Delegated(child.returncode)
     return res
+
+
+def environment_for(cfg, res, root: Path) -> dict | None:
+    profile = cfg.platform.profile
+    if not profile or not res.release:
+        return None
+    return toolchain.verify_profile(res.release["toolchains"], profile, root)
 
 
 def cmd_detect(args) -> int:
@@ -99,6 +135,11 @@ def cmd_init(args) -> int:
     if target.exists() and not args.force:
         raise ConfigError([f"{target} exists (use --force)"])
     sha = args.sha256
+    vrel = default_store() / args.platform_version
+    if (vrel / "release.json").is_file():
+        profiles = release.load(vrel)["toolchains"]["profiles"]
+        if args.profile not in profiles:
+            raise ConfigError([f"profile {args.profile!r} not in release (have {sorted(profiles)})"])
     if not sha:
         vdir = default_store() / args.platform_version
         if not vdir.is_dir():
@@ -115,6 +156,7 @@ def cmd_init(args) -> int:
         "[platform]",
         f'version = "{args.platform_version}"',
         f'sha256 = "{sha}"',
+        f'profile = "{args.profile}"',
         "",
         "[project]",
         f'name = "{root.resolve().name}"',
@@ -178,6 +220,16 @@ def cmd_doctor(args) -> int:
         try:
             res = resolve(cfg, protected=protected_context(os.environ, args.__dict__.get("protected", False)))
             add("ok", f"platform resolved: mode={res.mode} version={res.version}")
+            env_rec = environment_for(cfg, res, args.project.resolve())
+            res.dispose()
+            if env_rec:
+                for t in env_rec["tools"]:
+                    add(
+                        "ok" if t["status"] == "ok" else "error",
+                        f"tool {t['name']}: expected {t['expected']} observed {t['observed']} "
+                        f"[{t['identity']}] {t['status']}",
+                    )
+                code = code or (EXIT_UNSATISFIED if not env_rec["conformant"] else EXIT_OK)
             if res.mode == "override":
                 add("warn", "override active: results are not certifiable")
         except DevPlatformError as e:
@@ -202,7 +254,7 @@ def cmd_doctor(args) -> int:
 
 def _plan(args, execute: bool) -> tuple[dict, int]:
     cfg = load(args.project)
-    res = _resolve_and_maybe_exec(cfg, args)
+    res = _resolve_and_delegate(cfg, args)
     previous = json.loads(args.previous.read_text()) if args.previous else None
     doc = engine.build(
         cfg,
@@ -216,6 +268,7 @@ def _plan(args, execute: bool) -> tuple[dict, int]:
         event_trust=args.event_trust,
         revision=engine.git_revision(args.project),
         dirty=engine.git_dirty(args.project),
+        environment=environment_for(cfg, res, args.project.resolve()),
     )
     return doc, doc["exit"]
 
@@ -265,6 +318,60 @@ def cmd_check(args) -> int:
     return EXIT_UNSATISFIED if code else EXIT_OK
 
 
+def cmd_release(args) -> int:
+    if args.rcmd == "build":
+        src = args.src or Path(__file__).resolve().parent.parent
+        dest = release.build(
+            src,
+            args.toolchains,
+            args.out,
+            args.rversion,
+            source_uri=args.source_uri,
+            source_revision=args.source_revision,
+        )
+        print(f"built {dest}\npin sha256 = {tree_digest(dest)}")
+        return EXIT_OK
+    doc = release.load(args.path)
+    print(
+        f"ok: {doc['platform']['version']} source {doc['platform']['source_digest']}\n"
+        f"pin sha256 = {tree_digest(args.path)}"
+    )
+    return EXIT_OK
+
+
+def cmd_validate(args) -> int:
+    bad = 0
+    for f in args.file:
+        problems = records.validate_file(f)
+        bad += bool(problems)
+        print(f"{f}: " + ("ok" if not problems else "INVALID"))
+        for p in problems:
+            print(f"  {p}")
+    return EXIT_USAGE if bad else EXIT_OK
+
+
+def cmd_affected(args) -> int:
+    adv = json.loads(args.advisory.read_text())
+    problems = records.validate_advisory(adv)
+    if problems:
+        raise ConfigError(problems)
+    store = args.store or default_store()
+    rels = {}
+    if store.is_dir():
+        for d in sorted(store.iterdir()):
+            if (d / "release.json").is_file():
+                doc = release.load(d)
+                doc["sbom_doc"] = json.loads((d / doc["sbom"]["path"]).read_text())
+                rels[d.name] = doc
+    hit = records.releases_affected(adv, rels)
+    consumers = sorted(str(c) for c in args.consumers if records.consumer_release(c) in hit)
+    out = {"advisory": adv["id"], "affected_releases": hit, "affected_consumers": consumers}
+    _emit(
+        args, out, f"advisory {adv['id']}: affected releases {hit or 'none'}; consumers {consumers or 'none'}"
+    )
+    return EXIT_UNSATISFIED if hit else EXIT_OK
+
+
 def cmd_digest(args) -> int:
     print(tree_digest(args.path))
     return EXIT_OK
@@ -277,6 +384,9 @@ _COMMANDS = {
     "explain": cmd_explain,
     "check": cmd_check,
     "digest": cmd_digest,
+    "release": cmd_release,
+    "validate": cmd_validate,
+    "affected": cmd_affected,
 }
 
 
@@ -286,6 +396,8 @@ def main(argv: list[str] | None = None) -> int:
     args._argv = list(argv)
     try:
         return _COMMANDS[args.cmd](args)
+    except _Delegated as d:
+        return d.code
     except ConfigError as e:
         for p in e.problems:
             print(f"config error: {p}", file=sys.stderr)

@@ -1,6 +1,6 @@
 # ADR 0009: Distribution and integrity
 
-Status: Proposed. Design in [distribution.md](../distribution.md).
+Status: Superseded by [ADR 0011](0011-supply-chain-dependency-model.md) and [ADR 0014](0014-release-trust-bootstrap-and-execution.md). Design in [distribution.md](../distribution.md).
 
 - Release = a tagged, deterministic source tree; integrity pin = sha256 tree digest
   (`dev-platform digest`).

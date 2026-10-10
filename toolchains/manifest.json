@@ -1,0 +1,19 @@
+{
+  "schema": "dev-platform.toolchains/v1",
+  "profiles": {
+    "dev-platform": {
+      "tools": {
+        "python": {"version": "3.14.", "compare": "prefix",
+                   "probe": {"argv": ["{python}", "--version"], "pattern": "Python (\\S+)"},
+                   "purl": "pkg:generic/python"},
+        "uv": {"version": "0.12.3",
+               "probe": {"argv": ["uv", "--version"], "pattern": "uv (\\S+)"},
+               "purl": "pkg:pypi/uv@0.12.3"},
+        "ruff": {"version": "0.17.0",
+                 "probe": {"argv": ["uvx", "--from", "ruff==0.17.0", "ruff", "--version"],
+                           "pattern": "ruff (\\S+)"},
+                 "purl": "pkg:pypi/ruff@0.17.0"}
+      }
+    }
+  }
+}

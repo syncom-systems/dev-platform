@@ -2,7 +2,8 @@
 schema_version = 1
 
 [platform]
-self_hosted = true  # this repository IS the platform; see docs/adr/0003
+self_hosted = true  # this repository IS the platform; see docs/adr/0014
+profile = "dev-platform"  # toolchain profile from toolchains/manifest.json
 
 [project]
 name = "dev-platform"

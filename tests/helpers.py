@@ -11,6 +11,7 @@ schema_version = 1
 [platform]
 version = "0.1.0"
 sha256 = "%s"
+profile = "py"
 [project]
 name = "t"
 """

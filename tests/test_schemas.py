@@ -61,6 +61,30 @@ class SchemaContractTest(unittest.TestCase):
         )
 
 
+class RecordSchemaTest(unittest.TestCase):
+    def test_required_keys_match_validators(self):
+        from tests.test_records import app_release, auth
+
+        for name, doc in (("app-release", app_release()), ("authorization", auth())):
+            s = schema(f"{name}-v1.schema.json")
+            self.assertTrue(set(s["required"]) <= set(doc), name)
+            self.assertEqual(doc["schema"], s["properties"]["schema"]["const"])
+
+    def test_release_and_toolchain_schemas_match_builder(self):
+        import json as _json
+
+        from dev_platform import release
+        from tests.test_release import build
+
+        doc = _json.loads((build(self) / "release.json").read_text())
+        s = schema("release-v1.schema.json")
+        self.assertEqual(set(doc), set(s["properties"]))
+        self.assertEqual(doc["schema"], release.RELEASE_SCHEMA)
+        self.assertEqual(
+            schema("toolchains-v1.schema.json")["properties"]["schema"]["const"], doc["toolchains"]["schema"]
+        )
+
+
 class GitChangeTest(unittest.TestCase):
     def git(self, d, *a):
         subprocess.run(

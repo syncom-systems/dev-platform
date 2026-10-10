@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/advisory-v1.schema.json",
+  "title": "dev-platform.advisory/v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "summary",
+    "severity",
+    "affected"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dev-platform.advisory/v1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "severity": {
+      "type": "string"
+    },
+    "affected": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "component",
+          "versions"
+        ]
+      }
+    }
+  }
+}

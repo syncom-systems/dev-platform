@@ -1,6 +1,6 @@
 # ADR 0003: Version selection, overrides and self-hosting
 
-Status: Proposed (the override prohibition is mandated; the mechanism is ours)
+Status: Superseded in part by [ADR 0014](0014-release-trust-bootstrap-and-execution.md) (launcher mechanism and self-hosted certification; the override rules remain in force)
 
 ## Decision
 - **Launcher.** `dev-platform` reads the pin, resolves the release in the store

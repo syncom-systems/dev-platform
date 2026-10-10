@@ -1,13 +1,13 @@
 # Distribution design
 
-Status: the store layout, digest pin, launcher re-exec and override rules are **implemented**.
+Status: the store layout, digest pin, verified-snapshot launcher, release build (toolchain manifest + SBOM) and override rules are **implemented**. Supersedes the earlier "release = source tree" design (ADR 0010, 0011, 0014).
 Everything marked *(planned)* is design only.
 
 ## Artifacts
 
 | Artifact | Form | Integrity |
 |---|---|---|
-| Platform release | tagged source tree `src/dev_platform/` (zero dependencies) | sha256 tree digest (`dev-platform digest`) pinned by consumers; *(planned)* signed tag + Sigstore/SLSA provenance |
+| Platform release | immutable directory: `src/`, `release.json` (toolchain profiles), `sbom.cdx.json`; built by `dev-platform release build` | sha256 tree digest pinned by consumers; *(planned)* Sigstore/SLSA attestations from `release.yml` |
 | Launcher | the same package; entry point `dev-platform` | bootstrap script *(planned)*: fetch release archive by version, verify the pinned digest **before** unpacking into the store |
 | Reusable GitHub workflow | `.github/workflows/check.yml` (`workflow_call`) | consumers reference it by full commit SHA, never a branch or floating tag |
 | Skills / Claude Code plugin | *(planned)* `integrations/` directory in the same release | covered by the same release digest |
@@ -21,7 +21,7 @@ symlinks rejected.
 
 ## Consumer flow
 
-1. `dev-platform init --platform-version X --sha256 D` writes the pin.
+1. `dev-platform init --platform-version X --profile P --sha256 D` writes the pin (version, digest, toolchain profile).
 2. CI uses the reusable workflow, which installs version X, checks D, then runs
    `dev-platform check --stage pre-merge --base origin/<default>`.
 3. Upgrading = editing version + digest in a reviewed PR.

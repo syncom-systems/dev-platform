@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/release-v1.schema.json",
+  "title": "dev-platform.release/v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "platform",
+    "toolchains",
+    "sbom",
+    "provenance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dev-platform.release/v1"
+    },
+    "platform": {
+      "type": "object",
+      "required": [
+        "name",
+        "version",
+        "source_digest"
+      ]
+    },
+    "toolchains": {
+      "$ref": "toolchains-v1.schema.json"
+    },
+    "sbom": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256"
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "source_uri",
+        "source_revision",
+        "attestations"
+      ]
+    }
+  }
+}

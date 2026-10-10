@@ -4,7 +4,9 @@
 
 | Component | Where | Role |
 |---|---|---|
-| Launcher | `resolve.py`, `cli.py` | Reads the consumer pin, verifies the release, re-executes into it |
+| Launcher | `resolve.py`, `cli.py`, `digest.py` | Snapshots and verifies the pinned release, runs it from the verified copy |
+| Release + toolchains | `release.py`, `toolchain.py`, [release schema](../schemas/release-v1.schema.json) | Immutable environment: code + toolchain profiles + SBOM; verifies the live environment against a profile |
+| Records | `records.py`, `schemas/` | App-release, authorization and advisory contracts; `affected` queries |
 | Config contract | `config.py`, [schema](../schemas/config-v1.schema.json) | Strict, versioned project policy (`dev-platform.toml`) |
 | Detection | `detect.py` | Discovered facts only |
 | Verification model | `model.py`, `impact.py`, `engine.py` | Stages, obligations, selection, evidence state machine, results |
@@ -29,8 +31,17 @@ digest, and (for execution) the adapters' tool output. Results contain no timest
    ([ADR 0007](adr/0007-agent-independence.md)).
 
 Not defended: a malicious *consumer* repository (its configured `exec` argv runs as the invoking
-user, exactly as its Makefile would), and a compromised store directory prior to digest check
-(TOCTOU between verification and re-exec; mitigated by store permissions, see Limitations).
+user, exactly as its Makefile would) and a same-user attacker modifying the running snapshot. The
+verification-to-execution race is closed by running from a verified private copy
+([release-trust.md](release-trust.md)).
+
+## Release = environment
+
+A release pins code *and* toolchain profiles ([ADR 0010](adr/0010-unified-platform-and-toolchain-releases.md)).
+Every result records `environment` (release identity, profile, per-tool expected/observed/identity,
+`identity_digest`). A non-conformant environment blocks admission and certification. Application
+releases reference these identities ([provenance](provenance-and-governance.md)); the platform as a
+dependency is tracked via SBOM, advisories and `affected` ([supply chain](supply-chain.md)).
 
 ## Installation, versioning, execution
 
@@ -62,12 +73,16 @@ run may consume it with `--previous` to carry evidence ([model](verification-mod
 | 2.5 verification semantics | ADR 0006 | `model.py`, `impact.py`, `engine.py` | `test_model`, `test_impact`, `test_engine` |
 | 2.6 runners | ADR 0005 | `runners.py` | `test_runners`, `test_engine` |
 | 2.7 agent independence | ADR 0007 | CLI + JSON only | e2e runs with no agent |
-| 4.H self-application | - | `dev-platform.toml`, `ci.yml` | CI runs `dev-platform check --stage full` |
+| 4.H self-application | - | `dev-platform.toml`, `ci.yml` | CI runs `dev-platform check --stage full` (self mode: verified, never certified) |
+| Rev.2 #1 unified releases | ADR 0010 | `release.py`, `toolchain.py` | `test_release`, `test_toolchain`, e2e profile tests |
+| Rev.2 #2 supply chain | ADR 0011 | SBOM, `records.releases_affected` | `test_records`, e2e `affected` |
+| Rev.2 #3/#4 provenance, governance | ADR 0012/0013 | `records.py`, schemas | `test_records` |
+| Rev.2 #5 release security | ADR 0014 | `digest.snapshot`, `resolve.py` | `test_resolve` (race, self not certifiable) |
 
 ## Limitations and open questions
 
-- Integrity is a digest the consumer trusts; producer authenticity is future work (ADR 0009).
-- Verification-to-re-exec is not atomic; the store must not be writable by untrusted users.
+- Producer authenticity (attestations) is designed and the release workflow is written but has never run; no release exists ([release-trust](release-trust.md)).
+- Tool identity is mostly `version-only`; binary digests and Bazel lock-file reconciliation are planned (ADR 0010).
 - The `python` adapter is `unittest` discovery only; pytest/ruff/pyright are `exec` checks for now.
 - No cross-run evidence persistence service: `--previous` consumes a result file the caller stores.
 - Open: bootstrapping rule for releasing the platform itself; whether `periodic` needs a scheduler

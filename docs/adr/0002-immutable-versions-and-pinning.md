@@ -1,6 +1,6 @@
 # ADR 0002: Immutable side-by-side versions and pinning
 
-Status: Ratified
+Status: Ratified, amended by [ADR 0010](0010-unified-platform-and-toolchain-releases.md) (a release includes its toolchain profiles)
 
 ## Decision
 - A platform release is an immutable directory `<store>/<version>/` holding `src/dev_platform/`.

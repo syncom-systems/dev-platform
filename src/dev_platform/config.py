@@ -28,6 +28,7 @@ class PlatformPin:
     version: str | None
     sha256: str | None
     self_hosted: bool
+    profile: str | None = None
 
 
 @dataclass(frozen=True)
@@ -103,13 +104,15 @@ def parse(data: dict) -> Config:
     if data.get("schema_version") != SCHEMA_VERSION:
         errs.append(f"schema_version: must be {SCHEMA_VERSION}, got {data.get('schema_version')!r}")
 
-    p = _table(data, "platform", {"version", "sha256", "self_hosted"}, "platform", errs)
+    p = _table(data, "platform", {"version", "sha256", "self_hosted", "profile"}, "platform", errs)
     self_hosted = p.get("self_hosted", False)
     version, sha = p.get("version"), p.get("sha256")
     if self_hosted is True:
         if version or sha:
             errs.append("platform: self_hosted excludes version/sha256")
     else:
+        if not (isinstance(p.get("profile"), str) and p["profile"]):
+            errs.append("platform.profile: required (the toolchain profile of the pinned release)")
         if not (isinstance(version, str) and _VERSION_RE.match(version)):
             errs.append("platform.version: required exact version like 1.2.3 (ranges are not allowed)")
         if not (isinstance(sha, str) and _SHA_RE.match(sha)):
@@ -249,7 +252,7 @@ def parse(data: dict) -> Config:
     if errs:
         raise ConfigError(errs)
     return Config(
-        platform=PlatformPin(version, sha, self_hosted is True),
+        platform=PlatformPin(version, sha, self_hosted is True, p.get("profile")),
         project_name=name,
         bazel_only=bazel_only,
         assurance=assurance,

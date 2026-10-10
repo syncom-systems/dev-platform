@@ -69,6 +69,17 @@ def git_changed(root: Path, *, base: str | None = None, staged: bool = False) ->
     return None
 
 
+def _release_identity(res: Resolution) -> dict:
+    rel = res.release or {}
+    return {
+        "version": res.version,
+        "tree_digest": res.digest,
+        "source_digest": (rel.get("platform") or {}).get("source_digest"),
+        "sbom_sha256": (rel.get("sbom") or {}).get("sha256"),
+        "synthesized": bool(rel.get("synthesized")),
+    }
+
+
 def build(
     cfg: Config,
     root: Path,
@@ -83,6 +94,7 @@ def build(
     event_trust: str = "untrusted",
     revision: str | None = None,
     dirty: bool = False,
+    environment: dict | None = None,
 ) -> dict:
     prev_state = {c["id"]: EvidenceState(c["state"]) for c in (previous or {}).get("checks", [])}
     offered = load_profile(infra_profile)
@@ -139,8 +151,12 @@ def build(
         entry |= {"outcome": outcome.value, "state": after.value}
         checks.append(entry)
 
+    env_rec = environment or {"profile": None, "conformant": None, "tools": []}
     owed = [e for e in checks if e["selected"]]
     unsatisfied = [e["id"] for e in owed if e["outcome"] != Outcome.PASSED.value]
+    # A non-conformant environment makes every admission claim false (no silent substitution).
+    if env_rec["conformant"] is False and stage in ADMISSION_STAGES and execute:
+        unsatisfied.append("environment")
     admission = None
     if stage in ADMISSION_STAGES:
         admission = "admitted" if execute and not unsatisfied else "blocked"
@@ -152,6 +168,8 @@ def build(
         blockers.append(f"platform mode '{resolution.mode}' is not certifiable")
     if revision is None:
         blockers.append("revision unknown (not a git checkout)")
+    if env_rec["conformant"] is not True:
+        blockers.append("environment does not conform to a platform toolchain profile")
     if dirty:
         blockers.append("working tree has uncommitted changes")
     if not execute:
@@ -170,6 +188,7 @@ def build(
         "project": {"name": cfg.project_name, "assurance": cfg.assurance, "bazel_only": cfg.bazel_only},
         "revision": revision,
         "stage": stage.value,
+        "environment": {"release": _release_identity(resolution), **env_rec},
         "change_set": {"known": changed is not None, "paths": list(changed) if changed else []},
         "executed": execute,
         "checks": checks,

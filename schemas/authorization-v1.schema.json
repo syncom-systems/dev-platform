@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/authorization-v1.schema.json",
+  "title": "dev-platform.authorization/v1",
+  "description": "A decision about a subject, with approver identity assertion, basis, UTC timestamp, supersession and retention. Git authorship is never an identity assertion.",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "subject",
+    "decision",
+    "decided_by",
+    "basis",
+    "decided_at",
+    "retention"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dev-platform.authorization/v1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "object",
+      "required": [
+        "kind",
+        "digest"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "application-release",
+            "platform-release",
+            "change"
+          ]
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "decision": {
+      "enum": [
+        "approved",
+        "rejected",
+        "revoked"
+      ]
+    },
+    "decided_by": {
+      "type": "object",
+      "required": [
+        "id",
+        "role",
+        "identity_assertion"
+      ]
+    },
+    "basis": {
+      "type": "object",
+      "required": [
+        "kind",
+        "reference"
+      ]
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "retention": {
+      "type": "object",
+      "required": [
+        "class",
+        "until"
+      ]
+    }
+  }
+}

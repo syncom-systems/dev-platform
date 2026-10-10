@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/toolchains-v1.schema.json",
+  "title": "dev-platform.toolchains/v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "profiles"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dev-platform.toolchains/v1"
+    },
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "tools"
+        ],
+        "properties": {
+          "tools": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "version"
+              ],
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "compare": {
+                  "enum": [
+                    "exact",
+                    "prefix"
+                  ]
+                },
+                "bazel_managed": {
+                  "type": "boolean"
+                },
+                "declared_in": {
+                  "type": "object",
+                  "required": [
+                    "file",
+                    "pattern"
+                  ]
+                },
+                "probe": {
+                  "type": "object",
+                  "required": [
+                    "argv",
+                    "pattern"
+                  ]
+                },
+                "sha256": {
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$"
+                      }
+                    }
+                  ]
+                },
+                "purl": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
