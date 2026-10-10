@@ -79,6 +79,31 @@ def auth(archive_sha, **over):
     return d
 
 
+def build_candidate(test, version, revision=REV):
+    import shutil
+
+    from dev_platform import pack, release
+    from tests.test_toolchain import MANIFEST
+
+    out = tmpdir(test)
+    test.addCleanup(shutil.rmtree, out, ignore_errors=True)
+    tc = out / "tc.json"
+    tc.write_text(json.dumps(MANIFEST))
+    d = release.build(ROOT / "src", tc, out / "r", version, source_revision=revision, strict_version=False)
+    # the verifier also checks the source __version__ matches
+    init = d / "src" / "dev_platform" / "__init__.py"
+    init.write_text(re.sub(r'__version__ = "[^"]+"', f'__version__ = "{version}"', init.read_text()))
+    doc = json.loads((d / "release.json").read_text())
+    doc["platform"]["source_digest"] = tree_digest(d / "src")
+    sbom = json.dumps(release.make_sbom(version, doc["platform"]["source_digest"], MANIFEST), indent=2)
+    (d / "sbom.cdx.json").write_text(sbom)
+    doc["sbom"]["sha256"] = hashlib.sha256(sbom.encode()).hexdigest()
+    (d / "release.json").write_text(json.dumps(doc))
+    arc = out / "a.tar.gz"
+    sha = pack.pack(d, arc)
+    return arc, sha
+
+
 class VerifierTest(unittest.TestCase):
     def setUp(self):
         self.version = "1.0.0-rc.1"
@@ -92,30 +117,7 @@ class VerifierTest(unittest.TestCase):
         }
 
     def rebuild(self, version, revision=REV):
-        import shutil
-
-        from dev_platform import pack, release
-        from tests.test_toolchain import MANIFEST
-
-        out = tmpdir(self)
-        self.addCleanup(shutil.rmtree, out, ignore_errors=True)
-        tc = out / "tc.json"
-        tc.write_text(json.dumps(MANIFEST))
-        d = release.build(
-            ROOT / "src", tc, out / "r", version, source_revision=revision, strict_version=False
-        )
-        # the verifier also checks the source __version__ matches
-        init = d / "src" / "dev_platform" / "__init__.py"
-        init.write_text(re.sub(r'__version__ = "[^"]+"', f'__version__ = "{version}"', init.read_text()))
-        doc = json.loads((d / "release.json").read_text())
-        doc["platform"]["source_digest"] = tree_digest(d / "src")
-        sbom = json.dumps(release.make_sbom(version, doc["platform"]["source_digest"], MANIFEST), indent=2)
-        (d / "sbom.cdx.json").write_text(sbom)
-        doc["sbom"]["sha256"] = hashlib.sha256(sbom.encode()).hexdigest()
-        (d / "release.json").write_text(json.dumps(doc))
-        arc = out / "a.tar.gz"
-        sha = pack.pack(d, arc)
-        return arc, sha
+        return build_candidate(self, version, revision)
 
     def run_v(self, version, revision=REV, gh=None, auths=(), policy=POLICY, ref=None):
         arc, sha = self.rebuild(version, revision)

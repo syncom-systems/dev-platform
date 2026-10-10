@@ -65,3 +65,25 @@ releases. `release.yml` ends by asserting the new release is immutable and by ru
 `gh release verify` / `verify-asset`; if the repository setting is missing it fails loudly after
 publication (the release must then not be used or accepted). A failed publication leaves the tag and
 its diagnostics in place as history (`releases/<version>/ATTEMPT.md`); the version is never reused.
+
+## Trusted installation (`tools/install_release.py`)
+```
+python3 tools/install_release.py --version 0.1.0 --store ~/.dev-platform/store \
+  --verifier-sha256 <pin> --policy-sha256 <pin> [--tree-sha256 <consumer pin>] \
+  [--allow-prerelease | --allow-unaccepted] [--previous-record <record>]
+```
+Order (nothing from the archive is imported or executed): check the pinned digests of the verifier and
+trust policy (exit 3 if they differ) -> obtain the archive -> resolve the expected commit from the git
+tag -> independent verification, including the SBOM attestation -> admission by acceptance state ->
+extract the verified bytes to staging, require the verified tree digest -> atomic write-once rename,
+freeze read-only, store the verification record under `<store>/.records/`. A pre-release installs only
+with `--allow-prerelease`, a stable release that lacks an owner authorization only with
+`--allow-unaccepted`; the admitted state is recorded. The verifier is executed from the exact bytes that
+were hashed, not re-read from the path. `--previous-record` adds continuity evidence (is the signer
+policy unchanged since a previously verified release); it is informational and never substitutes for
+the operator's pins.
+
+The operator obtains the two pins out of band (for example from a reviewed commit of this repository
+whose history they trust, compared against a second source). The pins are the root; the release being
+installed cannot supply or alter them. `dev-platform release install` remains the low-level installer
+that takes already-trusted digests and performs no provenance verification.
