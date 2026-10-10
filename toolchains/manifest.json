@@ -241,6 +241,56 @@
           "purl": "pkg:generic/rust@1.85.0"
         }
       }
+    },
+    "rust-cargo": {
+      "tools": {
+        "rust": {
+          "version": "1.85.0",
+          "executable": "cargo",
+          "purl": "pkg:generic/rust@1.85.0",
+          "closure": {
+            "kind": "prefix",
+            "prefix_up": 2,
+            "sha256": {
+              "darwin-arm64": "cb8afd1af06f708479ed5a9c05054ed377487c914857ec89144ce077ff66539e"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://static.rust-lang.org/dist/rust-1.85.0-aarch64-apple-darwin.tar.xz",
+              "sha256": "8c18f341226121d35f5cd99b8bb6a6b0bdcd28ba48f8ac2d674bded691fca315",
+              "type": "rust-dist",
+              "components": [
+                "rustc",
+                "cargo",
+                "rust-std-aarch64-apple-darwin"
+              ]
+            },
+            "linux-x86_64": {
+              "url": "https://static.rust-lang.org/dist/rust-1.85.0-x86_64-unknown-linux-gnu.tar.xz",
+              "sha256": "6f8b323ed2a34ccf0031631b85d79e1133da662094566bc910432da9bd3a5b42",
+              "type": "rust-dist",
+              "components": [
+                "rustc",
+                "cargo",
+                "rust-std-x86_64-unknown-linux-gnu"
+              ]
+            }
+          }
+        }
+      }
     }
   }
 }
