@@ -1,39 +1,107 @@
-# Release workflow (UNTESTED: written for review, first run will be the first test).
-# Produces an immutable release directory, publishes it with GitHub artifact attestations
-# (Sigstore-signed SLSA build provenance) and a CycloneDX SBOM attestation. Consumers verify with:
-#   gh attestation verify <archive> --repo syncom-systems/dev-platform
-# See docs/release-trust.md for the trust model. Nothing here is "signed" until this has run.
+# Release workflow. Triggered by a version tag. Produces a deterministic archive, attests its build
+# provenance (Sigstore, SLSA v1) and SBOM, verifies it with the independent verifier, then publishes.
+# Tags containing '-' (e.g. v0.1.0-rc.1) are pre-releases: verified artifacts, never "accepted".
+# Stable acceptance additionally requires an owner authorization record (docs/release-trust.md);
+# this workflow never grants it. Third-party actions are pinned by commit SHA.
 name: release
 on:
   push:
-    tags: ["v*.*.*"]
+    tags: ["v[0-9]+.[0-9]+.[0-9]+", "v[0-9]+.[0-9]+.[0-9]+-*"]
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 jobs:
-  release:
+  build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      archive_sha256: ${{ steps.pack.outputs.archive_sha256 }}
+      tree_digest: ${{ steps.pack.outputs.tree_digest }}
     steps:
-      - uses: actions/checkout@v4
-        with: {persist-credentials: false}
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with: {python-version: "3.14"}
-      - id: v
+      - id: meta
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - name: Build release directory
-        env: {version: "${{ steps.v.outputs.version }}"}
+      - name: Tag must be on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Unit tests
+        run: python -m unittest discover -t . -s tests
+      - id: pack
+        env: {VERSION: "${{ steps.meta.outputs.version }}"}
         run: |
-          PYTHONPATH=src python -m dev_platform release build --version "$version" --out dist \
-            --source-uri "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --source-revision "$GITHUB_SHA" | tee build.log
-          tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -czf "dev-platform-$version.tar.gz" -C dist "$version"
-          sha256sum "dev-platform-$version.tar.gz" > "dev-platform-$version.tar.gz.sha256"
-      - uses: actions/attest-build-provenance@v2
-        with: {subject-path: "dev-platform-*.tar.gz"}
-      - uses: actions/attest-sbom@v2
+          export PYTHONPATH=src
+          python -m dev_platform release build --version "$VERSION" --out dist \
+            --source-uri "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --source-revision "$GITHUB_SHA"
+          mkdir out
+          python -m dev_platform release pack "dist/$VERSION" --out "out/dev-platform-$VERSION.tar.gz"
+          sha=$(sha256sum "out/dev-platform-$VERSION.tar.gz" | cut -d' ' -f1)
+          tree=$(python -m dev_platform digest "dist/$VERSION")
+          echo "$sha  dev-platform-$VERSION.tar.gz" > "out/dev-platform-$VERSION.tar.gz.sha256"
+          cp "dist/$VERSION/sbom.cdx.json" "out/dev-platform-$VERSION.sbom.cdx.json"
+          echo "archive_sha256=$sha" >> "$GITHUB_OUTPUT"
+          echo "tree_digest=$tree" >> "$GITHUB_OUTPUT"
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with: {subject-path: "out/dev-platform-*.tar.gz"}
+      - uses: actions/attest-sbom@bd218ad0dbcb3e146bd073d1d9c6d78e08aa8a0b # v2
         with:
-          subject-path: "dev-platform-*.tar.gz"
-          sbom-path: "dist/${{ steps.v.outputs.version }}/sbom.cdx.json"
-      - name: Publish
-        env: {GH_TOKEN: "${{ github.token }}"}
-        run: gh release create "$GITHUB_REF_NAME" dev-platform-*.tar.gz* build.log --verify-tag --notes-file build.log
+          subject-path: "out/dev-platform-${{ steps.meta.outputs.version }}.tar.gz"
+          sbom-path: "out/dev-platform-${{ steps.meta.outputs.version }}.sbom.cdx.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with: {name: release-out, path: out/, if-no-files-found: error}
+
+  verify:
+    # A separate job and runner, read-only token: re-verifies what the build job produced using the
+    # independent verifier and the trust policy from the tagged commit.
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      attestations: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: {python-version: "3.14"}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with: {name: release-out, path: out}
+      - name: Independent verification
+        run: |
+          python tools/verify_release.py "out/dev-platform-$VERSION.tar.gz" \
+            --version "$VERSION" --source-revision "$GITHUB_SHA" \
+            --archive-sha256 "${{ needs.build.outputs.archive_sha256 }}" \
+            --tree-digest "${{ needs.build.outputs.tree_digest }}" \
+            --policy trust/policy.json --out "out/dev-platform-$VERSION.verification.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with: {name: verification, path: "out/dev-platform-*.verification.json"}
+
+  publish:
+    needs: [build, verify]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with: {name: release-out, path: out}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with: {name: verification, path: out}
+      - name: Publish (draft first, so assets are complete before it becomes visible)
+        run: |
+          flag=""; case "$VERSION" in *-*) flag="--prerelease";; esac
+          notes="Archive sha256: ${{ needs.build.outputs.archive_sha256 }}
+          Tree digest (consumer pin): ${{ needs.build.outputs.tree_digest }}
+          Source revision: $GITHUB_SHA
+          Acceptance: see dev-platform-$VERSION.verification.json. Pre-releases are never accepted;
+          stable releases require an owner authorization record."
+          gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --verify-tag $flag \
+            --title "dev-platform $VERSION" --notes "$notes"

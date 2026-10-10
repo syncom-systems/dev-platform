@@ -19,7 +19,7 @@ def make_release(test, version="0.1.0"):
     out = tmpdir(test)
     tc = out / "tc.json"
     tc.write_text(json.dumps(MANIFEST))
-    vdir = release.build(ROOT / "src", tc, out / "store", version)
+    vdir = release.build(ROOT / "src", tc, out / "store", version, strict_version=False)
     return out / "store", vdir
 
 

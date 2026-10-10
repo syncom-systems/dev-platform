@@ -11,7 +11,36 @@ Normative decision: [ADR 0014](adr/0014-release-trust-bootstrap-and-execution.md
 5. The snapshot is deleted afterwards. Residual risk: a same-user attacker can modify the running
    snapshot (it is writable by its owner); the threat model excludes same-user compromise.
 
-## Trust roots and bootstrap (designed)
+## Release pipeline (implemented; first exercise recorded in the pre-release notes)
+`release.yml` on a version tag: tag commit must be an ancestor of `main` -> unit tests ->
+`release build` (strict: `__version__` must equal the tag) -> `release pack` (deterministic tar.gz) ->
+`attest-build-provenance` (Sigstore, SLSA v1) and `attest-sbom` -> separate read-only **verify** job
+runs `tools/verify_release.py` with `trust/policy.json` -> **publish** (pre-release flag when the
+version contains `-`) with the archive, `.sha256`, SBOM and the verification record attached.
+
+## Independent verification
+`tools/verify_release.py` imports nothing from `dev_platform` (its digest/structure logic is a
+deliberate second implementation, tested to agree) and uses `gh attestation verify` as the signature
+verifier. Checks, each recorded in a `dev-platform.verification/v1` record: archive digest; safe
+extraction; version binding (archive root = `release.json` = source `__version__` = expected);
+source digest; **source revision** recorded in `release.json` = expected; SBOM digest and toolchain
+coverage; tree digest; policy allows the ref; `gh attestation verify` pinned to repo, signer workflow,
+source digest and ref, GitHub-hosted runner; then **our own re-check of the signing certificate**
+against the policy (issuer, source repository, revision, ref, signer workflow, runner) and of the
+attestation subject digest and predicate type.
+
+## Signature is not trust
+A valid Sigstore signature only proves *some* GitHub workflow signed the bytes. Trust requires the
+signer to match `trust/policy.json` (repository, workflow path, tag-ref pattern). Even then:
+- **Pre-releases** end at `pre-release`: verified artifacts, never accepted, never certified.
+- **Stable releases** end at `verified-unaccepted` unless an effective
+  `dev-platform.authorization/v1` record (kind `platform-release`, digest = archive sha256,
+  non-git identity assertion, not superseded or revoked) exists. Only the owner can create it; the
+  workflow and the verifier cannot. That record is the initial trust anchor, and it is accepted only
+  *after* all technical checks pass.
+Verification records are attached to the release and retained in git under `releases/<version>/`.
+
+## Trust roots and bootstrap
 | Question | Trust root |
 |---|---|
 | Is this the release my repo pinned? | digest committed in the consumer repo (reviewed diff) |
