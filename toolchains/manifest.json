@@ -252,7 +252,8 @@
             "kind": "prefix",
             "prefix_up": 2,
             "sha256": {
-              "darwin-arm64": "cb8afd1af06f708479ed5a9c05054ed377487c914857ec89144ce077ff66539e"
+              "darwin-arm64": "cb8afd1af06f708479ed5a9c05054ed377487c914857ec89144ce077ff66539e",
+              "linux-x86_64": "254f1b7d349c2eda82c65f365cd2844190b97a1a265b3cab7a55d93439599456"
             },
             "system_libs": [
               "/usr/lib/",
@@ -264,7 +265,8 @@
               "libpthread.so.0",
               "librt.so.1",
               "libutil.so.1",
-              "libgcc_s.so.1"
+              "libgcc_s.so.1",
+              "libz.so.1"
             ]
           },
           "source": {
