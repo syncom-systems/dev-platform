@@ -7,7 +7,7 @@ involved. Host tools are emulated only where a real one would make the suite non
 
 | Consumer | Profile | Demonstrated |
 |---|---|---|
-| Python | `python` (sha256 of the interpreter) | pinned run, `digest-verified`, certified at `full` on a clean git tree; `python-weak` admits but cannot certify |
+| Python | `python` (closure digest of the interpreter file) | pinned run, `closure-verified`, certified at `full` on a clean git tree; `python-weak` admits but cannot certify |
 | Rust, Bazel-only | `rust-bazel` | `bazel_only` init never proposes Cargo; Bazel adapter runs; tools `bazel-locked` (pinned toolchain archive sha256 in `MODULE.bazel` and in the resolved lock; Bazelisk-verified binary digest) |
 | Mixed Python+Rust, Bazel | `mixed-bazel` | three Bazel-managed toolchains reconciled, no host tool consulted |
 | Rust, Cargo | `rust-cargo` | cargo adapter; the same project with `bazel_only = true` is rejected (exit 2) |

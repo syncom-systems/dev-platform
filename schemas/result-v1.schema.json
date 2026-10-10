@@ -26,7 +26,7 @@
                       "weak_tools": {"type": "array", "items": {"type": "string"}},
                       "tools": {"type": "array", "items": {"type": "object",
                         "required": ["name", "expected", "observed", "identity", "status"],
-                        "properties": {"identity": {"enum": ["none", "version-only", "digest-verified", "bazel-declared", "bazel-locked"]},
+                        "properties": {"identity": {"enum": ["none", "version-only", "digest-verified", "closure-verified", "bazel-declared", "bazel-locked"]},
                                        "status": {"enum": ["ok", "mismatch", "unavailable", "unreconciled"]}}}}}},
     "project": {"type": "object", "required": ["name", "assurance", "bazel_only"]},
     "revision": {"type": ["string", "null"]},

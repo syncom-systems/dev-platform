@@ -30,6 +30,7 @@ from pathlib import Path
 RECORD_SCHEMA = "dev-platform.verification/v1"
 POLICY_SCHEMA = "dev-platform.trust/v1"
 SLSA = "https://slsa.dev/provenance/v1"
+CYCLONEDX = "https://cyclonedx.org/bom"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$")
 UNTRUSTED_PROVIDERS = {"git-commit-author", "git-config"}  # authorship is not approval
 GhRunner = Callable[[list[str]], tuple[int, str, str]]
@@ -105,15 +106,25 @@ class Record:
 
 
 def check_attestation(
-    rec: Record, archive: Path, archive_sha: str, exp: dict, policy: dict, gh: GhRunner, bundle: Path | None
-) -> None:
+    rec: Record,
+    archive: Path,
+    archive_sha: str,
+    exp: dict,
+    policy: dict,
+    gh: GhRunner,
+    bundle: Path | None,
+    *,
+    predicate_type: str = SLSA,
+    label: str = "attestation",
+) -> list[dict]:
+    """Verify one attestation type for the archive; returns the results that satisfy the policy."""
     signers = policy.get("signers", [])
     if not rec.add("policy-has-signers", bool(signers), "trust policy must list at least one signer"):
-        return
+        return []
     ref = exp["ref"]
     matching = [s for s in signers if re.search(s["ref_pattern"], ref)]
     if not rec.add("policy-allows-ref", bool(matching), f"ref {ref} vs policy ref_patterns"):
-        return
+        return []
     s = matching[0]
     argv = [
         "gh",
@@ -130,6 +141,8 @@ def check_attestation(
         ref,
         "--cert-oidc-issuer",
         policy["oidc_issuer"],
+        "--predicate-type",
+        predicate_type,
         "--format",
         "json",
     ]
@@ -139,14 +152,14 @@ def check_attestation(
         argv += ["--bundle", str(bundle)]
     code, out, err = gh(argv)
     if not rec.add(
-        "attestation-signature", code == 0, "" if code == 0 else (err.strip()[:300] or f"gh exit {code}")
+        f"{label}-signature", code == 0, "" if code == 0 else (err.strip()[:300] or f"gh exit {code}")
     ):
-        return
+        return []
     try:
         results = json.loads(out)
     except json.JSONDecodeError:
-        rec.add("attestation-output", False, "gh output was not JSON")
-        return
+        rec.add(f"{label}-output", False, "gh output was not JSON")
+        return []
     good = []
     for r in results:
         vr = r.get("verificationResult", {})
@@ -156,7 +169,7 @@ def check_attestation(
         problems = []
         if archive_sha not in subjects:
             problems.append("subject digest != archive")
-        if stmt.get("predicateType") != SLSA:
+        if stmt.get("predicateType") != predicate_type:
             problems.append("predicate type")
         if cert.get("issuer") != policy["oidc_issuer"]:
             problems.append("issuer")
@@ -174,12 +187,56 @@ def check_attestation(
         if not problems:
             good.append(r)
         else:
-            rec.add("attestation-claim", False, "; ".join(problems))
+            rec.add(f"{label}-claim", False, "; ".join(problems))
     rec.add(
-        "attestation-matches-policy",
+        f"{label}-matches-policy",
         bool(good),
         f"{len(good)} attestation(s) satisfy signer policy and expectations",
     )
+    return good
+
+
+def expected_components(toolchains: dict) -> dict:
+    """What the SBOM must say about each tool, derived independently from the toolchain manifest."""
+    want: dict = {}
+    for prof in toolchains["profiles"].values():
+        for name, spec in prof["tools"].items():
+            c = want.setdefault((name, spec["version"]), {"closure": {}, "source": {}})
+            c["closure"].update(spec.get("closure", {}).get("sha256", {}))
+            for plat, src in spec.get("source", {}).items():
+                c["source"][plat] = (src["url"], src["sha256"])
+    return want
+
+
+def sbom_matches_manifest(sbom: dict, toolchains: dict) -> list[str]:
+    """Empty list when the SBOM's tool components equal what the manifest declares, exactly."""
+    problems = []
+    want = expected_components(toolchains)
+    have: dict = {}
+    for comp in sbom.get("components", []):
+        key = (comp.get("name"), comp.get("version"))
+        if key in have:
+            problems.append(f"duplicate component {key}")
+        prefix = "dev-platform:closure-sha256:"
+        closure = {
+            p["name"][len(prefix) :]: p["value"]
+            for p in comp.get("properties", [])
+            if p.get("name", "").startswith(prefix)
+        }
+        source = {
+            r["comment"]: (r["url"], r["hashes"][0]["content"])
+            for r in comp.get("externalReferences", [])
+            if r.get("type") == "distribution"
+        }
+        have[key] = {"closure": closure, "source": source}
+    for key in sorted(set(want) | set(have)):
+        if key not in have:
+            problems.append(f"missing component {key}")
+        elif key not in want:
+            problems.append(f"undeclared component {key}")
+        elif have[key] != want[key]:
+            problems.append(f"component {key} closure/source differ from the manifest")
+    return problems
 
 
 def effective_authorization(paths: list[Path], archive_sha: str) -> dict | None:
@@ -209,8 +266,10 @@ def verify(
     gh: GhRunner = default_gh,
     authorizations: list[Path] = (),
     bundle: Path | None = None,
+    sbom_bundle: Path | None = None,
 ) -> dict:
     rec = Record()
+    sbom_doc = None
     archive_sha = sha256_file(archive)
     rec.add("archive-digest", archive_sha == exp["archive_sha256"], f"actual {archive_sha}")
     subject = {"archive": archive.name, "archive_sha256": archive_sha, "tree_digest": None, "version": None}
@@ -259,9 +318,41 @@ def verify(
                         for t, spec in p["tools"].items()
                     }
                     rec.add("sbom-covers-toolchains", need <= names, f"missing {sorted(need - names)}")
+                    sbom_doc = json.loads(sbom_path.read_text())
+                    mism = sbom_matches_manifest(sbom_doc, rel["toolchains"])
+                    rec.add("sbom-matches-manifest", not mism, "; ".join(mism))
+                    rec.add(
+                        "sbom-describes-artifact",
+                        sbom_doc.get("metadata", {}).get("component", {}).get("version") == exp["version"]
+                        and any(
+                            h.get("content") == rel["platform"]["source_digest"]
+                            for h in sbom_doc["metadata"]["component"].get("hashes", [])
+                        ),
+                        "SBOM root component must be this version and source digest",
+                    )
                 if exp.get("tree_digest"):
                     rec.add("tree-digest", subject["tree_digest"] == exp["tree_digest"])
     check_attestation(rec, archive, archive_sha, exp, policy, gh, bundle)
+    attested = check_attestation(
+        rec,
+        archive,
+        archive_sha,
+        exp,
+        policy,
+        gh,
+        sbom_bundle,
+        predicate_type=CYCLONEDX,
+        label="sbom-attestation",
+    )
+    rec.add(
+        "sbom-attestation-content",
+        sbom_doc is not None
+        and any(
+            r.get("verificationResult", {}).get("statement", {}).get("predicate") == sbom_doc
+            for r in attested
+        ),
+        "the attested SBOM must be exactly the SBOM inside the archive",
+    )
 
     prerelease = "-" in exp["version"]
     auth = None if prerelease else effective_authorization(list(authorizations), archive_sha)
@@ -296,7 +387,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--ref", help="expected git ref (default refs/tags/v<version>)")
     ap.add_argument("--policy", type=Path, required=True, help="trust policy (from outside the release)")
     ap.add_argument("--authorization", type=Path, action="append", default=[])
-    ap.add_argument("--bundle", type=Path, help="offline attestation bundle")
+    ap.add_argument("--bundle", type=Path, help="offline provenance attestation bundle")
+    ap.add_argument("--sbom-bundle", type=Path, help="offline SBOM attestation bundle")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     policy = json.loads(a.policy.read_text())
@@ -311,7 +403,9 @@ def main(argv: list[str] | None = None) -> int:
     }
     if a.tree_digest:
         exp["tree_digest"] = a.tree_digest
-    doc = verify(a.archive, exp, policy, authorizations=a.authorization, bundle=a.bundle)
+    doc = verify(
+        a.archive, exp, policy, authorizations=a.authorization, bundle=a.bundle, sbom_bundle=a.sbom_bundle
+    )
     text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
     if a.out:
         a.out.write_text(text)

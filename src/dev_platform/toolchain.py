@@ -70,11 +70,32 @@ def validate(doc: dict) -> dict:
                     errs.append(f"{w}: closure applies to executed tools, not Bazel-managed ones")
                 else:
                     errs.extend(_closure.validate(w, t["closure"]))
+            for plat, src in (t.get("source") or {}).items() if isinstance(t.get("source", {}), dict) else []:
+                ok = (
+                    isinstance(src, dict)
+                    and str(src.get("url", "")).startswith("https://")
+                    and re.fullmatch(r"[0-9a-f]{64}", str(src.get("sha256", "")))
+                )
+                if not ok:
+                    errs.append(f"{w}.source[{plat}]: https url and sha256 (64 hex) required")
             sha = t.get("sha256")
             if sha is not None:
                 vals = sha.values() if isinstance(sha, dict) else [sha]
                 if not all(isinstance(v, str) and re.fullmatch(r"[0-9a-f]{64}", v) for v in vals):
                     errs.append(f"{w}.sha256: 64 hex chars (or a map keyed by '<sys.platform>-<machine>')")
+    pinned: dict[tuple[str, str, str, str], str] = {}
+    for pname, prof in profiles.items():
+        tools = prof.get("tools") if isinstance(prof, dict) else None
+        for tname, t in (tools or {}).items():
+            if not isinstance(t, dict) or not isinstance(t.get("version"), str):
+                continue
+            facts = [("closure", t.get("closure", {}).get("sha256")), ("source", t.get("source"))]
+            for kind, mapping in facts:
+                for plat, val in (mapping or {}).items() if isinstance(mapping, dict) else []:
+                    key = (tname, t["version"], kind, plat)
+                    enc = json.dumps(val, sort_keys=True)
+                    if pinned.setdefault(key, enc) != enc:
+                        errs.append(f"{pname}.{tname}@{t['version']}: conflicting {kind} pin for {plat}")
     if errs:
         raise ConfigError([f"toolchain manifest: {e}" for e in errs])
     return doc
