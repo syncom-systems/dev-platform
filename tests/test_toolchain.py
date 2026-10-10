@@ -123,11 +123,150 @@ class ToolchainTest(unittest.TestCase):
             },
         }
         rec = T.verify_profile(m, "p", tmpdir(self), probe_returning("1"))
-        self.assertEqual(
-            (rec["tools"][0]["identity"], rec["tools"][0]["status"]), ("digest-verified", "mismatch")
-        )
+        self.assertEqual((rec["tools"][0]["identity"], rec["tools"][0]["status"]), ("none", "mismatch"))
         self.assertTrue(sys.executable)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+SHA_A = "a" * 64
+SHA_B = "b" * 64
+BAZEL_LOCKED = {
+    "schema": T.SCHEMA,
+    "profiles": {
+        "bz": {
+            "tools": {
+                "rules_rust_toolchain": {
+                    "version": "8.1.0",
+                    "bazel_managed": True,
+                    "declared_in": {"file": ".bazelversion", "pattern": "(\\S+)"},
+                    "integrity": [
+                        {
+                            "name": "rustc",
+                            "file": "MODULE.bazel",
+                            "pattern": 'sha256 = "([0-9a-f]{64})"',
+                            "sha256": SHA_A,
+                            "lock_file": "MODULE.bazel.lock",
+                        }
+                    ],
+                }
+            }
+        }
+    },
+}
+
+
+def bazel_consumer(test, declared=SHA_A, lock=SHA_A, version="8.1.0"):
+    d = tmpdir(test)
+    (d / ".bazelversion").write_text(version + "\n")
+    (d / "MODULE.bazel").write_text(f'rust.toolchain(sha256 = "{declared}")\n')
+    if lock is not None:
+        (d / "MODULE.bazel.lock").write_text(f'{{"rustc": "{lock}"}}')
+    return d
+
+
+class IdentityStrengthTest(unittest.TestCase):
+    def test_probe_without_pinned_digest_is_never_stronger_than_version_only(self):
+        rec = T.verify_profile(MANIFEST, "p", tmpdir(self), probe_returning("tool 1.2.3"))
+        self.assertEqual(rec["tools"][0]["identity"], "version-only")
+        self.assertEqual(
+            (rec["conformant"], rec["assurance"], rec["weak_tools"]), (True, "diagnostic", ["tool"])
+        )
+
+    def test_digest_verified_requires_matching_binary(self):
+        import hashlib
+        import sys
+        from pathlib import Path
+
+        real = hashlib.sha256(Path(sys.executable).resolve().read_bytes()).hexdigest()
+        m = {
+            "schema": T.SCHEMA,
+            "profiles": {
+                "p": {
+                    "tools": {
+                        "py": {
+                            "version": "3",
+                            "compare": "prefix",
+                            "sha256": real,
+                            "probe": {"argv": ["{python}", "--version"], "pattern": "Python (\\S+)"},
+                        }
+                    }
+                }
+            },
+        }
+        rec = T.verify_profile(m, "p", tmpdir(self))
+        self.assertEqual((rec["tools"][0]["identity"], rec["assurance"]), ("digest-verified", "certifiable"))
+        m["profiles"]["p"]["tools"]["py"]["sha256"] = "0" * 64
+        rec = T.verify_profile(m, "p", tmpdir(self))
+        self.assertEqual((rec["tools"][0]["identity"], rec["assurance"]), ("none", "diagnostic"))
+
+    def test_unavailable_tool_claims_nothing(self):
+        rec = T.verify_profile(MANIFEST, "p", tmpdir(self), probe_returning("", 127))
+        self.assertEqual(rec["tools"][0]["identity"], "none")
+
+    def test_bazel_declared_is_weak_and_locked_is_strong(self):
+        d = tmpdir(self)
+        (d / ".bazelversion").write_text("8.1.0\n")
+        rec = T.verify_profile(MANIFEST, "bz", d)
+        self.assertEqual((rec["tools"][0]["identity"], rec["assurance"]), ("bazel-declared", "diagnostic"))
+        rec = T.verify_profile(BAZEL_LOCKED, "bz", bazel_consumer(self))
+        self.assertEqual((rec["tools"][0]["identity"], rec["assurance"]), ("bazel-locked", "certifiable"))
+        self.assertEqual(rec["tools"][0]["integrity"][0]["status"], "ok")
+
+    def test_bazel_integrity_failures_never_claim_identity(self):
+        cases = {
+            "declared digest differs": bazel_consumer(self, declared=SHA_B),
+            "absent from resolved graph": bazel_consumer(self, lock=SHA_B),
+            "no lock file": bazel_consumer(self, lock=None),
+            "wrong bazel version": bazel_consumer(self, version="8.0.0"),
+        }
+        for name, d in cases.items():
+            rec = T.verify_profile(BAZEL_LOCKED, "bz", d)
+            self.assertFalse(rec["conformant"], name)
+            self.assertEqual(rec["tools"][0]["identity"], "none", name)
+            self.assertEqual(rec["assurance"], "diagnostic", name)
+
+    def test_bazel_checks_never_execute_host_tools(self):
+        def boom(argv):
+            raise AssertionError("host executable must not be consulted")
+
+        self.assertTrue(T.verify_profile(BAZEL_LOCKED, "bz", bazel_consumer(self), boom)["conformant"])
+
+    def test_manifest_cannot_assert_strength(self):
+        m = {
+            "schema": T.SCHEMA,
+            "profiles": {
+                "p": {
+                    "tools": {
+                        "t": {
+                            "version": "1",
+                            "identity": "digest-verified",
+                            "probe": {"argv": ["t"], "pattern": "(\\d)"},
+                        }
+                    }
+                }
+            },
+        }
+        rec = T.verify_profile(m, "p", tmpdir(self), probe_returning("1"))
+        self.assertEqual(rec["tools"][0]["identity"], "version-only")
+
+    def test_integrity_entries_are_validated(self):
+        bad = {
+            "schema": T.SCHEMA,
+            "profiles": {
+                "p": {
+                    "tools": {
+                        "t": {
+                            "version": "1",
+                            "bazel_managed": True,
+                            "declared_in": {"file": "f", "pattern": "(x)"},
+                            "integrity": [{"name": "n"}],
+                        }
+                    }
+                }
+            },
+        }
+        with self.assertRaises(ConfigError):
+            T.validate(bad)

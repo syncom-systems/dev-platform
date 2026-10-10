@@ -14,7 +14,7 @@ CHECKS = [
 ]
 CFG = parse(tomllib.loads(cfg_text(CHECKS)))
 PINNED = Resolution("pinned", "0.1.0", None, "d")
-CONFORMANT = {"profile": "p", "conformant": True, "tools": []}
+CONFORMANT = {"profile": "p", "conformant": True, "assurance": "certifiable", "weak_tools": [], "tools": []}
 
 
 def fake(codes):
@@ -114,6 +114,13 @@ class EnginePolicyTest(unittest.TestCase):
         cert = build(Stage.FULL, (), res=override, revision="abc")["certification"]
         self.assertFalse(cert["certified"])
         self.assertIn("not certifiable", " ".join(cert["blockers"]))
+
+    def test_weak_tool_identity_cannot_certify(self):
+        weak = {**CONFORMANT, "assurance": "diagnostic", "weak_tools": ["ruff"]}
+        doc = build(Stage.FULL, (), revision="abc", environment=weak)
+        self.assertEqual(doc["admission"], "admitted")  # diagnostics still admit
+        self.assertFalse(doc["certification"]["certified"])
+        self.assertIn("too weak", " ".join(doc["certification"]["blockers"]))
 
     def test_dirty_tree_is_not_certifiable(self):
         cert = build(Stage.FULL, (), revision="abc", dirty=True)["certification"]

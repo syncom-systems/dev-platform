@@ -170,6 +170,11 @@ def build(
         blockers.append("revision unknown (not a git checkout)")
     if env_rec["conformant"] is not True:
         blockers.append("environment does not conform to a platform toolchain profile")
+    if env_rec.get("conformant") and env_rec.get("assurance") != "certifiable":
+        blockers.append(
+            "tool identity too weak for certification (version-level only): "
+            + ", ".join(env_rec.get("weak_tools", []))
+        )
     if dirty:
         blockers.append("working tree has uncommitted changes")
     if not execute:
