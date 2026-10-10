@@ -30,8 +30,10 @@ Researched from GitHub documentation; not yet exercised against this repository.
   itself *(planned)*; the platform's own `advisory/v1` + `affected` remains the cross-consumer index.
 - **Artifact attestations** (Sigstore; verified with `gh attestation verify`) provide provenance
   *(planned, see release-trust.md)*.
-- **Dependabot for GitHub Actions** applies to the workflows' action references in this repo
-  *(planned: also pin actions by commit SHA)*.
+- **Dependabot for GitHub Actions** is configured (`.github/dependabot.yml`, weekly, grouped); action
+  references are pinned by commit SHA, which Dependabot updates together with the version comment.
+  Dependabot alerts and security updates are enabled on the repository, as is CodeQL default setup
+  (actions, python, rust).
 
 ## Gaps
 Tool digests are mostly `version-only` today; consumers' transitive dependency resolution is out of
