@@ -101,8 +101,8 @@
           "closure": {
             "kind": "file",
             "sha256": {
-              "darwin-arm64": "5db922251f29fb535f8762a03d4bea05d8552f2af134837ec3db9ddbcc754de9",
-              "linux-x86_64": "6f050122e8397304e878c97f1b5f647573dae29cee051e0a8506322b7ab0330d"
+              "darwin-arm64": "36e6dddae1de08c325c6be847bf35cc7f60697f35ecafa0492424a9b95fe5993",
+              "linux-x86_64": "4ca9f3d98bc6e23e2b5a7e9f8ef50b4c2a3a96ff89a23b02a33347c954e7e10d"
             },
             "system_libs": [
               "/usr/lib/",
@@ -116,6 +116,125 @@
               "libutil.so.1"
             ]
           }
+        }
+      }
+    },
+    "python": {
+      "tools": {
+        "python": {
+          "version": "3.14.7",
+          "executable": "{python}",
+          "probe": {
+            "argv": [
+              "{python}",
+              "--version"
+            ],
+            "pattern": "Python (\\S+)"
+          },
+          "purl": "pkg:generic/cpython@3.14.7",
+          "closure": {
+            "kind": "prefix",
+            "prefix_up": 2,
+            "sha256": {
+              "darwin-arm64": "bc602f3eeaca659ab7cec5f741d44971d53021b625fa6dc994f567fc92440b18",
+              "linux-x86_64": "520d9d6ebeba77ece9d776110bb89845d6b7560394038f2b6438ff244e7ba538"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260807/cpython-3.14.7%2B20260807-aarch64-apple-darwin-install_only_stripped.tar.gz",
+              "sha256": "532645be202d3df8510ab318ca5faed92060a694c8327144e14fa81f31af0f6d",
+              "strip": "python"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20260807/cpython-3.14.7%2B20260807-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+              "sha256": "a2478d654ed51d443bae21ec20ad927f116b4f5aae4094ab74918a6aa38f0575",
+              "strip": "python"
+            }
+          }
+        }
+      }
+    },
+    "rust-bazel": {
+      "tools": {
+        "bazelisk": {
+          "version": "1.29.0",
+          "executable": "bazel",
+          "purl": "pkg:github/bazelbuild/bazelisk@v1.29.0",
+          "closure": {
+            "kind": "file",
+            "sha256": {
+              "darwin-arm64": "cee851f726789227d5561004e9904a52be45c3efb56f8b38b6993d6adbaa0409",
+              "linux-x86_64": "5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-darwin-arm64",
+              "sha256": "cee851f726789227d5561004e9904a52be45c3efb56f8b38b6993d6adbaa0409",
+              "type": "binary",
+              "as": "bazel"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64",
+              "sha256": "5a408715e932c0250d28bd84555f12edbf70117de42f9181691c736eacc4a992",
+              "type": "binary",
+              "as": "bazel"
+            }
+          }
+        },
+        "bazel": {
+          "version": "8.4.2",
+          "bazel_managed": true,
+          "declared_in": {
+            "file": ".bazelversion",
+            "pattern": "(\\S+)"
+          },
+          "launcher": "bazelisk",
+          "binary_sha256": {
+            "darwin-arm64": "45e9388abf21d1107e146ea366ad080eb93cb6a5f3a4a3b048f78de0bc3faffa",
+            "linux-x86_64": "4dc8e99dfa802e252dac176d08201fd15c542ae78c448c8a89974b6f387c282c"
+          },
+          "purl": "pkg:github/bazelbuild/bazel@8.4.2"
+        },
+        "rust-toolchain": {
+          "version": "1.85.0",
+          "bazel_managed": true,
+          "declared_in": {
+            "file": "MODULE.bazel",
+            "pattern": "versions = \\[\"([^\"]+)\"\\]"
+          },
+          "integrity": [
+            {
+              "kind": "bazel_module",
+              "name": "rules_rust",
+              "version": "0.61.0",
+              "source_json_sha256": "d1bc743b5fa2e2abb35c436df7126a53dab0c3f35890ae6841592b2253786a63"
+            }
+          ],
+          "purl": "pkg:generic/rust@1.85.0"
         }
       }
     }

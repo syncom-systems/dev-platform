@@ -70,7 +70,13 @@ def _files(root: Path):
 
 
 def digest(root: Path) -> tuple[str, int]:
-    """Canonical digest of a file or tree, including symlink targets and executable bits."""
+    """Canonical digest of a file or tree, including symlink targets and executable bits.
+
+    A single file is identified by the plain sha256 of its bytes, so the pin can be compared with the
+    publisher's own digest.
+    """
+    if Path(root).is_file():
+        return hashlib.sha256(Path(root).read_bytes()).hexdigest(), 1
     h, n = hashlib.sha256(), 0
     for rel, kind, payload, exe in _files(root):
         b = rel.encode()

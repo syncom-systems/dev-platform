@@ -1,3 +1,4 @@
+import json
 import unittest
 
 from dev_platform import closure as C
@@ -384,3 +385,134 @@ class ClosureIdentityTest(unittest.TestCase):
             T.validate(m)
         self.assertIn("prefix_up", str(cm.exception))
         self.assertIn("64 hex", str(cm.exception))
+
+
+def bazel_real_consumer(test, *, version="0.61.0", lock_hash="a" * 64, bazelrc=None):
+    d = tmpdir(test)
+    (d / ".bazelversion").write_text("8.4.2\n")
+    (d / "MODULE.bazel").write_text(
+        f'module(name = "x")\nbazel_dep(name = "rules_rust", version = "{version}")\n'
+        'rust.toolchain(versions = ["1.85.0"])\n'
+    )
+    key = "https://bcr.bazel.build/modules/rules_rust/0.61.0/source.json"
+    (d / "MODULE.bazel.lock").write_text(json.dumps({"registryFileHashes": {key: lock_hash}}))
+    if bazelrc:
+        (d / ".bazeliskrc").write_text(f"BAZELISK_VERIFY_SHA256={bazelrc}\n")
+    return d
+
+
+BIN = "b" * 64
+
+
+def real_bazel_manifest(launcher_closure=True, pins=None):
+    tools = {
+        "bazelisk": {
+            "version": "1.29.0",
+            "executable": "bazel",
+            "closure": {
+                "kind": "file",
+                "sha256": {C.platform_key(): "c" * 64},
+                "system_libs": ["/usr/lib/"],
+            },
+        },
+        "bazel": {
+            "version": "8.4.2",
+            "bazel_managed": True,
+            "declared_in": {"file": ".bazelversion", "pattern": r"(\S+)"},
+            "launcher": "bazelisk",
+            "binary_sha256": pins if pins is not None else {C.platform_key(): BIN},
+        },
+        "rust": {
+            "version": "1.85.0",
+            "bazel_managed": True,
+            "declared_in": {"file": "MODULE.bazel", "pattern": r'versions = \["([^"]+)"\]'},
+            "integrity": [
+                {
+                    "kind": "bazel_module",
+                    "name": "rules_rust",
+                    "version": "0.61.0",
+                    "source_json_sha256": "a" * 64,
+                }
+            ],
+        },
+    }
+    return {"schema": T.SCHEMA, "profiles": {"b": {"tools": tools}}}
+
+
+class RealBazelIdentityTest(unittest.TestCase):
+    def verify(self, consumer, manifest=None, launcher_ok=True, **kw):
+        import tests.test_toolchain as me
+
+        m = manifest or real_bazel_manifest(**kw)
+        link = (lambda p: ["/usr/lib/libSystem.B.dylib"]) if launcher_ok else (lambda p: None)
+        d = tmpdir(self) / "bin"
+        d.mkdir()
+        exe = d / "bazel"
+        exe.write_bytes(b"\x7fELFlauncher")
+        exe.chmod(0o755)
+        m["profiles"]["b"]["tools"]["bazelisk"]["executable"] = str(exe)
+        m["profiles"]["b"]["tools"]["bazelisk"]["closure"]["sha256"][C.platform_key()] = C.digest(exe)[0]
+        return T.verify_profile(m, "b", consumer, lambda a: (127, ""), link), me
+
+    def tools(self, rec):
+        return {t["name"]: t for t in rec["tools"]}
+
+    def test_pinned_module_and_binary_with_verified_launcher_is_certifiable(self):
+        rec, _ = self.verify(bazel_real_consumer(self))
+        t = self.tools(rec)
+        self.assertEqual(
+            (t["bazelisk"]["identity"], t["bazel"]["identity"], t["rust"]["identity"]),
+            ("closure-verified", "bazel-locked", "bazel-locked"),
+        )
+        self.assertEqual(t["bazel"]["binary"]["status"], "enforced-at-execution")
+        self.assertEqual((rec["conformant"], rec["assurance"]), (True, "certifiable"))
+
+    def test_module_pin_failures_are_not_conformant(self):
+        for name, d in {
+            "declared module version differs": bazel_real_consumer(self, version="0.60.0"),
+            "locked source hash differs": bazel_real_consumer(self, lock_hash="f" * 64),
+        }.items():
+            rec, _ = self.verify(d)
+            self.assertFalse(rec["conformant"], name)
+            self.assertEqual(self.tools(rec)["rust"]["identity"], "none", name)
+
+    def test_missing_lock_is_not_conformant(self):
+        d = bazel_real_consumer(self)
+        (d / "MODULE.bazel.lock").unlink()
+        rec, _ = self.verify(d)
+        self.assertFalse(rec["conformant"])
+
+    def test_bazel_binary_pin_requires_a_verified_launcher_and_a_platform_pin(self):
+        rec, _ = self.verify(bazel_real_consumer(self), launcher_ok=False)
+        self.assertFalse(rec["conformant"])  # launcher linkage unlistable -> launcher mismatch
+        rec, _ = self.verify(bazel_real_consumer(self), pins={"plan9-mips": BIN})
+        b = self.tools(rec)["bazel"]
+        self.assertEqual((b["identity"], b["binary"]["status"]), ("bazel-declared", "unbound"))
+        self.assertEqual((rec["conformant"], rec["assurance"]), (True, "diagnostic"))
+
+    def test_consumer_cannot_pin_a_different_bazel_binary(self):
+        rec, _ = self.verify(bazel_real_consumer(self, bazelrc="d" * 64))
+        self.assertFalse(rec["conformant"])
+        agree = bazel_real_consumer(self, bazelrc=BIN)
+        rec, _ = self.verify(agree)
+        self.assertTrue(rec["conformant"])
+
+    def test_runtime_env_enforces_the_pin_for_this_platform_only(self):
+        m = real_bazel_manifest()
+        self.assertEqual(T.runtime_env(m, "b"), {"BAZELISK_VERIFY_SHA256": BIN})
+        self.assertEqual(T.runtime_env(real_bazel_manifest(pins={"plan9-mips": BIN}), "b"), {})
+        self.assertEqual(T.runtime_env(m, "nope"), {})
+
+    def test_closure_only_tool_needs_a_pin_for_the_platform(self):
+        m = real_bazel_manifest()
+        m["profiles"]["b"]["tools"]["bazelisk"]["closure"]["sha256"] = {"plan9-mips": "c" * 64}
+        rec = T.verify_profile(m, "b", bazel_real_consumer(self), lambda a: (127, ""))
+        t = self.tools(rec)["bazelisk"]
+        self.assertEqual((t["status"], t["identity"]), ("unavailable", "none"))
+
+    def test_single_file_closure_is_the_plain_sha256(self):
+        import hashlib
+
+        f = tmpdir(self) / "x"
+        f.write_bytes(b"abc")
+        self.assertEqual(C.digest(f)[0], hashlib.sha256(b"abc").hexdigest())

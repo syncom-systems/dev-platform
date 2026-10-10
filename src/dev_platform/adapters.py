@@ -28,7 +28,9 @@ def _python(check: Check, root: Path) -> Command:
 
 
 def _bazel(check: Check, root: Path) -> Command:
-    return Command(("bazel", "test", "--test_output=errors", *check.targets))
+    # --lockfile_mode=error: a module graph that differs from MODULE.bazel.lock fails the build instead
+    # of silently re-resolving, so the lock file the platform reconciled is the graph that executes.
+    return Command(("bazel", "test", "--lockfile_mode=error", "--test_output=errors", *check.targets))
 
 
 def _cargo(check: Check, root: Path) -> Command:
