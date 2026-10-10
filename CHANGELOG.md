@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+- 0.1.0-rc.3 candidate: tool identity by runtime closure (`closure-verified`; a bare executable digest no
+  longer certifies), pinned hash-locked release-profile environment, SBOM correspondence and SBOM
+  attestation verification, trusted installer (`tools/install_release.py`), real Bazel/rules_rust and
+  CPython qualification in CI, Bazel binary pinned and enforced at execution, Dependabot for Actions and
+  pip, immutable-release probe and post-publish assertion. ADR 0015.
+- 0.1.0-rc.2 pre-release: first fully verified pipeline run (see releases/0.1.0-rc.2).
 - 0.1.0-rc.1 pre-release: first exercise of the release pipeline (never accepted; see docs/release-trust.md).
 - Revision 2: releases are environments (toolchain manifest + profiles + SBOM, `release build|verify`);
   environment verification recorded in results (`environment`, breaking pre-release change to
