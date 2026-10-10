@@ -13,6 +13,7 @@ import hashlib
 import json
 import re
 import shutil
+import uuid
 from pathlib import Path
 
 from dev_platform import toolchain
@@ -49,6 +50,9 @@ def make_sbom(version: str, source_digest: str, manifest: dict) -> dict:
             components.append(comp)
     return {
         "bomFormat": "CycloneDX",
+        # Deterministic serial (required by attest-sbom): derived from the identity it describes.
+        "serialNumber": "urn:uuid:"
+        + str(uuid.uuid5(uuid.NAMESPACE_URL, f"{PURL_NAME}@{version}:{source_digest}")),
         "specVersion": "1.5",
         "version": 1,
         "metadata": {
