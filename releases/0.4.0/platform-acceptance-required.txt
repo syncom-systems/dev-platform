@@ -1,0 +1,7 @@
+PASSED  release-record
+PASSED  application-policy
+PASSED  verification-evidence
+PASSED  platform-release
+FAILED  platform-acceptance  (platform release state is 'verified-unaccepted', not 'accepted')
+PASSED  advisories
+approval: failed  platform-acceptance

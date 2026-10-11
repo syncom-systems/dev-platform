@@ -1,0 +1,82 @@
+{
+  "all_ok": true,
+  "cases": [
+    {
+      "actual": "unapproved",
+      "case": "record never committed to the evidence repository",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "no commit on main touches authorizations/live-20261011222359-uncommitted.json"
+    },
+    {
+      "case": "live API reports a valid GitHub signature with author github-actions[bot] and committer web-flow",
+      "observed": {
+        "author": "github-actions[bot]",
+        "committer": "web-flow",
+        "reason": "valid",
+        "verified": true
+      },
+      "ok": true
+    },
+    {
+      "actual": "unapproved",
+      "case": "valid GitHub signature but committer web-flow is refused (committer is not the approver)",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "committer of commit fb2218a302c4 is not github-actions[bot]"
+    },
+    {
+      "actual": "unapproved",
+      "case": "unsigned commit of a record",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "commit 92401143f972 is not a validly signed commit (unsigned)"
+    },
+    {
+      "actual": "unapproved",
+      "case": "unreadable evidence repository fails closed",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "cannot fetch signing evidence: gh api repos/syncom-systems/does-not-exist-qualification/commits?sha=main&path=authorizations/live-20261011222359-bot.json&per_page=100: gh: Not Found (HTTP 404)"
+    },
+    {
+      "actual": "unapproved",
+      "case": "discovering every record in the live evidence repository still approves nothing",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | committer of commit fb2218a302c4 is not github-actions[bot] | commit 92401143f972 is not a validly signed commit (unsigned) | schema must be dev-platform.authorization/v1"
+    },
+    {
+      "case": "discovery listed live records",
+      "count": 7,
+      "ok": true
+    },
+    {
+      "case": "rollback select over a bundle whose only approval is the live web-flow-committed record selects nothing",
+      "exit": 1,
+      "ok": true,
+      "rejected": [
+        {
+          "reasons": [
+            "no authenticated, authorized, in-force approval bound to this exact release record",
+            "live-20261011222359-bot.json: ignored (committer of commit fb2218a302c4 is not github-actions[bot])"
+          ],
+          "release_sha256": "6e92e1b77e4a3975fafaf988d6501dc7ebeb28b45464e4d90c8964c61e642189",
+          "version": "0.0.1"
+        }
+      ]
+    }
+  ],
+  "fixture_commits": {
+    "bot_signed_web_flow": "fb2218a302c4af5d38cc2283591fb168c9be68cb",
+    "head_at_end": "92401143f9725fdd3b8589be636cc93817d03b21",
+    "unsigned": "92401143f9725fdd3b8589be636cc93817d03b21"
+  },
+  "identity": "github-actions[bot]",
+  "limit": "no second GitHub identity with its own signing key exists; the live path therefore never reaches `approved`",
+  "ran_at": "2026-10-11T22:24:24.359080+00:00",
+  "reaches_approved": false,
+  "release_sha256": "6e92e1b77e4a3975fafaf988d6501dc7ebeb28b45464e4d90c8964c61e642189",
+  "repo": "syncom-systems/dev-platform-qualification-fixture",
+  "schema": "dev-platform.live-qualification/v1"
+}

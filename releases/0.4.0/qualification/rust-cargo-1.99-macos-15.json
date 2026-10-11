@@ -1,0 +1,363 @@
+{
+  "result": {
+    "admission": "admitted",
+    "certification": {
+      "blockers": [],
+      "certified": true,
+      "limitations": [
+        "tool identity is not complete execution-environment identity: the host kernel, CPU, filesystem and anything not listed above are not part of the evidence",
+        "system libraries named in closure.system_libs are trusted by name or prefix, not by content; the environment is not byte-level hermetic"
+      ],
+      "release_eligible": true
+    },
+    "change_set": {
+      "known": false,
+      "paths": []
+    },
+    "checks": [
+      {
+        "adapter": "cargo",
+        "command": [
+          "cargo",
+          "test",
+          "--locked"
+        ],
+        "cost": "fast",
+        "exit_code": 0,
+        "id": "cargo.test",
+        "obligation": "change",
+        "outcome": "passed",
+        "reasons": [
+          "full validation runs every check"
+        ],
+        "selected": true,
+        "state": "verified"
+      }
+    ],
+    "environment": {
+      "assurance": "certifiable",
+      "conformant": true,
+      "identity_digest": "9a7fe9c192811eb5b85e57959ec6ad688cd3ed89ab24ce3395de71e7d4476527",
+      "platform": "darwin-arm64",
+      "profile": "rust-cargo-1.99",
+      "release": {
+        "sbom_sha256": "b2b145adad1fb4799bf168fca3d26375ae23fb1638e7fbd83ae5683258a16445",
+        "source_digest": "2be26cd8fb60dc2daa0134b4b6072ec854f7e7d18671da4df151929f3c9e0e1b",
+        "synthesized": false,
+        "tree_digest": "46c141bd8041fb27a806caf2f8026114a2aa6ab090abaa29a89c44718f7a8e32",
+        "version": "0.4.0"
+      },
+      "scope": {
+        "hermetic": false,
+        "limitations": [
+          "tool identity is not complete execution-environment identity: the host kernel, CPU, filesystem and anything not listed above are not part of the evidence",
+          "system libraries named in closure.system_libs are trusted by name or prefix, not by content; the environment is not byte-level hermetic"
+        ]
+      },
+      "tools": [
+        {
+          "closure": {
+            "digest": "92ef5380c2f77f4fa96ef9c5d0a12a115599fd517f38808da07cbd2c1e004414",
+            "files": 146,
+            "kind": "prefix",
+            "linkage": {
+              "native_objects": 22,
+              "unknown": [],
+              "violations": []
+            },
+            "platform": "darwin-arm64",
+            "root": "/Users/runner/work/dev-platform/dev-platform/.devenv/tools/rust/1.99.0",
+            "scope": "closure bytes pinned; native dependencies limited to the closure and declared system libraries, which are trusted by name, not by content",
+            "status": "ok"
+          },
+          "expected": "1.99.0",
+          "identity": "closure-verified",
+          "name": "rust",
+          "observed": "1.99.0",
+          "observed_via": "closure",
+          "status": "ok"
+        }
+      ],
+      "weak_tools": []
+    },
+    "executed": true,
+    "execution": {
+      "environment": "inherited",
+      "inherited_dropped": 0,
+      "limits": [
+        "the full parent environment is passed to every check"
+      ],
+      "path": null,
+      "variables": null
+    },
+    "exit": 0,
+    "platform": {
+      "digest": "46c141bd8041fb27a806caf2f8026114a2aa6ab090abaa29a89c44718f7a8e32",
+      "mode": "pinned",
+      "pinned_version": "0.4.0",
+      "running_version": "0.4.0"
+    },
+    "project": {
+      "assurance": "standard",
+      "bazel_only": false,
+      "name": "consumer"
+    },
+    "regressions": [],
+    "revision": "106dc3c86834ffb9cd069b458447d877089c2cd2",
+    "schema": "dev-platform.result/v1",
+    "stage": "full",
+    "unsatisfied_obligations": []
+  },
+  "summary": {
+    "admission": "admitted",
+    "app_release": {
+      "all_ok": true,
+      "artifact": "git archive of the consumer HEAD (stand-in)",
+      "assembled": true,
+      "cases": [
+        {
+          "actual": "approved",
+          "case": "authenticated approval of the exact release",
+          "expected": "approved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "no approval at all",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "unsigned approval",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "approval by an authenticated non-approver",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "approval of a different release",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "authentic revocation after approval",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "source revision pin differs",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "manipulated result (digest no longer matches)",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "evidence missing",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "artifact bytes differ",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "dependency state differs",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "platform release not allowed by the application policy",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "security advisory on the platform release",
+          "expected": "failed",
+          "ok": true
+        }
+      ],
+      "double": "GitHub is a recording double at the gh api boundary; all verification code is real",
+      "release_sha256": "af4ecd9d7752446aad6dbf0463d7c781701349637f2c91a8a04f3fd07edfb386",
+      "rollback": {
+        "all_ok": true,
+        "cases": [
+          {
+            "case": "only the authenticated, unrevoked, unsuperseded, unaffected release is eligible",
+            "detail": {
+              "eligible": [
+                "1.0.0"
+              ],
+              "exit": 0
+            },
+            "ok": true
+          },
+          {
+            "case": "revoked release is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-110.json: authentic approved by qa",
+              "rev-110.json: authentic revoked by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "superseded approval (decision replaced) is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-120.json: authentic approved by qa",
+              "sup-120.json: authentic rejected by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "release with an advisory against it is refused",
+            "detail": [
+              "advisories: ADV-APP: qualified-app@1.3.0",
+              "ok-130.json: authentic approved by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval by an authenticated non-approver is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-150.json: ignored (qualify-stranger is authenticated but is not an approver in the application policy)"
+            ],
+            "ok": true
+          },
+          {
+            "case": "unsigned approval is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-160.json: ignored (commit 000000000000 is not a validly signed commit (unsigned))"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval edited after signing is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-170.json: ignored (record differs from the signed file (modified after signing?))"
+            ],
+            "ok": true
+          },
+          {
+            "case": "advisory on the Dev Platform release refuses every release built with it",
+            "detail": {
+              "eligible": [],
+              "rejected": [
+                "1.0.0",
+                "1.4.0"
+              ]
+            },
+            "ok": true
+          },
+          {
+            "case": "tampered bundle (byte appended after pinning) aborts selection",
+            "detail": "config error: bundle /Users/runner/work/dev-platform/dev-platform/.devenv/qualify/app-release/rollback/bundle-1.0.0: release.json: bytes differ",
+            "ok": true
+          },
+          {
+            "case": "selection without the pinned verifiers is refused",
+            "detail": "config error: approvals are authenticated by the pinned independent verifier; missing ['--app-policy', '--verifier', '--verifier-sha256', '--platform-verifier',",
+            "ok": true
+          },
+          {
+            "case": "selection with a wrong verifier pin is refused",
+            "detail": "config error: application verifier sha256 6c4b5d78bfe16675d8513f5d227f21ce1d1d69714d6122c6c9f603a46a3199c4 does not match the pin 000000000000000000000000000000",
+            "ok": true
+          },
+          {
+            "case": "release record outside any pinned bundle is not an immutable target",
+            "detail": [
+              "release record is not from a pinned evidence bundle (not immutable)"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval without the verification evidence is refused (insufficiently verified)",
+            "detail": [
+              "verification-evidence: 92f52be45ffb: not supplied (or differs from its digest)",
+              "ok-100-loose.json: authentic approved by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "stale bundle alone still shows the old approval (stated limitation: supply the newest evidence)",
+            "detail": [
+              "1.8.0"
+            ],
+            "ok": true
+          },
+          {
+            "case": "with --discover-authorizations the later revocation in the evidence repository refuses it",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-180.json: authentic approved by qa",
+              "rev-180.json: authentic revoked by qa"
+            ],
+            "ok": true
+          }
+        ]
+      }
+    },
+    "blockers": [],
+    "certified": true,
+    "checks": {
+      "cargo.test": "verified"
+    },
+    "environment": {
+      "assurance": "certifiable",
+      "conformant": true,
+      "identity_digest": "9a7fe9c192811eb5b85e57959ec6ad688cd3ed89ab24ce3395de71e7d4476527",
+      "tools": {
+        "rust": "closure-verified"
+      }
+    },
+    "execution": {
+      "environment": "inherited",
+      "inherited_dropped": 0,
+      "limits": [
+        "the full parent environment is passed to every check"
+      ],
+      "path": null,
+      "variables": null
+    },
+    "negative": [
+      {
+        "blockers": [
+          "check cargo.test is failed"
+        ],
+        "case": "failing test",
+        "rejected": true
+      },
+      {
+        "blockers": [
+          "check cargo.test is failed"
+        ],
+        "case": "lock file out of date (--locked)",
+        "rejected": true
+      }
+    ],
+    "platform": "darwin-arm64",
+    "profile": "rust-cargo-1.99"
+  }
+}
