@@ -119,7 +119,11 @@ def main(argv=None) -> int:
     work = a.work.resolve()
 
     def finish() -> int:
-        expect = c.get("expect", {}).get(a.mode, {})
+        import platform as _pl
+
+        plat = f"{sys.platform}-{_pl.machine()}"
+        ex = c.get("expect", {})
+        expect = {**ex.get(a.mode, {}), **ex.get(f"{a.mode}@{plat}", {})}
         rec["expectations"] = {k: {"expected": v, "actual": rec["steps"].get(k)} for k, v in expect.items()}
         rec["matches_expectations"] = all(rec["steps"].get(k) == v for k, v in expect.items())
         a.out.write_text(json.dumps(rec, indent=2, sort_keys=True) + "\n")

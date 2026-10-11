@@ -149,6 +149,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pc.add_argument("--workflows", type=Path, default=Path(".github/workflows"))
     pc.add_argument("--infra-profile", type=Path, default=None, help="dev-platform.infra/v1 incl. admission")
+    ic = sub.add_parser("infra", help="provider-side tools for dev-platform.infra/v1 (validate, event trust)")
+    isub = ic.add_subparsers(dest="icmd", required=True)
+    icc = isub.add_parser(
+        "check", help="validate a profile; optionally check workflows and repository visibility"
+    )
+    icc.add_argument("profile", type=Path)
+    icc.add_argument("--workflows", type=Path, help="directory of workflow files to run pr-check on")
+    icc.add_argument(
+        "--repo-visibility", choices=["public", "private"], help="warn on persistent runners if public"
+    )
+    ie = isub.add_parser("event-trust", help="normative event trust for a CI context")
+    ie.add_argument("--event", required=True)
+    ie.add_argument("--head-repo")
+    ie.add_argument("--base-repo")
+    ie.add_argument("--protected-ref", action="store_true")
+    ie.add_argument("--same-repo-pr-opt-in", action="store_true")
+    ie.add_argument("--triggering-event-trust", choices=["trusted", "untrusted"])
     pl = sub.add_parser("plan", help="release planning: readiness, versions, notes (never grants acceptance)")
     psub = pl.add_subparsers(dest="pcmd", required=True)
     for name, hlp in (
@@ -709,6 +726,38 @@ def cmd_plan(args) -> int:
     return EXIT_OK
 
 
+def cmd_infra(args) -> int:
+    from . import prcheck, runners
+
+    if args.icmd == "event-trust":
+        t = runners.event_trust(
+            args.event,
+            head_repo=args.head_repo,
+            base_repo=args.base_repo,
+            protected_ref=args.protected_ref,
+            same_repo_pr_opt_in=args.same_repo_pr_opt_in,
+            triggering_event_trust=args.triggering_event_trust,
+        )
+        print(json.dumps({"event": args.event, "event_trust": t}, sort_keys=True))
+        return EXIT_OK
+    doc = _j(args.profile)
+    problems = runners.validate_profile(doc)
+    out: dict = {"profile": str(args.profile), "valid": not problems, "problems": problems, "warnings": []}
+    if not problems:
+        persistent = [r["id"] for r in doc["runners"] if r["isolation"] == "persistent"]
+        if args.repo_visibility == "public" and persistent:
+            out["warnings"].append(
+                f"public repository but the profile offers persistent runners {persistent}: select another "
+                "profile for public repositories (persistent runners must never serve untrusted events)"
+            )
+        if args.workflows:
+            files = {str(p): p.read_text() for p in sorted(args.workflows.glob("*.y*ml"))}
+            out["pr_check"] = prcheck.check(files, doc)
+    print(json.dumps(out, indent=2, sort_keys=True))
+    bad = problems or (out.get("pr_check") or {}).get("admission") not in (None, "ok")
+    return EXIT_UNSATISFIED if bad else EXIT_OK
+
+
 def cmd_pr_check(args) -> int:
     from . import prcheck
 
@@ -741,6 +790,7 @@ _COMMANDS = {
     "release": cmd_release,
     "plan": cmd_plan,
     "pr-check": cmd_pr_check,
+    "infra": cmd_infra,
     "validate": cmd_validate,
     "affected": cmd_affected,
 }
