@@ -154,9 +154,7 @@ def main(argv=None) -> int:
     if r.returncode:
         findings.append({"step": "init", "detail": r.stderr.strip()[-400:]})
         return finish()
-    if a.mode == "head":
-        # consumer path: the pinned release provisions its own profile (the published 0.1.2 cannot: no
-        # `toolchain provision`; release mode relies on tools/setup_env.py in the workflow)
+    if True:  # consumer path: the pinned release provisions its own profile (`toolchain provision --pinned`)
         dest = work / "devenv"
         r = run([sys.executable, "-m", "dev_platform", "toolchain", "provision", "--pinned", "--project", str(cd),
                  "--profile", c["profile"], "--dest", str(dest)], env=env)  # fmt: skip
@@ -168,8 +166,8 @@ def main(argv=None) -> int:
         env["PATH"] = os.pathsep.join([*extra, env["PATH"]])
     cfg = (cd / "dev-platform.toml").read_text()
     rec["steps"]["generated_checks"] = re.findall(r'^id = "([^"]+)"', cfg, re.M)
-    if a.mode == "head" and c.get("config_append"):
-        # consumer-declared additions (head only: the published release predates them)
+    if c.get("config_append"):
+        # consumer-declared additions (the release under test must understand them: 0.2.1 or later)
         (cd / "dev-platform.toml").write_text(cfg.rstrip("\n") + "\n\n" + c["config_append"])
         rec["steps"]["config_append"] = True
     run(["git", "-C", str(cd), "add", "dev-platform.toml"])
