@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Declared host requirements (#60): `[[host]]` in dev-platform.toml, recorded in environment evidence (gates
+  conformance, never raises assurance). New profiles `rust-cargo-1.99` and `rust-bazel-9` (qualified in CI).
+  `toolchain provision [--pinned]`; `init` derives checks from build markers; `infra check|event-trust`;
+  consumer pilot harness (flight); docs: infra integration, consumer quickstart, nga pilot plan.
 - Advisory impact analysis (#7): version ranges, severity enum, `affected --impact [--github REPO]` with fix/patch/
   upgrade actions per release and pinned consumers. Proposals only.
 - Predecessor continuity (#4): `tools/run_continuity.py`, `dev-platform.continuity/v1`, `continuity` check in the

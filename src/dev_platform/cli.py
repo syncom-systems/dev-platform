@@ -276,7 +276,8 @@ def environment_for(cfg, res, root: Path) -> dict | None:
     profile = cfg.platform.profile
     if not profile or not res.release:
         return None
-    return toolchain.verify_profile(res.release["toolchains"], profile, root)
+    env = toolchain.verify_profile(res.release["toolchains"], profile, root)
+    return toolchain.with_host_requirements(env, toolchain.host_requirements(cfg.host_tools))
 
 
 def exec_env_for(cfg, res) -> dict[str, str]:
@@ -403,6 +404,12 @@ def cmd_doctor(args) -> int:
                         "ok" if t["status"] == "ok" else "error",
                         f"tool {t['name']}: expected {t['expected']} observed {t['observed']} "
                         f"[{t['identity']}] {t['status']}",
+                    )
+                for h in env_rec.get("host_requirements", []):
+                    add(
+                        "ok" if h["status"] == "ok" else "error",
+                        f"host tool {h['name']}: expected {h['expected'] or 'any'} observed {h['observed']} "
+                        f"[{h['identity']}] {h['status']}",
                     )
                 code = code or (EXIT_UNSATISFIED if not env_rec["conformant"] else EXIT_OK)
             if res.mode == "override":

@@ -42,6 +42,16 @@ class RunnerSpec:
 
 
 @dataclass(frozen=True)
+class HostTool:
+    """A host tool the project's checks need that is not part of the toolchain profile (for example tmux)."""
+
+    name: str
+    argv: tuple[str, ...]
+    pattern: str
+    version: str | None = None
+
+
+@dataclass(frozen=True)
 class Check:
     id: str
     adapter: str
@@ -66,6 +76,7 @@ class Config:
     impact_ignore: tuple[str, ...]
     runners: dict[str, RunnerSpec] = field(default_factory=dict)
     checks: tuple[Check, ...] = ()
+    host_tools: tuple[HostTool, ...] = ()
 
 
 def _table(d: dict, key: str, allowed: set[str], where: str, errs: list[str]) -> dict:
@@ -99,7 +110,7 @@ def _enum(cls, v: Any, where: str, errs: list[str], default=None):
 def parse(data: dict) -> Config:
     errs: list[str] = []
     for k in data:
-        if k not in {"schema_version", "platform", "project", "impact", "runner", "check"}:
+        if k not in {"schema_version", "platform", "project", "impact", "runner", "check", "host"}:
             errs.append(f"{k}: unknown top-level key")
     if data.get("schema_version") != SCHEMA_VERSION:
         errs.append(f"schema_version: must be {SCHEMA_VERSION}, got {data.get('schema_version')!r}")
@@ -165,6 +176,42 @@ def parse(data: dict) -> Config:
         if spec.fallback not in ("hosted", "none"):
             errs.append(f"{w}.fallback: must be hosted|none")
         runners[rname] = spec
+
+    host: list[HostTool] = []
+    raw_host = data.get("host", [])
+    if not isinstance(raw_host, list):
+        errs.append("host: must be an array of [[host]] tables")
+        raw_host = []
+    host_seen: set[str] = set()
+    for i, h in enumerate(raw_host):
+        w = f"host[{h.get('name', i) if isinstance(h, dict) else i}]"
+        if not isinstance(h, dict):
+            errs.append(f"{w}: must be a table")
+            continue
+        for k in h:
+            if k not in {"name", "argv", "pattern", "version"}:
+                errs.append(f"{w}.{k}: unknown key")
+        name = h.get("name")
+        if not (isinstance(name, str) and _ID_RE.match(name)):
+            errs.append(f"{w}.name: required, lowercase [a-z0-9_.-], starting with a letter")
+            continue
+        if name in host_seen:
+            errs.append(f"{w}.name: duplicate")
+        host_seen.add(name)
+        argv = _strlist(h.get("argv", []), f"{w}.argv", errs)
+        if not argv:
+            errs.append(f'{w}.argv: required (the probe command, for example ["tmux", "-V"])')
+        pat = h.get("pattern")
+        try:
+            ok = isinstance(pat, str) and re.compile(pat).groups >= 1
+        except re.error:
+            ok = False
+        if not ok:
+            errs.append(f"{w}.pattern: required regular expression with a capture group for the version")
+        ver = h.get("version")
+        if ver is not None and not (isinstance(ver, str) and ver):
+            errs.append(f"{w}.version: must be a non-empty string")
+        host.append(HostTool(name, argv, pat if isinstance(pat, str) else "", ver))
 
     checks: list[Check] = []
     seen: set[str] = set()
@@ -261,6 +308,7 @@ def parse(data: dict) -> Config:
         impact_ignore=impact_ignore,
         runners=runners,
         checks=tuple(checks),
+        host_tools=tuple(host),
     )
 
 
