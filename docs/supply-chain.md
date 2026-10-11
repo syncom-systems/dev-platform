@@ -48,3 +48,17 @@ version and the change kinds `security-fix`/`toolchain-patch` for `plan version-
 unsupported (`no-patch-upgrade`); pre-release versions are ignored; consumers pinned to affected releases are
 listed. Output is a proposal: the patch is built and verified through the normal pipeline and acceptance
 remains the owner's separate act.
+
+### Advisory process
+1. **Report** privately (SECURITY.md; private vulnerability reporting is enabled). Do not open public issues.
+2. **Record** it as `advisories/<id>.json` (`dev-platform.advisory/v1`, validated by the test suite).
+3. **Analyse** with `dev-platform affected --advisory advisories/<id>.json --impact --github syncom-systems/dev-platform`
+   (add `--github-draft` for a draft repository-advisory payload built from the same record).
+4. **Plan** the patch on the supported line: open an issue in the patch milestone; `plan version-check` classifies
+   the change (`security-fix`, `toolchain-patch`). A toolchain fix is a new release, never an edit of an old one.
+5. **Build and verify** through the normal pipeline (release.yml, independent verification). The patched release
+   is `verified-unaccepted` until the owner's separate authorization.
+6. **Publish the repository advisory** (owner action: it is outward-facing); consumers pinned to affected releases
+   are found with `affected` against their configs/results.
+An unauthenticated report may *suspend* use of a release (lifecycle warning) but is not a governance decision
+(ADR 0017).

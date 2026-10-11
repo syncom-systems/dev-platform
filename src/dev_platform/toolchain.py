@@ -384,6 +384,49 @@ def verify_profile(
     }
 
 
+def host_requirements(declared, probe: Probe = default_probe) -> list[dict]:
+    """Observe project-declared host tools (not part of the toolchain profile). Identity is `host-observed`:
+    the probed version is recorded, never verified by content; a declared tool that is absent or at another
+    version is unavailable/mismatch and makes the environment non-conformant."""
+    out = []
+    for h in declared:
+        code, text = probe(list(h.argv))
+        m = re.search(h.pattern, text) if code == 0 else None
+        observed = m.group(1) if m else None
+        status = "unavailable"
+        if observed is not None:
+            ok = h.version is None or observed == h.version or observed.startswith(h.version + ".")
+            status = "ok" if ok else "mismatch"
+        out.append({"name": h.name, "expected": h.version, "observed": observed,
+                    "identity": "host-observed", "status": status})  # fmt: skip
+    return out
+
+
+def with_host_requirements(env: dict, reqs: list[dict]) -> dict:
+    """Attach host requirements to an environment record. They gate conformance (the project said it needs
+    them) and change the identity digest, but never raise assurance: they are observed, not verified."""
+    if not reqs:
+        return env
+    env = dict(env)
+    env["host_requirements"] = reqs
+    env["conformant"] = bool(env["conformant"]) and all(r["status"] == "ok" for r in reqs)
+    if not env["conformant"]:
+        env["assurance"] = "diagnostic"
+    ident = {"base": env["identity_digest"], "host": [(r["name"], r["observed"]) for r in reqs]}
+    env["identity_digest"] = hashlib.sha256(json.dumps(ident, sort_keys=True).encode()).hexdigest()
+    env["scope"] = {
+        **env["scope"],
+        "limitations": [
+            *env["scope"]["limitations"],
+            "host tools declared by the project ("
+            + ", ".join(r["name"] for r in reqs)
+            + ") are identified only "
+            "by their probed version, not by content, and their system dependencies are outside the evidence",
+        ],
+    }
+    return env
+
+
 def scope_for(tools: list[dict]) -> dict:
     """What the environment evidence does and does not establish. Never claims hermeticity."""
     lim = [

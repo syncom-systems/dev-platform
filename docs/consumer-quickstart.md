@@ -22,6 +22,18 @@ These steps are exactly what `tools/pilot.py` runs against a real public consume
    identity on a stated platform; it is not hermetic and not owner acceptance.
 6. **Upgrading** is an explicit edit of the pin in a reviewed change. A toolchain change is a new release.
 
+Host tools your checks need that are not in the toolchain profile (a terminal multiplexer, `qemu`, ...) are
+declared in `dev-platform.toml`:
+```toml
+[[host]]
+name = "tmux"
+argv = ["tmux", "-V"]
+pattern = "tmux (\\S+)"      # capture group 1 is the version
+version = "3"                 # optional: exact, or a dotted prefix
+```
+They are observed (never content-verified), recorded in the environment evidence with a limitation, change the
+identity digest, and gate conformance: a missing or mismatching declared tool is reported as such instead of an
+obscure test failure. They never raise assurance and never imply hermeticity.
+
 Known friction (from the flight pilot): the consumer's dependency set may need a newer toolchain profile than
-an older release ships (a new release is required); host tools a test needs (e.g. a terminal multiplexer) are
-not yet declared in evidence (issue #60).
+an older release ships (a new release is required).

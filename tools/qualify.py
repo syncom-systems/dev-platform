@@ -82,15 +82,20 @@ def _lock_tamper(c: Path) -> None:
     (c / "MODULE.bazel.lock").write_text(json.dumps(lock, indent=2))
 
 
+def _bazel_cases(other_bazel: str, rust: str, other_rust: str, dep: str, dep_version: str) -> list:
+    """`dep` must NOT already be in the resolved graph (rules_rust 0.74 already pulls abseil-cpp)."""
+    return [
+        ("resolved graph tampered", _lock_tamper, "environment"),
+        ("undeclared module change (lockfile_mode=error)", lambda c: _sub(c / "MODULE.bazel", 'module(name = "rust_demo", version = "0.1.0")', 'module(name = "rust_demo", version = "0.1.0")\nbazel_dep(name = "' + dep + '", version = "' + dep_version + '")'), "check"),
+        ("declared bazel version differs", lambda c: (c / ".bazelversion").write_text(other_bazel + "\n"), "environment"),
+        ("declared rust version differs", lambda c: _sub(c / "MODULE.bazel", rust, other_rust), "environment"),
+        ("failing test", lambda c: _sub(c / "src/lib.rs", "assert_eq!(super::add(2, 3), 5)", "assert_eq!(super::add(2, 3), 6)"), "check"),
+    ]  # fmt: skip
+
+
 # profile -> [(name, mutation, what must be true afterwards)]. Each must end NOT certified.
 NEGATIVE = {
-    "rust-bazel": [
-        ("resolved graph tampered", _lock_tamper, "environment"),
-        ("undeclared module change (lockfile_mode=error)", lambda c: _sub(c / "MODULE.bazel", 'module(name = "rust_demo", version = "0.1.0")', 'module(name = "rust_demo", version = "0.1.0")\nbazel_dep(name = "abseil-cpp", version = "20250127.1")'), "check"),
-        ("declared bazel version differs", lambda c: (c / ".bazelversion").write_text("8.4.1\n"), "environment"),
-        ("declared rust version differs", lambda c: _sub(c / "MODULE.bazel", "1.85.0", "1.84.0"), "environment"),
-        ("failing test", lambda c: _sub(c / "src/lib.rs", "assert_eq!(super::add(2, 3), 5)", "assert_eq!(super::add(2, 3), 6)"), "check"),
-    ],
+    "rust-bazel": None,  # built by _bazel_cases below
     "rust-cargo": [
         ("failing test", lambda c: _sub(c / "src/lib.rs", "assert_eq!(super::add(2, 3), 5)", "assert_eq!(super::add(2, 3), 6)"), "check"),
         ("lock file out of date (--locked)", lambda c: _sub(c / "Cargo.toml", 'edition = "2021"', 'edition = "2021"\n\n[dependencies]\nsmallvec = "1"'), "check"),
@@ -102,6 +107,8 @@ NEGATIVE = {
 }  # fmt: skip
 
 NEGATIVE["rust-cargo-1.99"] = NEGATIVE["rust-cargo"]
+NEGATIVE["rust-bazel"] = _bazel_cases("8.4.1", "1.85.0", "1.84.0", "abseil-cpp", "20250127.1")
+NEGATIVE["rust-bazel-9"] = _bazel_cases("9.1.0", "1.97.1", "1.97.0", "yaml-cpp", "0.8.0")
 
 
 def commit_all(consumer: Path, genv: dict, msg: str) -> None:

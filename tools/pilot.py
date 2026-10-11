@@ -168,6 +168,10 @@ def main(argv=None) -> int:
         env["PATH"] = os.pathsep.join([*extra, env["PATH"]])
     cfg = (cd / "dev-platform.toml").read_text()
     rec["steps"]["generated_checks"] = re.findall(r'^id = "([^"]+)"', cfg, re.M)
+    if a.mode == "head" and c.get("config_append"):
+        # consumer-declared additions (head only: the published release predates them)
+        (cd / "dev-platform.toml").write_text(cfg.rstrip("\n") + "\n\n" + c["config_append"])
+        rec["steps"]["config_append"] = True
     run(["git", "-C", str(cd), "add", "dev-platform.toml"])
     run(["git", "-C", str(cd), "-c", "user.name=pilot", "-c", "user.email=pilot@invalid", "commit", "-q",
          "-m", "pilot: generated dev-platform.toml (local only)"])  # fmt: skip

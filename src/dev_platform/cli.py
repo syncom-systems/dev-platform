@@ -109,6 +109,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     af.add_argument("--github", metavar="REPO", help="with --impact: analyse the GitHub releases of REPO")
     af.add_argument("--policy", type=Path, default=Path("planning/release-policy.json"))
+    af.add_argument(
+        "--github-draft", action="store_true", help="with --impact: print a draft repository advisory"
+    )
     af.add_argument("consumers", type=Path, nargs="*", help="dev-platform.toml, result or app-release files")
     tc = sub.add_parser("toolchain", help="inspect toolchain closures")
     tsub = tc.add_subparsers(dest="tcmd", required=True)
@@ -276,7 +279,8 @@ def environment_for(cfg, res, root: Path) -> dict | None:
     profile = cfg.platform.profile
     if not profile or not res.release:
         return None
-    return toolchain.verify_profile(res.release["toolchains"], profile, root)
+    env = toolchain.verify_profile(res.release["toolchains"], profile, root)
+    return toolchain.with_host_requirements(env, toolchain.host_requirements(cfg.host_tools))
 
 
 def exec_env_for(cfg, res) -> dict[str, str]:
@@ -403,6 +407,12 @@ def cmd_doctor(args) -> int:
                         "ok" if t["status"] == "ok" else "error",
                         f"tool {t['name']}: expected {t['expected']} observed {t['observed']} "
                         f"[{t['identity']}] {t['status']}",
+                    )
+                for h in env_rec.get("host_requirements", []):
+                    add(
+                        "ok" if h["status"] == "ok" else "error",
+                        f"host tool {h['name']}: expected {h['expected'] or 'any'} observed {h['observed']} "
+                        f"[{h['identity']}] {h['status']}",
                     )
                 code = code or (EXIT_UNSATISFIED if not env_rec["conformant"] else EXIT_OK)
             if res.mode == "override":
@@ -576,6 +586,10 @@ def cmd_affected(args) -> int:
         pins = {str(c): records.consumer_release(c) for c in args.consumers}
         pol = json.loads(args.policy.read_text())
         out = advisories.impact(adv, rels, {k: v for k, v in pins.items() if v}, pol)
+        if args.github_draft:
+            out = {"impact": out, "github_advisory_draft": advisories.github_advisory_draft(adv, out)}
+            print(json.dumps(out, indent=2, sort_keys=True))
+            return EXIT_UNSATISFIED if out["impact"]["releases"] else EXIT_OK
         print(json.dumps(out, indent=2, sort_keys=True))
         return EXIT_UNSATISFIED if out["releases"] else EXIT_OK
     hit = records.releases_affected(adv, rels)
