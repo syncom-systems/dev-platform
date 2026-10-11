@@ -42,6 +42,8 @@ class AppVerifier:
         advisories: list[Path] = (),
         platform_sbom: Path | None = None,
         mode: str = "select",
+        platform_args: list[str] = (),
+        discover: bool = False,
     ):
         _pinned(verifier, verifier_sha256, "application verifier")
         _pinned(platform_verifier, platform_verifier_sha256, "platform verifier")
@@ -58,6 +60,11 @@ class AppVerifier:
             "--mode",
             mode,
         ]
+        # --platform-archive/--platform-policy/... passed through verbatim: the verifier re-runs the platform
+        # verifier for policies that require an accepted Dev Platform release (checked against its own pins).
+        self.argv_base += list(platform_args)
+        if discover:
+            self.argv_base.append("--discover-authorizations")
         self.results = results
         self.authorizations = list(authorizations)
         self.advisories = list(advisories)

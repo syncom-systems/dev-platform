@@ -128,6 +128,17 @@ def link_problems(
     return problems
 
 
+def _auth_reasons(approval: dict) -> list[str]:
+    """What each supplied/discovered authorization record amounted to, from the verifier's own evidence."""
+    out = []
+    for v in approval.get("authorization_evidence", []):
+        if v.get("status") == "authentic":
+            out.append(f"{v['file']}: authentic {v.get('decision')} by {v.get('approver')}")
+        elif v.get("problems") and not any("subject.digest" in p for p in v["problems"]):
+            out.append(f"{v['file']}: ignored ({'; '.join(v['problems'])})")
+    return out
+
+
 def select_rollback(
     application: str,
     current: str,
@@ -175,7 +186,7 @@ def select_rollback(
                 )
             else:
                 failed = [f"{c['id']}: {c['detail']}" for c in rec["checks"] if c["status"] == "failed"]
-                rejected.append({**entry, "reasons": failed or ap["reasons"]})
+                rejected.append({**entry, "reasons": (failed or ap["reasons"]) + _auth_reasons(ap)})
             continue
         probs = link_problems(rel, results, authorizations, list(advisories), plat)
         if probs:

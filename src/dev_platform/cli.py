@@ -173,6 +173,22 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--platform-verifier", type=Path, help="tools/verify_release.py (provider registry)")
     rs.add_argument("--platform-verifier-sha256", help="operator pin of --platform-verifier")
     rs.add_argument("--platform-sbom", type=Path, help="SBOM of the platform release (component advisories)")
+    platform_flags = {"archive": "ARCHIVE", "policy": "POLICY", "bundle": "BUNDLE", "sbom-bundle": "BUNDLE",
+                      "environment": "RECORD", "continuity": "RECORD"}  # fmt: skip
+    for flag, meta in platform_flags.items():
+        rs.add_argument(
+            f"--platform-{flag}",
+            type=Path,
+            metavar=meta,
+            help="only for policies that require an accepted Dev Platform release",
+        )
+    rs.add_argument(
+        "--discover-authorizations",
+        action="store_true",
+        help="also judge every record in the policy's evidence repository (a newer revocation then counts)",
+    )
+    rs.add_argument("--platform-policy-sha256", help="operator pin of --platform-policy")
+    rs.add_argument("--platform-authorization", type=Path, action="append", default=[])
     rs.add_argument(
         "--unauthenticated",
         action="store_true",
@@ -774,6 +790,19 @@ def _bundle_inputs(specs: list[str]) -> tuple[list[Path], list[Path], list[Path]
     return rel, res, auth, adv
 
 
+def _platform_args(args) -> list[str]:
+    out: list[str] = []
+    for flag in ("archive", "policy", "bundle", "sbom_bundle", "environment", "continuity"):
+        v = getattr(args, f"platform_{flag}")
+        if v:
+            out += [f"--platform-{flag.replace('_', '-')}", str(v)]
+    if args.platform_policy_sha256:
+        out += ["--platform-policy-sha256", args.platform_policy_sha256]
+    for a in args.platform_authorization:
+        out += ["--platform-authorization", str(a)]
+    return out
+
+
 def cmd_rollback(args) -> int:
     b_rel, b_res, b_auth, b_adv = _bundle_inputs(args.bundle)
     args.authorization = [*args.authorization, *b_auth]
@@ -815,6 +844,8 @@ def cmd_rollback(args) -> int:
             authorizations=args.authorization,
             advisories=args.advisory,
             platform_sbom=args.platform_sbom,
+            platform_args=_platform_args(args),
+            discover=args.discover_authorizations,
         )
     out = provenance.select_rollback(
         args.application,

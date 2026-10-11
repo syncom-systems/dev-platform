@@ -18,9 +18,12 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 import re
+import shutil
 import subprocess
 import sys
+import zipapp
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -60,12 +63,62 @@ class RecordedGitHub:
         if m:
             hist = [{k: v for k, v in c.items() if k != "_content"} for c in self.history.get(m.group(2), [])]
             return 0, json.dumps(hist), ""
+        m = re.search(r"/contents/(authorizations)\?ref=", ep)
+        if m:  # directory listing at the branch head
+            return 0, json.dumps([{"name": p.rsplit("/", 1)[1], "path": p, "type": "file"}
+                                  for p in sorted(self.history)]), ""  # fmt: skip
         m = re.search(r"/contents/([^?]+)\?ref=(\w+)", ep)
         if m:
-            for c in self.history.get(m.group(1), []):
-                if c["sha"] == m.group(2):
+            for i, c in enumerate(self.history.get(m.group(1), [])):
+                if c["sha"] == m.group(2) or (m.group(2) == "main" and i == 0):
                     return 0, json.dumps({"content": base64.b64encode(c["_content"]).decode()}), ""
         return 1, "", "not found"
+
+    def dump(self, path: Path) -> None:
+        enc = {p: [{**c, "_content": base64.b64encode(c["_content"]).decode()} for c in cs]
+               for p, cs in self.history.items()}  # fmt: skip
+        Path(path).write_text(json.dumps(enc))
+
+    @classmethod
+    def load(cls, path: Path) -> RecordedGitHub:
+        g = cls()
+        for p, cs in json.loads(Path(path).read_text()).items():
+            g.history[p] = [{**c, "_content": base64.b64decode(c["_content"])} for c in cs]
+        return g
+
+
+def _artifact(consumer: Path, work: Path, git) -> tuple[Path, str, str, list[dict]]:
+    """The artifact under approval. A hash-locked Python consumer is packaged as a real zipapp with its pinned
+    dependencies installed by `pip --require-hashes`; any other consumer gets a `git archive` stand-in."""
+    req = consumer / "requirements.txt"
+    if not (req.is_file() and "--hash=sha256:" in req.read_text()):
+        art = work / "source.tar"
+        art.write_bytes(git("archive", "--format=tar", "HEAD"))
+        return art, "source.tar", "git archive of the consumer HEAD (stand-in)", []
+    extra: list[dict] = []
+    tree = work / "zipapp-tree"
+    shutil.rmtree(tree, ignore_errors=True)
+    tree.mkdir(parents=True)
+    pip = [sys.executable, "-m", "pip", "install", "--no-deps", "--no-compile", "--only-binary=:all:",
+           "--require-hashes", "--disable-pip-version-check", "--target", str(tree), "-r"]  # fmt: skip
+    ok = subprocess.run([*pip, str(req)], capture_output=True, text=True)
+    if ok.returncode:
+        raise RuntimeError(f"pinned dependencies did not install: {ok.stderr[-300:]}")
+    # the lock must actually bind: a wrong hash is refused by the installer itself
+    bad = work / "requirements-bad-hash.txt"
+    bad.write_text(re.sub(r"sha256:[0-9a-f]{8}", "sha256:00000000", req.read_text()))
+    refused = subprocess.run([*pip, str(bad)], capture_output=True, text=True).returncode != 0
+    extra.append({"case": "dependency with a wrong lock hash is refused at install", "expected": "refused",
+                  "actual": "refused" if refused else "installed", "ok": refused})  # fmt: skip
+    shutil.copy(consumer / "app.py", tree / "app.py")
+    for f in tree.rglob("*"):
+        os.utime(f, (315532800, 315532800))  # deterministic member times
+    art = work / "app.pyz"
+    zipapp.create_archive(tree, art, main="app:main", compressed=False)
+    smoke = subprocess.run([sys.executable, str(art)], capture_output=True, text=True)
+    extra.append({"case": "built zipapp runs with the locked dependency", "expected": "locked-app 3",
+                  "actual": smoke.stdout.strip(), "ok": smoke.stdout.strip() == "locked-app 3"})  # fmt: skip
+    return art, "app.pyz", "zipapp of the application with hash-locked dependencies installed by pip", extra
 
 
 def _digest(doc) -> str:
@@ -84,15 +137,18 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
     locks = [consumer / n for n in LOCKS if (consumer / n).is_file()]
     if not locks:
         return {"skipped": "fixture has no lock file the chain knows"}
-    art = work / "source.tar"
-    art.write_bytes(git("archive", "--format=tar", "HEAD"))
+    art, art_name, art_note, extra = _artifact(consumer, work, git)
+
+    def assemble_file(version: str, out: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, "-m", "dev_platform", "provenance", "assemble", "--result", str(result_path),
+             "--name", "qualified-app", "--app-version", version, "--source-uri", "https://example.invalid/app",
+             "--artifact", f"{art_name}={hashlib.sha256(art.read_bytes()).hexdigest()}",
+             *[x for lock in locks for x in ("--lock", str(lock))], "--root", str(consumer), "--out", str(out)],
+            cwd=ROOT, env=env, capture_output=True, text=True)  # fmt: skip
+
     rel_path = work / "release.json"
-    asm = subprocess.run(
-        [sys.executable, "-m", "dev_platform", "provenance", "assemble", "--result", str(result_path),
-         "--name", "qualified-app", "--app-version", "1.0.0", "--source-uri", "https://example.invalid/app",
-         "--artifact", f"source.tar={hashlib.sha256(art.read_bytes()).hexdigest()}",
-         *[x for lock in locks for x in ("--lock", str(lock))], "--root", str(consumer), "--out", str(rel_path)],
-        cwd=ROOT, env=env, capture_output=True, text=True)  # fmt: skip
+    asm = assemble_file("1.0.0", rel_path)
     if asm.returncode:
         return {"assembled": False, "detail": (asm.stderr or asm.stdout)[-400:]}
     rel = json.loads(rel_path.read_text())
@@ -137,7 +193,7 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
         rp.write_text(json.dumps(release, sort_keys=True))
         out = A.verify(
             rp, pol, V, mode="release", source_revision=rev_pin, locks=lock_files, lock_root=consumer,
-            artifacts={"source.tar": artifact}, results=[result_path] if results is None else results,
+            artifacts={art_name: artifact}, results=[result_path] if results is None else results,
             advisories=list(advisories), authorizations=paths, gh=gh or default_gh, now=NOW)  # fmt: skip
         return out["approval"]["state"]
 
@@ -202,11 +258,25 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
                                "severity": "high", "affected": [{"component": "dev-platform",
                                "versions": [plat["release_version"]]}]}))  # fmt: skip
     case("security advisory on the platform release", "failed", lambda: verify(good(), advisories=[adv]))
+
+    def assemble(version: str) -> dict:
+        out = work / f"release-{version}.json"
+        r = assemble_file(version, out)
+        if r.returncode:
+            raise RuntimeError(f"assemble {version}: {(r.stderr or r.stdout)[-300:]}")
+        return json.loads(out.read_text())
+
+    qualify_rollback = _load("qualify_rollback", ROOT / "tools" / "qualify_rollback.py")
+    default_gh = RecordedGitHub()
+    rollback = qualify_rollback.run(
+        env=env, work=work, result_path=result_path, assemble=assemble, approval=approval,
+        double=default_gh, policy=policy, app="qualified-app")  # fmt: skip
     return {
         "assembled": True,
+        "rollback": rollback,
         "release_sha256": _digest(rel),
-        "artifact": "git archive of the consumer HEAD (stand-in)",
+        "artifact": art_note,
         "double": "GitHub is a recording double at the gh api boundary; all verification code is real",
-        "cases": cases,
-        "all_ok": all(c["ok"] for c in cases),
+        "cases": cases + extra,
+        "all_ok": all(c["ok"] for c in cases + extra) and rollback["all_ok"],
     }

@@ -30,7 +30,7 @@ evidence that any compiler or build-system integration works. Support is claimed
 
 | Profile | Fixture | Real tools | Platforms | Identity established |
 |---|---|---|---|---|
-| `python` | `fixtures/python-only` | pinned CPython (python-build-standalone) | linux-x86_64, darwin-arm64 | `closure-verified` |
+| `python` | `fixtures/python-only` (CI qualifies `fixtures-real/python-locked`, same checks plus a hash-locked dependency and a zipapp artifact for the application-release chain, from 0.4.0) | pinned CPython (python-build-standalone) | linux-x86_64, darwin-arm64 | `closure-verified` |
 | `rust-cargo` | `fixtures-real/rust-cargo` | rustc/cargo 1.85.0 official dist (assembled from the pinned tarball's component manifests, not install.sh) | linux-x86_64, darwin-arm64 | `closure-verified`; `cargo test --locked` (rejects an out-of-date lock); host linker outside the evidence |
 | `rust-cargo-1.99` | `fixtures-real/rust-cargo` | rustc/cargo 1.99.0 official dist, same assembly | linux-x86_64, darwin-arm64 (CI `qualify`) | `closure-verified`; same negative cases as `rust-cargo` |
 | `rust-bazel-9` | `fixtures-real/rust-bazel-9` | Bazelisk 1.29.0 -> Bazel 9.2.0 -> rules_rust 0.74.0 -> rustc 1.97.1 (edition 2024) | linux-x86_64, darwin-arm64 (CI `qualify`) | as `rust-bazel`; its undeclared-module negative case uses a module absent from the resolved graph (rules_rust 0.74 already resolves abseil-cpp) |
