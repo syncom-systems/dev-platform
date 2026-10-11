@@ -1,0 +1,15 @@
+== invented
+AUTH    invented.json: ignored  (identity provider 'github-oidc' is not supported (fail closed))
+acceptance: verified-unaccepted  no authenticated, authorized, in-force approval for this archive digest
+== uncommitted
+AUTH    uncommitted.json: ignored  (no commit on main touches authorizations/uncommitted.json)
+acceptance: verified-unaccepted  no authenticated, authorized, in-force approval for this archive digest
+== invented
+== uncommitted
+FAILED  source-revision  (release.json says c80891bd646622213bc8a5cf3a7eca32dc305cfc)
+FAILED  attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got c80891bd646622213bc8a5cf3a7eca32dc305cfc)
+FAILED  sbom-attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got c80891bd646622213bc8a5cf3a7eca32dc305cfc)
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  archive-digest  (actual ae75247e95f88dc05407ba6734329951c7395e41085ac3ef1c0c6335f15140f8)
+FAILED  attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:ae75247e95f88dc05407ba6734329951c7395e41085ac3ef1c0c6335f15140f8?per_page=30&predicate_type=https%3A%2F%2Fslsa.dev%2Fprovenance%2Fv1))
+FAILED  sbom-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:ae75247e95f88dc05407ba6734329951c7395e41085ac3ef1c0c6335f15140f8?per_page=30&predicate_type=https%3A%2F%2Fcyclonedx.org%2Fbom))
