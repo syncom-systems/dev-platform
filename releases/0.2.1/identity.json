@@ -1,0 +1,37 @@
+{
+  "version": "0.2.1",
+  "state": "verified-unaccepted (stable candidate; NOT accepted; release not certified)",
+  "git_tag": "v0.2.1",
+  "source_revision": "750d065e9eab486b7153079b7162013b19cc8aad",
+  "archive": "dev-platform-0.2.1.tar.gz",
+  "archive_sha256": "3cc47abb71afcd279383f2c46386f46183f460ff3e91af7656a407030ba42044",
+  "tree_digest_pin": "7cc140322520220bce0292e599c8d9e1c36d0785981af02070175d32fc4165b5",
+  "release_workflow_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38158695472",
+  "signer": "syncom-systems/dev-platform/.github/workflows/release.yml@refs/tags/v0.2.1",
+  "github_release": {
+    "immutable": true,
+    "prerelease": true,
+    "title": "dev-platform 0.2.1 (verified, NOT accepted)"
+  },
+  "verifier_pins": {
+    "verify_release.py_sha256": "791713d01198f47045c7abb210e73dd94976d266ed12351cfce53ea9d2b466a9",
+    "trust_policy_sha256": "403f9131d130629d988f46abbcc4980635c16c1646b9967b19b3b45594db9cc7",
+    "install_release.py_sha256": "473a2c73eb71904ea6ee0e010f2288976126d4560e3efd11c33c11e44f15bb93"
+  },
+  "build_environment": {
+    "profile": "dev-platform-release",
+    "platform": "linux-x86_64",
+    "assurance": "certifiable",
+    "hermetic": false,
+    "identity_digest": "a31eef599f21ed869d53a15911593302630a695b1db840e0ba856164029895a6"
+  },
+  "continuity": {
+    "predecessor": "0.2.0",
+    "predecessor_state": "verified-unaccepted",
+    "stage": "full",
+    "admission": "admitted"
+  },
+  "supersedes_candidate": "0.2.0 (retained verified-unaccepted; its tag's installer cannot supply the continuity record)",
+  "qualification_ci_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38158696379",
+  "owner_authorization": "none"
+}

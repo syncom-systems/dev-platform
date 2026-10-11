@@ -1,0 +1,36 @@
+== invented (unsigned record naming an unsupported provider)
+AUTH    invented.json: ignored  (identity provider 'github-oidc' is not supported (fail closed))
+acceptance: verified-unaccepted  no authenticated, authorized, in-force approval for this archive digest
+== uncommitted (supported provider, never committed)
+AUTH    uncommitted.json: ignored  (no commit on main touches authorizations/uncommitted.json)
+acceptance: verified-unaccepted  no authenticated, authorized, in-force approval for this archive digest
+== wrong revision
+FAILED  source-revision  (release.json says 750d065e9eab486b7153079b7162013b19cc8aad)
+FAILED  attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got 750d065e9eab486b7153079b7162013b19cc8aad)
+FAILED  sbom-attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got 750d065e9eab486b7153079b7162013b19cc8aad)
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  environment-attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got edadc4d089b0b5dae3f995121ce48b40cec
+FAILED  continuity  (predecessor did not run over this source revision)
+FAILED  continuity-attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got 750d065e9eab486b7153079b7162013b19cc
+acceptance: failed  source-revision; attestation-signature; sbom-attestation-signature; sbom-attestation-content; environment-attestation-signature; continuity; continuit
+== appended byte
+FAILED  attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:db1ce9e0c77638706eec2a7ee36c1dd1d
+FAILED  sbom-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:db1ce9e0c77638706eec2a7ee36c
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  continuity  (record is about a different archive)
+acceptance: failed  attestation-signature; sbom-attestation-signature; sbom-attestation-content; continuity
+== continuity record absent
+FAILED  continuity  (policy names predecessor 0.2.0; continuity record required)
+acceptance: failed  continuity
+== continuity record altered by one byte
+FAILED  continuity-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:78df8329050bd6a66f6b0a
+acceptance: failed  continuity-attestation-signature
+== installer without --allow-unaccepted
+refused: acceptance state 'verified-unaccepted' is not admitted (see --allow-prerelease/--allow-unaccepted)
+== installer with --allow-unaccepted, invented authorization
+installed inst/b/0.2.1
+acceptance: verified-unaccepted
+pin sha256 = 7cc140322520220bce0292e599c8d9e1c36d0785981af02070175d32fc4165b5
+== installer, wrong verifier pin
+refused: verifier /Users/mats/dev/dev-platform/tools/verify_release.py does not match the pinned sha256
+exit=3
