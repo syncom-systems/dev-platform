@@ -30,7 +30,8 @@
           "config_valid": true,
           "generated_checks": [
             "cargo.test"
-          ]
+          ],
+          "provision_exit": 0
         }
       }
     },
@@ -53,7 +54,8 @@
           "config_valid": true,
           "generated_checks": [
             "cargo.test"
-          ]
+          ],
+          "provision_exit": 0
         },
         "head@linux-x86_64": {
           "check_exit": 0,

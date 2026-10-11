@@ -154,6 +154,18 @@ def main(argv=None) -> int:
     if r.returncode:
         findings.append({"step": "init", "detail": r.stderr.strip()[-400:]})
         return finish()
+    if a.mode == "head":
+        # consumer path: the pinned release provisions its own profile (the published 0.1.2 cannot: no
+        # `toolchain provision`; release mode relies on tools/setup_env.py in the workflow)
+        dest = work / "devenv"
+        r = run([sys.executable, "-m", "dev_platform", "toolchain", "provision", "--pinned", "--project", str(cd),
+                 "--profile", c["profile"], "--dest", str(dest)], env=env)  # fmt: skip
+        rec["steps"]["provision_exit"] = r.returncode
+        if r.returncode:
+            findings.append({"step": "provision", "detail": (r.stderr or r.stdout).strip()[-400:]})
+            return finish()
+        extra = [str(dest / "bin")] + [str(p / "bin") for p in sorted(dest.iterdir()) if (p / "bin").is_dir()]
+        env["PATH"] = os.pathsep.join([*extra, env["PATH"]])
     cfg = (cd / "dev-platform.toml").read_text()
     rec["steps"]["generated_checks"] = re.findall(r'^id = "([^"]+)"', cfg, re.M)
     run(["git", "-C", str(cd), "add", "dev-platform.toml"])

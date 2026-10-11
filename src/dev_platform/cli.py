@@ -114,6 +114,14 @@ def build_parser() -> argparse.ArgumentParser:
     tv.add_argument("--manifest", type=Path, default=Path("toolchains/manifest.json"))
     tv.add_argument("--profile", required=True)
     tv.add_argument("--require-certifiable", action="store_true", help="exit 1 unless every tool is strong")
+    tp = tsub.add_parser(
+        "provision", help="realize a profile's pinned tools into a version-keyed local store"
+    )
+    tp.add_argument("--manifest", type=Path, default=Path("toolchains/manifest.json"))
+    tp.add_argument("--pinned", action="store_true", help="use the manifest of the project's pinned release")
+    tp.add_argument("--project", type=Path, default=Path("."))
+    tp.add_argument("--profile", required=True)
+    tp.add_argument("--dest", type=Path, default=Path(".devenv"))
     pv = sub.add_parser("provenance", help="assemble an application-release record from a certified result")
     psub = pv.add_subparsers(dest="pcmd", required=True)
     pa = psub.add_parser("assemble")
@@ -565,7 +573,31 @@ def cmd_affected(args) -> int:
 
 
 def cmd_toolchain(args) -> int:
+    if args.tcmd == "provision" and args.pinned:
+        from . import provision
+
+        cfg = load(args.project)
+        res = resolve(cfg, protected=protected_context(os.environ, False))
+        try:
+            if not res.release:
+                raise ConfigError(["no pinned release resolved (override or self-hosted mode has none)"])
+            done = provision.provision(res.release["toolchains"], args.profile, args.dest)
+        finally:
+            res.dispose()
+        print(
+            json.dumps({"profile": args.profile, "dest": str(args.dest), "installed": done}, sort_keys=True)
+        )
+        print(f"then: export PATH={args.dest / 'bin'}:$PATH  and run: dev-platform toolchain verify")
+        return EXIT_OK
     manifest = toolchain.validate(json.loads(args.manifest.read_text()))
+    if args.tcmd == "provision":
+        from . import provision
+
+        done = provision.provision(manifest, args.profile, args.dest)
+        print(
+            json.dumps({"profile": args.profile, "dest": str(args.dest), "installed": done}, sort_keys=True)
+        )
+        return EXIT_OK
     if args.tcmd == "verify":
         rec = toolchain.verify_profile(manifest, args.profile, Path.cwd())
         print(json.dumps(rec, indent=2, sort_keys=True))

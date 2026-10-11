@@ -35,11 +35,12 @@ jobs:
           persist-credentials: false
       - name: The consumer commit must equal the pinned one
         run: test "$(git -C pilot-consumer rev-parse HEAD)" = "${{ matrix.commit }}"
-      - name: Realize the pinned toolchain profile (no uv/cache action in this job: untrusted code is present)
+      - name: Realize the pinned toolchain profile (release mode; head mode uses `toolchain provision`)
+        if: matrix.mode == 'release'
         run: python tools/setup_env.py ${{ matrix.profile }}
       - name: Pilot (install, configure, execute)
         run: |
-          export PATH="$PWD/.devenv/bin:$PWD/.devenv/rust/bin:$PATH"
+          if [ "${{ matrix.mode }}" = release ]; then export PATH="$PWD/.devenv/bin:$PWD/.devenv/rust/bin:$PATH"; fi
           mkdir -p pilot-work
           python tools/pilot.py --consumer-id ${{ matrix.consumer }} --consumer-dir pilot-consumer \
             --work pilot-work --out pilot-result.json --mode ${{ matrix.mode }}
