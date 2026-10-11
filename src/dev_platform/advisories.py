@@ -112,3 +112,41 @@ def github_releases(repo: str) -> dict[str, dict]:
                 "github_prerelease_flag": bool(rel["isPrerelease"]),
             }
     return out
+
+
+_GH_SEVERITY = {"low": "low", "moderate": "medium", "high": "high", "critical": "critical"}
+
+
+def github_advisory_draft(advisory: dict, impact_doc: dict) -> dict:
+    """Payload for `POST /repos/{repo}/security-advisories` (a *draft*; publishing it is an outward-facing
+    owner action and is never done by this code). Built from a validated dev-platform.advisory/v1 record and
+    its impact analysis, so the text and version ranges cannot disagree with the platform's own record."""
+    problems = records.validate_advisory(advisory)
+    if problems:
+        raise ConfigError(problems)
+    vulns = []
+    for a in advisory["affected"]:
+        rng = ", ".join([*a.get("ranges", []), *[f"= {v}" for v in a.get("versions", [])]])
+        patched = ", ".join(a.get("fixed", [])) or None
+        vulns.append(
+            {
+                "package": {"ecosystem": "other", "name": a["component"]},
+                "vulnerable_version_range": rng,
+                "patched_versions": patched,
+            }
+        )
+    steps = [
+        f"- {e['version']}: {e['action']}"
+        + (f" to {e['to']}" if e.get("to") else "")
+        + (f" (patch release {e['patch_version']})" if e.get("patch_version") else "")
+        for e in impact_doc["releases"]
+        if e["action"] != "ignore-prerelease"
+    ]
+    return {
+        "summary": advisory["summary"],
+        "description": advisory["summary"]
+        + ("\n\nAffected dev-platform releases and actions:\n" + "\n".join(steps) if steps else ""),
+        "severity": _GH_SEVERITY[advisory["severity"]],
+        "vulnerabilities": vulns,
+        "note": "draft payload only; not sent. Publishing is an owner action.",
+    }

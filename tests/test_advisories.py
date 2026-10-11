@@ -94,5 +94,27 @@ class Impact(unittest.TestCase):
         self.assertIn("approves anything", out["note"])
 
 
+class Draft(unittest.TestCase):
+    def test_github_draft_is_built_from_the_record_and_never_sent(self):
+        a = adv(affected=[{"component": "ruff", "ranges": [">=0.17.0,<0.17.2"], "fixed": ["0.17.2"]}])
+        out = advisories.impact(a, {"0.1.2": rel("0.17.0")}, {}, POLICY)
+        d = advisories.github_advisory_draft(a, out)
+        self.assertEqual(d["severity"], "high")
+        self.assertEqual(d["vulnerabilities"][0]["vulnerable_version_range"], ">=0.17.0,<0.17.2")
+        self.assertEqual(d["vulnerabilities"][0]["patched_versions"], "0.17.2")
+        self.assertIn("0.1.2: patch-release (patch release 0.1.3)", d["description"])
+        self.assertIn("not sent", d["note"])
+
+    def test_invalid_record_is_refused(self):
+        with self.assertRaises(ConfigError):
+            advisories.github_advisory_draft(adv(severity="x"), {"releases": []})
+
+    def test_repository_advisory_records_validate(self):
+        import json
+
+        for f in sorted((ROOT / "advisories").glob("*.json")) if (ROOT / "advisories").is_dir() else []:
+            self.assertEqual(records.validate_advisory(json.loads(f.read_text())), [], f.name)
+
+
 if __name__ == "__main__":
     unittest.main()
