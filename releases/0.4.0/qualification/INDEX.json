@@ -1,0 +1,72 @@
+{
+  "ci_qualification": [
+    {
+      "file": "python-macos-15.json",
+      "sha256": "e42f41b369ef4df754495c2330a0dbe7c89b541635e55a05ee7b3d6fe8eafc12"
+    },
+    {
+      "file": "python-ubuntu-24.04.json",
+      "sha256": "97c4daae6f1c81e39f1dc0a7c9c551013881234a3f0a4a24dae9cb661a172b9f"
+    },
+    {
+      "file": "rust-bazel-9-macos-15.json",
+      "sha256": "5edbd8cda7271d7cf7d17339f9bb038eccff7d24e0990022100e6f87e0bc0463"
+    },
+    {
+      "file": "rust-bazel-9-ubuntu-24.04.json",
+      "sha256": "c68ae649054e9dee1e385acb7c941c1485b6f8be4b6d2edcee455d310090a892"
+    },
+    {
+      "file": "rust-bazel-macos-15.json",
+      "sha256": "07eed2485281b8e84cdd22cb2ff877cf3b2d661fe4e8f5cf2748a92430400a70"
+    },
+    {
+      "file": "rust-bazel-ubuntu-24.04.json",
+      "sha256": "cbaad78c27ab21ffc3ed600d1d2325b67ca9ae307dfcaacf0ca267d97dec022d"
+    },
+    {
+      "file": "rust-cargo-1.99-macos-15.json",
+      "sha256": "7af357d23a867e1dbfdce5c04649f25da65454b42c0006b77a5489348dab0eab"
+    },
+    {
+      "file": "rust-cargo-1.99-ubuntu-24.04.json",
+      "sha256": "d676f0df4b6f0286d7c149097408faefb0cbf39e9c7b3e8bb265256da5c37330"
+    },
+    {
+      "file": "rust-cargo-macos-15.json",
+      "sha256": "f0d90032523f2657d0f71118ae0b811aac3f2cbe881c0a093ad60b6bc83034ad"
+    },
+    {
+      "file": "rust-cargo-ubuntu-24.04.json",
+      "sha256": "4c1a2068f36344246da02b53afe0db0383d90018674fa8786e24010e9e5484be"
+    }
+  ],
+  "ci_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38179786582 (artifacts qualification-<profile>-<os>)",
+  "live_fixture_repo": "syncom-systems/dev-platform-qualification-fixture (private; commit ids in live-qualification.json)",
+  "note": "Each file is retained byte-for-byte; sha256 identifies it. 0.3.0's qualification claims are not widened by these records.",
+  "other_records": [
+    {
+      "file": "live-qualification.json",
+      "sha256": "75fa2e42d32a98ecb5384ca84fdb77bb14db769da0c418cde1045c080e10c658"
+    },
+    {
+      "file": "platform-acceptance-required.txt",
+      "sha256": "db9749162305e45976c501850df65dc75363c93247c3ae86ef4e73f71cde2e8e"
+    },
+    {
+      "file": "rejections.txt",
+      "sha256": "673160ca36bce7b338e0af69dd6f8d79500311956c4597379e5c10725ffd72bc"
+    },
+    {
+      "file": "verification.independent.json",
+      "sha256": "e71adf1ce87c33404bda624e27b1666b9bda075c0c73eaae09d89a7ae171b39b"
+    },
+    {
+      "file": "verification.ci.json",
+      "sha256": "cbcc838504b16d2e6f5027292a50ec15da5f28d80830b76e4cc1cff48bf4c007"
+    }
+  ],
+  "release": "0.4.0",
+  "schema": "dev-platform.qualification-index/v1",
+  "source_revision": "ea477c86d0dd388a6a7d93c87366a9931ad46a23"
+}

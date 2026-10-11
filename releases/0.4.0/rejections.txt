@@ -1,0 +1,31 @@
+archive sha256 91d81005dbd5dc082fb6ebed37ebc2a7173a7e336feb2a25764a8d5ee2daeb2e
+tag revision ea477c86d0dd388a6a7d93c87366a9931ad46a23
+== verification
+acceptance: verified-unaccepted  no authenticated, authorized, in-force approval for this archive digest
+== invented
+AUTH    invented.json: ignored  (identity provider 'github-oidc' is not supported (fail closed))
+acceptance: verified-unaccepted  no authenticated, authorized, in-force approval for this archive digest
+== uncommitted
+AUTH    uncommitted.json: ignored  (no commit on main touches authorizations/uncommitted.json)
+acceptance: verified-unaccepted  no authenticated, authorized, in-force approval for this archive digest
+== wrong revision
+FAILED  source-revision  (release.json says ea477c86d0dd388a6a7d93c87366a9931ad46a23)
+FAILED  attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got ea477c86d0dd388a6a7d93c87366a9931ad46a23)
+FAILED  sbom-attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got ea477c86d0dd388a6a7d93c87366a9931ad46a23)
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  environment-attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got edadc4d089b0b5dae3f995121ce48b40cec0e8aa)
+FAILED  continuity  (predecessor did not run over this source revision)
+FAILED  continuity-attestation-signature  (Error: expected SourceRepositoryDigest to be aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, got ea477c86d0dd388a6a7d93c87366a9931ad46a23)
+acceptance: failed  source-revision; attestation-signature; sbom-attestation-signature; sbom-attestation-content; environment-attestation-signature; continuity; continuity-attestation-signature
+== appended byte
+FAILED  attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:6f5c3d9535c6fdf1a89d741ca4d8b2dd42adbf20371d014f4587c1dfd49c91f
+FAILED  sbom-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:6f5c3d9535c6fdf1a89d741ca4d8b2dd42adbf20371d014f4587c1dfd4
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  continuity  (record is about a different archive)
+acceptance: failed  attestation-signature; sbom-attestation-signature; sbom-attestation-content; continuity
+== continuity record absent
+FAILED  continuity  (policy names predecessor 0.3.0; continuity record required)
+acceptance: failed  continuity
+== continuity record altered
+FAILED  continuity-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:aeb93b59526a959611b50f2a9e71ad4cab94b6d6e1656e3fb195
+acceptance: failed  continuity-attestation-signature
