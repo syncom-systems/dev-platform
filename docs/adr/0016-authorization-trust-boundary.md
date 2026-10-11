@@ -1,6 +1,6 @@
-# ADR 0016: Authorization trust boundary
+# 0016 Authorization trust boundary
 
-Status: Accepted by owner directive (2026-10-11). Supersedes the `tools/validate_authorization.py` proposal
+Status: Ratified (owner directive, 2026-10-11). Supersedes the `tools/validate_authorization.py` proposal
 that accompanied the v0.1.0 acceptance packet; the owner did not ratify that two-tool design.
 
 ## Defect found
