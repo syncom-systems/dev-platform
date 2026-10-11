@@ -60,6 +60,35 @@ class InstallTest(unittest.TestCase):
         )
         self.assertEqual(again, dest)  # idempotent
 
+    def test_policy_naming_a_predecessor_needs_the_continuity_record(self):
+        pol = {**POLICY, "continuity": {"predecessor": {"version": "0.9.0", "archive_sha256": "b" * 64,
+                                                       "tree_digest": "c" * 64}}}  # fmt: skip
+        arc, sha, exp = self.candidate()
+        with self.assertRaises(IR.Refused) as cm:
+            IR.install(arc, self.store, exp, self.verifier, pol, gh=fake_gh(sha, "1.0.0-rc.1"),
+                       allow_prerelease=True)  # fmt: skip
+        self.assertIn("continuity", str(cm.exception))
+        self.assertEqual(list(self.store.iterdir()), [])
+        cont = tmpdir(self) / "c.json"
+        cont.write_text(json.dumps({
+            "schema": "dev-platform.continuity/v1",
+            "subject": {"version": "1.0.0-rc.1", "archive_sha256": sha, "source_revision": REV},
+            "predecessor": {"version": "0.9.0", "archive_sha256": "b" * 64, "tree_digest": "c" * 64,
+                            "verification": {"state": "verified-unaccepted", "all_checks_passed": True}},
+            "stage": {"name": "full", "exit": 0, "admission": "admitted", "revision": REV},
+        }))  # fmt: skip
+        dest, rec = IR.install(arc, self.store, exp, self.verifier, pol, gh=fake_gh(sha, "1.0.0-rc.1"),
+                               allow_prerelease=True, continuity_record=cont)  # fmt: skip
+        self.assertTrue(dest.is_dir())
+        self.assertEqual(rec["acceptance"]["state"], "pre-release")
+
+    def test_continuity_is_not_passed_to_verifiers_that_predate_it(self):
+        arc, sha, exp = self.candidate()
+        legacy = {k: v for k, v in POLICY.items() if k != "continuity"}
+        dest, _ = IR.install(arc, self.store, exp, self.verifier, legacy, gh=fake_gh(sha, "1.0.0-rc.1"),
+                             allow_prerelease=True)  # fmt: skip
+        self.assertTrue(dest.is_dir())
+
     def test_prerelease_needs_explicit_admission(self):
         arc, sha, exp = self.candidate()
         with self.assertRaises(IR.Refused) as cm:
