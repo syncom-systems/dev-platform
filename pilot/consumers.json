@@ -1,15 +1,38 @@
 {
   "schema": "dev-platform.pilot/v1",
   "description": "Genuine consumer pilots. Read-only: the consumer repository is checked out at a pinned commit in CI, a dev-platform.toml is generated and committed only inside that throwaway checkout; nothing is pushed and no consumer is migrated. The release under test is the one named here, installed with the trusted installer under pins taken from releases/<version>/identity.json.",
-  "release": {"version": "0.1.2", "allow_unaccepted": true},
+  "release": {
+    "version": "0.1.2",
+    "allow_unaccepted": true
+  },
   "consumers": [
     {
       "id": "flight",
       "repo": "syncom-systems/flight",
       "commit": "a7e3765df73dab120ea240f70cc39cdc4354141c",
       "profile": "rust-cargo",
-      "platforms": ["linux-x86_64", "darwin-arm64"],
-      "expect": {"installed": true, "config_valid": true}
+      "platforms": [
+        "linux-x86_64",
+        "darwin-arm64"
+      ],
+      "expect": {
+        "release": {
+          "installed": true,
+          "init_exit": 0,
+          "config_valid": true,
+          "generated_checks": [
+            "python.unittest"
+          ]
+        },
+        "head": {
+          "installed": true,
+          "init_exit": 0,
+          "config_valid": true,
+          "generated_checks": [
+            "cargo.test"
+          ]
+        }
+      }
     }
   ]
 }

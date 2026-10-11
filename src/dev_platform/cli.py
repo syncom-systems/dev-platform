@@ -284,7 +284,15 @@ def cmd_init(args) -> int:
         sha = tree_digest(vdir)
     facts = detect(root)
     bazel = is_bazel_workspace(facts)
-    langs = sorted(facts["languages"])
+    # Checks come from build-system markers and real test layout, never from stray files with a language
+    # extension (pilot finding: a Rust workspace with an incidental .py file got a python.unittest check).
+    cargo = bool(facts["build_systems"].get("cargo")) and not bazel
+    py_tests = (root / "tests").is_dir() and any((root / "tests").rglob("test_*.py"))
+    python = "python" in facts["languages"] and py_tests and not bazel
+    langs = sorted(
+        ({"python"} if python or (bazel and "python" in facts["languages"]) else set())
+        | ({"rust"} if cargo or (bazel and "rust" in facts["languages"]) else set())
+    )
     lines = [
         f"schema_version = {SCHEMA_VERSION}",
         "",
@@ -298,7 +306,7 @@ def cmd_init(args) -> int:
         f"bazel_only = {str(bazel).lower()}",
         "# assurance is a declaration; it is never inferred from source files",
         'assurance = "standard"',
-        "languages = [" + ", ".join(f'"{x}"' for x in langs if x in ("python", "rust")) + "]",
+        "languages = [" + ", ".join(f'"{x}"' for x in langs) + "]",
         "",
     ]
     if bazel:
@@ -313,7 +321,7 @@ def cmd_init(args) -> int:
             'inputs = ["**"]',
             "",
         ]
-    elif "python" in langs:
+    if python:
         lines += [
             "[[check]]",
             'id = "python.unittest"',
@@ -324,7 +332,7 @@ def cmd_init(args) -> int:
             'inputs = ["**/*.py"]',
             "",
         ]
-    elif "rust" in langs:
+    if cargo:
         lines += [
             "[[check]]",
             'id = "cargo.test"',
@@ -334,8 +342,10 @@ def cmd_init(args) -> int:
             'inputs = ["**/*.rs", "**/Cargo.toml", "Cargo.lock"]',
             "",
         ]
-    else:
-        raise ConfigError(["no supported language detected; write dev-platform.toml by hand"])
+    if not (bazel or python or cargo):
+        raise ConfigError(
+            ["no supported build system or test layout detected; write dev-platform.toml by hand"]
+        )
     target.write_text("\n".join(lines))
     _emit(args, {"written": str(target), "bazel_only": bazel}, f"wrote {target}")
     return EXIT_OK

@@ -10,13 +10,14 @@ permissions:
   contents: read
 jobs:
   pilot:
-    name: pilot ${{ matrix.consumer }} (${{ matrix.os }})
+    name: pilot ${{ matrix.consumer }} ${{ matrix.mode }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15]
         consumer: [flight]
+        mode: [release, head]
         include:
           - {consumer: flight, repo: syncom-systems/flight, commit: a7e3765df73dab120ea240f70cc39cdc4354141c, profile: rust-cargo}
     env: {GH_TOKEN: "${{ github.token }}"}
@@ -42,11 +43,11 @@ jobs:
           export PATH="$PWD/.devenv/bin:$PWD/.devenv/rust/bin:$PATH"
           mkdir -p pilot-work
           python tools/pilot.py --consumer-id ${{ matrix.consumer }} --consumer-dir pilot-consumer \
-            --work pilot-work --out pilot-result.json
+            --work pilot-work --out pilot-result.json --mode ${{ matrix.mode }}
       - name: Summary
         if: always()
         run: |
           { echo '```json'; cat pilot-result.json 2>/dev/null || echo '{"error":"no result"}'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
-        with: {name: "pilot-${{ matrix.consumer }}-${{ matrix.os }}", path: "pilot-result.json"}
+        with: {name: "pilot-${{ matrix.consumer }}-${{ matrix.mode }}-${{ matrix.os }}", path: "pilot-result.json"}
