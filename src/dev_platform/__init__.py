@@ -1,3 +1,3 @@
 """dev-platform: a deterministic development control plane."""
 
-__version__ = "0.1.2-rc.1"
+__version__ = "0.1.2"
