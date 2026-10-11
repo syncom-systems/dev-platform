@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- ADR 0018: single admission policy contract. `runners.event_trust` (normative), optional `admission` section in
+  `dev-platform.infra/v1`, `dev-platform pr-check` (violations / incomplete / indicators), conformance cases.
+- Lifecycle: unauthenticated notices only suspend (warning); revocation is read from the pinned verifier's
+  authenticated evidence. `plan queue`: milestone priority is not an exclusive queue.
 - Release planning (ADR 0017): `dev-platform plan` (readiness, assign, version-check, patches, notes, manifest,
   state), `planning/release-policy.json` (versioning policy, assurance profiles), lifecycle state machine with no
   edge to `accepted` (observed only from a run of the pinned verifier), `release-plan.yml` (assign/report only),

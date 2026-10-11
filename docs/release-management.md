@@ -50,6 +50,7 @@ States: planned, implementation-complete, candidate-built, independently-verifie
 accepted; overlays superseded, revoked.
 ```
 dev-platform plan readiness --milestone v0.2.0 [--snapshot f.json]   # exit 1 while work is open
+dev-platform plan queue                                               # eligible work by priority, held/blocked listed
 dev-platform plan assign [--apply]                                    # PRs inherit the closed issue's milestone
 dev-platform plan version-check --previous 0.1.2 --new 0.2.0 --old-manifest old.json
 dev-platform plan patches --affected 0.1.2 --existing 0.1.2           # advisory -> patch candidates
@@ -61,9 +62,17 @@ dev-platform plan state --milestone v0.2.0 --archive-sha256 .. --ci-verification
 `accepted` appears only if the pinned verifier, run through `--verifier`, reports it.
 
 ## Working with a release awaiting acceptance
-The next milestone continues in parallel. Agents take open issues of the lowest open release milestone, mark no
-issue done without a merged PR, and never create, sign or attribute an authorization. Owner-reserved decisions:
-trust anchors (approver policy, signing keys), acceptance, anything regulated.
+The lowest open release milestone has priority; it is not an exclusive queue (`plan queue`). The next
+milestone, and unrelated work, continue in parallel while a release awaits acceptance, and a held patch or
+pending authorization never blocks them (labels `owner-decision`, `held`, `proposal` mark items that are
+waiting on someone else). Agents mark no issue done without a merged PR and never create, sign or attribute
+an authorization. Owner-reserved decisions: trust anchors (approver policy, signing keys), acceptance, anything
+regulated.
+
+Suspending versus revoking: an unauthenticated notice (an advisory, a report, a file that says "revoked")
+suspends use conservatively and is recorded as a warning, never as a governance decision. Revocation or
+replacement of an approval needs an authenticated, authorized record evaluated by the pinned verifier
+(ADR 0016, 0017).
 
 ## Assurance profiles for consumers
 `planning/release-policy.json` `assurance`: `open-source` (default) or `regulated` (traceability plus external

@@ -23,3 +23,4 @@ revision). Superseded records stay in place.
 | [0015](0015-closure-identity-and-trust-base.md) | Closure identity, SBOM correspondence and the verification trust base | Ratified (owner directive, turn 4) |
 | [0016](0016-authorization-trust-boundary.md) | Authorization trust boundary | Ratified (owner directive, 2026-10-11) |
 | [0017](0017-release-lifecycle-and-planning.md) | Release lifecycle and GitHub-native planning | Proposed |
+| [0018](0018-admission-policy-single-contract.md) | One admission policy contract; the PR checker evaluates, it does not decide | Proposed |

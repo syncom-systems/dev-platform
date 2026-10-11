@@ -89,6 +89,10 @@ run may consume it with `--previous` to carry evidence ([model](verification-mod
   contract; how Bazel graph queries plug in as an impact provider (see investigation).
 
 ## Infra contract conformance
+The profile may carry an optional organization-owned `admission` section (forbidden triggers, protected
+environments) consumed by `dev-platform pr-check`; event trust is derived by the platform and never configurable
+([ADR 0018](adr/0018-admission-policy-single-contract.md)).
+
 `contracts/infra/v1/` is the public conformance kit for `dev-platform.infra/v1`: valid and invalid profiles plus
 fail-closed routing cases, run by `tests/test_infra_contract.py` against `runners.validate_profile`. A private
 provider can run the same kit against its own generator without the platform reading anything private. The

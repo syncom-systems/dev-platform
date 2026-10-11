@@ -1,0 +1,5 @@
+{
+  "schema": "dev-platform.infra/v1",
+  "runners": [],
+  "admission": {"event_trust": {"pull_request_target": "trusted"}}
+}

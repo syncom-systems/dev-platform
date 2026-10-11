@@ -1,12 +1,15 @@
 """Release lifecycle and version policy. This module is a *reader*, never an authority.
 
 States:   planned < implementation-complete < candidate-built < independently-verified
-          < verified-unaccepted < accepted;  overlays: superseded, revoked.
+          < verified-unaccepted < accepted;  overlays: suspended (warning), revoked (authoritative).
 `planned` and `implementation-complete` come from planning data (milestone state) and carry no trust.
 Everything from `candidate-built` on is derived from verification records. `accepted` is observable only
 from a result produced by running the pinned authoritative verifier (`run_verifier`): no planning input
 (milestone closure, labels, merged PRs, a workflow result, a hand-written record) can produce it.
-Overlays only narrow trust, so they need no authentication.
+Overlays only narrow trust, but they are two different things: an unauthenticated safety *warning* suspends
+use conservatively and is never recorded as a governance decision; *revocation* (and replacement of an
+approval) is a governance decision, read only from authenticated, authorized records evaluated by the
+pinned verifier.
 """
 
 from __future__ import annotations
@@ -30,7 +33,7 @@ STATES = (
     "verified-unaccepted",
     "accepted",
 )
-OVERLAYS = ("superseded", "revoked")
+OVERLAYS = ("suspended", "revoked")
 # Forward edges only; there is deliberately no edge that targets `accepted`.
 EDGES = {
     "planned": {"implementation-complete"},
@@ -78,6 +81,9 @@ class Derivation:
     reasons: list[str] = field(default_factory=list)
     overlay: str | None = None
     usable: bool = True
+    governance_decision: bool = False  # True only for an authenticated, authorized decision
+    decisions: list[dict] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     def doc(self) -> dict:
         return {
@@ -85,6 +91,9 @@ class Derivation:
             "base_state": self.state,
             "overlay": self.overlay,
             "usable": self.usable,
+            "governance_decision": self.governance_decision,
+            "decisions": self.decisions,
+            "warnings": self.warnings,
             "reasons": self.reasons,
         }
 
@@ -149,13 +158,35 @@ def derive(facts: dict) -> Derivation:
             else:
                 reasons.append("no authenticated authorization has been evaluated by the pinned verifier")
     d = Derivation(state, reasons)
+    # Unauthenticated notices (any `kind`, even one that says "revoked") are warnings: they suspend use
+    # conservatively but are not governance decisions and never change the authorization outcome.
     for n in facts.get("notices") or []:
-        if n.get("digest") != digest or n.get("kind") not in OVERLAYS:
-            continue
-        if d.overlay is None or n["kind"] == "revoked":
-            d.overlay = n["kind"]
-        d.reasons.append(f"{n['kind']}: {n.get('reference', '')}".strip())
-    d.usable = d.overlay != "revoked"
+        if n.get("digest") == digest:
+            d.warnings.append(f"{n.get('kind', 'warning')}: {n.get('reference', '')}".strip())
+    if d.warnings:
+        d.overlay = "suspended"
+    v = facts.get("verifier")
+    if isinstance(v, VerifierResult):
+        ev = [
+            e
+            for e in (v.record.get("acceptance") or {}).get("authorization_evidence", [])
+            if e.get("status") == "authentic"
+        ]
+        replaced = {sid for e in ev for sid in e.get("supersedes", [])}
+        live = sorted((e for e in ev if e.get("id") not in replaced), key=lambda e: e.get("decided_at", ""))
+        d.decisions = [
+            {
+                "id": e.get("id"),
+                "decision": e.get("decision"),
+                "approver": e.get("approver"),
+                "supersedes": e.get("supersedes", []),
+            }
+            for e in ev
+        ]
+        if live and live[-1].get("decision") == "revoked" and _digest(v.record) == digest:
+            d.overlay = "revoked"
+            d.governance_decision = True
+    d.usable = d.overlay is None
     return d
 
 

@@ -1,0 +1,5 @@
+{
+  "schema": "dev-platform.infra/v1",
+  "runners": [],
+  "admission": {"forbidden_triggers": ["pull_request_target"], "protected_environments": ["org-protected"]}
+}

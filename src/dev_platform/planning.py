@@ -219,3 +219,42 @@ def release_manifest(
         "qualification": qualification,
         "authority": "none: derived index; the verification record and authorization are the evidence",
     }
+
+
+HELD_LABELS = ("owner-decision", "held", "proposal")
+BLOCKED = re.compile(r"\bblocked by #(\d+)", re.I)
+
+
+def work_queue(items: list[dict]) -> dict:
+    """Open issues ordered by milestone priority (lowest open release first, unscheduled last). Priority is
+    not exclusivity: every unheld, unblocked issue in any milestone is eligible concurrently. Held issues
+    (awaiting an owner decision or a proposal) and issues blocked by open issues never block others."""
+    from .lifecycle import _precedence
+
+    open_ = {i["number"] for i in items if not i["is_pr"] and i["state"] == "open"}
+    eligible, held, blocked = [], [], []
+    for i in items:
+        if i["is_pr"] or i["state"] != "open":
+            continue
+        row = {"number": i["number"], "title": i["title"], "milestone": i["milestone"]}
+        deps = sorted(int(n) for n in BLOCKED.findall(i["body"]) if int(n) in open_ and int(n) != i["number"])
+        if set(i["labels"]) & set(HELD_LABELS):
+            held.append(row)
+        elif deps:
+            blocked.append({**row, "blocked_by": deps})
+        else:
+            eligible.append(row)
+
+    def key(r):
+        m = r["milestone"]
+        try:
+            return (0, _precedence(m.lstrip("v")), r["number"]) if m else (1, (0,), r["number"])
+        except Exception:
+            return (1, (0,), r["number"])
+
+    return {
+        "eligible": sorted(eligible, key=key),
+        "held": sorted(held, key=key),
+        "blocked": sorted(blocked, key=key),
+        "note": "milestone order is priority, not an exclusive queue",
+    }

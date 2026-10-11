@@ -43,6 +43,20 @@
       "file": "invalid-not-object.json",
       "valid": false,
       "error": "must be an object"
+    },
+    {
+      "file": "valid-admission.json",
+      "valid": true
+    },
+    {
+      "file": "invalid-admission-event-trust.json",
+      "valid": false,
+      "error": "admission"
+    },
+    {
+      "file": "invalid-admission-trigger.json",
+      "valid": false,
+      "error": "unknown trigger"
     }
   ],
   "routing": [
@@ -103,6 +117,85 @@
       "event": "untrusted",
       "ok": true,
       "runner": "github-ubuntu"
+    }
+  ],
+  "event_trust": [
+    {
+      "event": "pull_request_target",
+      "context": {
+        "head_repo": "a/b",
+        "base_repo": "a/b",
+        "protected_ref": true
+      },
+      "trust": "untrusted"
+    },
+    {
+      "event": "pull_request",
+      "context": {
+        "head_repo": "fork/b",
+        "base_repo": "a/b",
+        "same_repo_pr_opt_in": true
+      },
+      "trust": "untrusted"
+    },
+    {
+      "event": "pull_request",
+      "context": {
+        "head_repo": "a/b",
+        "base_repo": "a/b",
+        "same_repo_pr_opt_in": true
+      },
+      "trust": "trusted"
+    },
+    {
+      "event": "push",
+      "context": {
+        "protected_ref": true
+      },
+      "trust": "trusted"
+    },
+    {
+      "event": "push",
+      "context": {
+        "protected_ref": false
+      },
+      "trust": "untrusted"
+    },
+    {
+      "event": "workflow_run",
+      "context": {
+        "triggering_event_trust": "untrusted"
+      },
+      "trust": "untrusted"
+    },
+    {
+      "event": "unknown",
+      "context": {
+        "protected_ref": true
+      },
+      "trust": "untrusted"
+    }
+  ],
+  "pr_check": [
+    {
+      "profile": "valid-admission.json",
+      "workflow": "on: pull_request_target\njobs:\n  j:\n    runs-on: ubuntu-24.04\n",
+      "admission": "failed"
+    },
+    {
+      "profile": "valid-empty.json",
+      "workflow": "on: pull_request\njobs:\n  j:\n    runs-on: [self-hosted]\n",
+      "admission": "failed"
+    },
+    {
+      "profile": "valid-empty.json",
+      "workflow": "on: pull_request\njobs:\n  j:\n    runs-on: ${{ inputs.r }}\n",
+      "admission": "unavailable"
+    },
+    {
+      "profile": "valid-empty.json",
+      "workflow": "on: pull_request\njobs:\n  j:\n    runs-on: ubuntu-24.04\n",
+      "admission": "ok"
     }
   ]
 }

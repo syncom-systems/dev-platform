@@ -104,14 +104,71 @@ class States(unittest.TestCase):
         d = lifecycle.derive(facts(verifier=verifier_result(rec("verified-unaccepted"))))
         self.assertEqual(d.state, "verified-unaccepted")
 
-    def test_revocation_and_supersession_overlays(self):
-        n = {"kind": "revoked", "digest": D, "reference": "advisory"}
-        d = lifecycle.derive(facts(verifier=verifier_result(rec("accepted")), notices=[n]))
-        self.assertEqual((d.doc()["state"], d.usable), ("revoked", False))
-        d = lifecycle.derive(facts(notices=[{"kind": "superseded", "digest": D}]))
-        self.assertEqual((d.doc()["state"], d.usable), ("superseded", True))
+    def test_unauthenticated_notice_suspends_but_is_not_a_governance_decision(self):
+        for kind in ("revoked", "superseded", "advisory"):
+            d = lifecycle.derive(facts(notices=[{"kind": kind, "digest": D, "reference": "someone said so"}]))
+            doc = d.doc()
+            self.assertEqual(
+                (doc["state"], doc["usable"], doc["governance_decision"]), ("suspended", False, False)
+            )
+            self.assertEqual(doc["decisions"], [])
+            self.assertEqual(
+                doc["base_state"], "verified-unaccepted"
+            )  # the authorization outcome is untouched
         d = lifecycle.derive(facts(notices=[{"kind": "revoked", "digest": "d" * 64}]))
         self.assertIsNone(d.overlay)
+
+    def test_unauthenticated_revocation_cannot_unaccept(self):
+        d = lifecycle.derive(
+            facts(verifier=verifier_result(rec("accepted")), notices=[{"kind": "revoked", "digest": D}])
+        )
+        self.assertEqual(d.base_state if hasattr(d, "base_state") else d.state, "accepted")
+        self.assertEqual((d.overlay, d.governance_decision), ("suspended", False))
+
+    def test_authenticated_revocation_is_a_governance_decision(self):
+        r = rec("verified-unaccepted")
+        r["acceptance"]["authorization_evidence"] = [
+            {
+                "id": "a1",
+                "status": "authentic",
+                "decision": "approved",
+                "decided_at": "2026-10-10T00:00:00Z",
+                "approver": "o",
+            },
+            {
+                "id": "a2",
+                "status": "authentic",
+                "decision": "revoked",
+                "decided_at": "2026-10-11T00:00:00Z",
+                "approver": "o",
+                "supersedes": ["a1"],
+            },
+        ]
+        d = lifecycle.derive(facts(verifier=verifier_result(r)))
+        self.assertEqual((d.doc()["state"], d.usable, d.governance_decision), ("revoked", False, True))
+        self.assertEqual([x["id"] for x in d.decisions], ["a1", "a2"])
+
+    def test_ignored_records_never_revoke(self):
+        r = rec("verified-unaccepted")
+        r["acceptance"]["authorization_evidence"] = [
+            {"id": "x", "status": "ignored", "decision": "revoked", "decided_at": "2026-10-11T00:00:00Z"}
+        ]
+        d = lifecycle.derive(facts(verifier=verifier_result(r)))
+        self.assertEqual((d.overlay, d.governance_decision, d.usable), (None, False, True))
+
+    def test_a_later_authentic_approval_overrides_an_earlier_revocation(self):
+        r = rec("verified-unaccepted")
+        r["acceptance"]["authorization_evidence"] = [
+            {"id": "a", "status": "authentic", "decision": "revoked", "decided_at": "2026-10-10T00:00:00Z"},
+            {
+                "id": "b",
+                "status": "authentic",
+                "decision": "approved",
+                "decided_at": "2026-10-11T00:00:00Z",
+                "supersedes": ["a"],
+            },
+        ]
+        self.assertIsNone(lifecycle.derive(facts(verifier=verifier_result(r))).overlay)
 
     def test_no_transition_targets_accepted(self):
         for cur in lifecycle.STATES:
@@ -433,3 +490,25 @@ class NoSecondAuthority(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Queue(unittest.TestCase):
+    def test_priority_not_exclusivity(self):
+        def it(n, ms, labels=(), body=""):
+            return {"number": n, "title": f"t{n}", "state": "open", "is_pr": False, "merged": False,
+                    "body": body, "labels": list(labels), "milestone": ms}  # fmt: skip
+
+        items = [
+            it(1, "v0.3.0"),
+            it(2, "v0.2.0"),
+            it(3, "v0.1.3", ["owner-decision"]),
+            it(4, None),
+            it(5, "v0.2.0", body="Blocked by #2"),
+            it(6, "v0.2.0", ["proposal"]),
+        ]
+        q = planning.work_queue(items)
+        self.assertEqual(
+            [r["number"] for r in q["eligible"]], [2, 1, 4]
+        )  # held v0.1.3 does not block v0.2.0/v0.3.0
+        self.assertEqual([r["number"] for r in q["held"]], [3, 6])
+        self.assertEqual(q["blocked"][0]["blocked_by"], [2])
