@@ -59,7 +59,9 @@
         "identity_assertion": {
           "type": "object",
           "required": [
-            "provider"
+            "provider",
+            "login",
+            "path"
           ],
           "properties": {
             "provider": {
@@ -108,11 +110,12 @@
           "type": "array",
           "items": {
             "enum": [
-              "platform-baseline"
+              "platform-baseline",
+              "application-release-approval"
             ]
           },
           "minItems": 1,
-          "description": "Exactly what the approval grants. Certification, qualification and consumer migration are never conferrable here."
+          "description": "Exactly what the approval grants: platform-release subjects may confer only platform-baseline, application-release subjects only application-release-approval. Certification, qualification, deployment and consumer migration are never conferrable here."
         }
       }
     },
@@ -130,20 +133,64 @@
       }
     }
   },
-  "if": {
-    "properties": {
-      "subject": {
+  "allOf": [
+    {
+      "if": {
         "properties": {
-          "kind": {
-            "const": "platform-release"
+          "subject": {
+            "properties": {
+              "kind": {
+                "const": "platform-release"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "scope"
+        ],
+        "properties": {
+          "scope": {
+            "properties": {
+              "confers": {
+                "items": {
+                  "const": "platform-baseline"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "subject": {
+            "properties": {
+              "kind": {
+                "const": "application-release"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "scope"
+        ],
+        "properties": {
+          "scope": {
+            "properties": {
+              "confers": {
+                "items": {
+                  "const": "application-release-approval"
+                }
+              }
+            }
           }
         }
       }
     }
-  },
-  "then": {
-    "required": [
-      "scope"
-    ]
-  }
+  ]
 }

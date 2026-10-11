@@ -95,14 +95,23 @@ def validate_authorization(d: dict) -> list[str]:
     by = d.get("decided_by") or {}
     _req(by, ["id", "role"], "decided_by", e)
     ia = by.get("identity_assertion") or {}
-    if not ia.get("provider") or not ia.get("reference"):
+    if ia.get("provider") not in IDENTITY_PROVIDERS:
+        e.append(f"decided_by.identity_assertion.provider {ia.get('provider')!r} is not a supported provider")
+    elif not (ia.get("login") and re.match(r"^authorizations/[A-Za-z0-9._-]+\.json$", str(ia.get("path")))):
+        # The shape the independent verifiers authenticate (tools/verify_*release.py).
         e.append(
-            "decided_by.identity_assertion: provider and reference required "
+            "decided_by.identity_assertion: login and path (authorizations/<name>.json) required "
             "(a name in a commit is not an approval identity)"
         )
-    elif ia["provider"] not in IDENTITY_PROVIDERS:
-        e.append(f"decided_by.identity_assertion.provider {ia['provider']!r} is not a supported provider")
     _req(d.get("basis") or {}, ["kind", "reference"], "basis", e)
+    conferrable = {
+        "platform-release": {"platform-baseline"},
+        "application-release": {"application-release-approval"},
+    }
+    if sub.get("kind") in conferrable:
+        confers = (d.get("scope") or {}).get("confers")
+        if not (isinstance(confers, list) and confers and set(confers) <= conferrable[sub["kind"]]):
+            e.append(f"scope.confers: non-empty subset of {sorted(conferrable[sub['kind']])} required")
     _ts(d.get("decided_at"), "decided_at", e)
     ret = d.get("retention") or {}
     if "class" not in ret or "until" not in ret:

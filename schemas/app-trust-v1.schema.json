@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/app-trust-v1.schema.json",
+  "title": "dev-platform.app-trust/v1",
+  "description": "Who may approve an application's releases and which Dev Platform releases it accepts. Owned by the application, never by the platform: platform approvers have no authority here, and platform release acceptance is not an input (ADR 0019).",
+  "type": "object",
+  "required": [
+    "schema",
+    "authorization",
+    "platform_releases"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dev-platform.app-trust/v1"
+    },
+    "authorization": {
+      "type": "object",
+      "required": [
+        "providers",
+        "evidence_repo",
+        "evidence_ref",
+        "approvers"
+      ],
+      "properties": {
+        "providers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "github-signed-commit"
+            ]
+          }
+        },
+        "evidence_repo": {
+          "type": "string"
+        },
+        "evidence_ref": {
+          "type": "string"
+        },
+        "approvers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "provider",
+              "login",
+              "may_approve",
+              "may_confer",
+              "applications"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "provider": {
+                "enum": [
+                  "github-signed-commit"
+                ]
+              },
+              "login": {
+                "type": "string"
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "may_approve": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "application-release"
+                  ]
+                }
+              },
+              "may_confer": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "application-release-approval"
+                  ]
+                }
+              },
+              "applications": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Explicit application names; there is no wildcard."
+              }
+            }
+          }
+        }
+      }
+    },
+    "platform_releases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "version",
+          "tree_digest"
+        ],
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "tree_digest": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sbom_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      }
+    }
+  }
+}

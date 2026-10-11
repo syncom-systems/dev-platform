@@ -51,10 +51,15 @@ def approval(rel, id="auth-1", at="2026-10-10T12:00:00Z", decision="approved", *
         "decided_by": {
             "id": "qa",
             "role": "release-approver",
-            "identity_assertion": {"provider": "github-signed-commit", "reference": "qa@example.invalid"},
+            "identity_assertion": {
+                "provider": "github-signed-commit",
+                "login": "qa",
+                "path": "authorizations/a.json",
+            },
         },
         "basis": {"kind": "ticket", "reference": "R-1"},
         "decided_at": at,
+        "scope": {"confers": ["application-release-approval"]},
         "retention": {"class": "regulated", "until": None},
     }
     d.update(over)

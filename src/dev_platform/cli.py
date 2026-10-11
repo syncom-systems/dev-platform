@@ -13,6 +13,7 @@ from pathlib import Path
 
 from dev_platform import (
     __version__,
+    appverify,
     engine,
     evidence,
     isolation,
@@ -152,6 +153,17 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--advisory", type=Path, action="append", default=[])
     rs.add_argument("--store", type=Path, default=None, help="platform release store (for advisories)")
     rs.add_argument("--evidence-store", type=Path, help="content-addressed evidence store (results)")
+    rs.add_argument("--app-policy", type=Path, help="application policy (dev-platform.app-trust/v1)")
+    rs.add_argument("--verifier", type=Path, help="tools/verify_app_release.py")
+    rs.add_argument("--verifier-sha256", help="operator pin of --verifier")
+    rs.add_argument("--platform-verifier", type=Path, help="tools/verify_release.py (provider registry)")
+    rs.add_argument("--platform-verifier-sha256", help="operator pin of --platform-verifier")
+    rs.add_argument("--platform-sbom", type=Path, help="SBOM of the platform release (component advisories)")
+    rs.add_argument(
+        "--unauthenticated",
+        action="store_true",
+        help="diagnostic only: shape-check approvals without authenticating them (never an approval)",
+    )
     ev = sub.add_parser("evidence", help="write-once content-addressed evidence store")
     esub = ev.add_subparsers(dest="ecmd", required=True)
     ep = esub.add_parser("put")
@@ -688,6 +700,28 @@ def cmd_rollback(args) -> int:
                 doc = release.load(d)
                 doc["sbom_doc"] = json.loads((d / doc["sbom"]["path"]).read_text())
                 plat[d.name] = doc
+    authenticate = None
+    if not args.unauthenticated:
+        need = ("app_policy", "verifier", "verifier_sha256", "platform_verifier", "platform_verifier_sha256")
+        missing = [f"--{n.replace('_', '-')}" for n in need if not getattr(args, n)]
+        if missing:
+            raise ConfigError(
+                [
+                    f"approvals are authenticated by the pinned independent verifier; missing {missing} "
+                    "(or pass --unauthenticated for a diagnostic that is never an approval)"
+                ]
+            )
+        authenticate = appverify.AppVerifier(
+            args.verifier,
+            args.verifier_sha256,
+            args.platform_verifier,
+            args.platform_verifier_sha256,
+            args.app_policy,
+            results=results,
+            authorizations=args.authorization,
+            advisories=args.advisory,
+            platform_sbom=args.platform_sbom,
+        )
     out = provenance.select_rollback(
         args.application,
         args.current,
@@ -696,6 +730,7 @@ def cmd_rollback(args) -> int:
         _load_json(args.authorization),
         advisories=_load_json(args.advisory),
         platform_releases=plat,
+        authenticate=authenticate,
     )
     print(json.dumps(out, indent=2, sort_keys=True))
     return EXIT_OK if out["eligible"] else EXIT_UNSATISFIED
