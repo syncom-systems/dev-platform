@@ -35,6 +35,21 @@
       "const": true,
       "description": "Cannot be disabled: a stable release is accepted only with an authenticated approval."
     },
+    "continuity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["predecessor"],
+      "properties": {
+        "predecessor": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "object", "additionalProperties": false,
+             "required": ["version", "archive_sha256", "tree_digest"],
+             "properties": {
+               "version": {"type": "string"},
+               "archive_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+               "tree_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}]}}
+    },
     "require_environment_evidence": {
       "type": "boolean"
     },
