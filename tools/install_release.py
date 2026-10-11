@@ -95,6 +95,8 @@ def download(repo: str, version: str, dest: Path) -> Path:
             name,
             "--pattern",
             f"dev-platform-{version}.build-environment.json",
+            "--pattern",
+            f"dev-platform-{version}.continuity.json",
             "--dir",
             str(dest),
         ],
@@ -166,10 +168,13 @@ def install(
     allow_prerelease=False,
     allow_unaccepted=False,
     environment=None,
+    continuity_record=None,
     expect_tree: str | None = None,
     previous_record: dict | None = None,
 ) -> tuple[Path, dict]:
     kw = {"gh": gh} if gh else {}
+    if continuity_record is not None:  # older pinned verifiers have no such parameter and no such policy key
+        kw["continuity"] = continuity_record
     record = verifier.verify(
         archive,
         exp,
@@ -251,6 +256,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--environment", type=Path, help="build-environment record (default: next to the archive)"
     )
+    ap.add_argument(
+        "--continuity", type=Path, help="predecessor-continuity record (default: next to the archive)"
+    )
     ap.add_argument("--allow-prerelease", action="store_true")
     ap.add_argument("--allow-unaccepted", action="store_true")
     a = ap.parse_args(argv)
@@ -262,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
         with tempfile.TemporaryDirectory(prefix="dp-install-") as tmp:
             archive = a.archive or download(a.repo, a.version, Path(tmp))
             env_file = a.environment or archive.parent / f"dev-platform-{a.version}.build-environment.json"
+            cont_file = a.continuity or archive.parent / f"dev-platform-{a.version}.continuity.json"
             rev = a.source_revision or resolve_revision(f"https://github.com/{a.repo}", a.version)
             exp = {
                 "version": a.version,
@@ -282,6 +291,7 @@ def main(argv: list[str] | None = None) -> int:
                 allow_prerelease=a.allow_prerelease,
                 allow_unaccepted=a.allow_unaccepted,
                 environment=env_file if env_file.is_file() else None,
+                continuity_record=cont_file if cont_file.is_file() else None,
                 expect_tree=a.tree_sha256,
                 previous_record=prev,
             )
