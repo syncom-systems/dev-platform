@@ -329,6 +329,64 @@ def effective(verdicts: list[dict]) -> dict | None:
     return live[-1] if live[-1]["decision"] == "approved" else None
 
 
+# ---------------------------------------------------------------- evidence bundle
+
+BUNDLE_SCHEMA = "dev-platform.app-release-evidence/v1"
+_BUNDLE_PATH = re.compile(r"^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$")
+BUNDLE_KINDS = ("release", "result", "authorization", "advisory", "sbom")
+
+
+def load_bundle(directory: Path, pin: str) -> tuple[list[str], dict]:
+    """Check an evidence bundle against the operator's pin of its manifest. (problems, files by kind).
+
+    The manifest's own sha256 is the pin: it fixes every listed file's digest, so one operator-held digest
+    makes the whole bundle immutable. Unlisted files, missing files, changed bytes, unsafe paths and a release
+    entry that is not exactly one are all refusals.
+    """
+    root = Path(directory)
+    files: dict[str, list[Path]] = {k: [] for k in BUNDLE_KINDS}
+    problems: list[str] = []
+    mpath = root / "manifest.json"
+    try:
+        raw = mpath.read_bytes()
+        manifest = json.loads(raw)
+    except (OSError, ValueError) as e:
+        return [f"manifest unreadable: {e}"], files
+    if hashlib.sha256(raw).hexdigest() != pin:
+        return [f"manifest sha256 {hashlib.sha256(raw).hexdigest()} does not match the pin {pin}"], files
+    if not isinstance(manifest, dict) or manifest.get("schema") != BUNDLE_SCHEMA:
+        return [f"manifest schema must be {BUNDLE_SCHEMA}"], files
+    entries = manifest.get("entries")
+    if not isinstance(entries, list) or not entries:
+        return ["manifest has no entries"], files
+    listed: set[str] = {"manifest.json"}
+    for e in entries:
+        path = e.get("path") if isinstance(e, dict) else None
+        if not (isinstance(path, str) and _BUNDLE_PATH.match(path) and ".." not in path.split("/")):
+            problems.append(f"unsafe or missing path {path!r}")
+            continue
+        if e.get("kind") not in BUNDLE_KINDS or not _SHA.match(str(e.get("sha256"))):
+            problems.append(f"{path}: bad kind or digest")
+            continue
+        f = root / path
+        if path in listed:
+            problems.append(f"{path}: listed twice")
+        elif f.is_symlink() or not f.is_file():
+            problems.append(f"{path}: missing (or not a regular file)")
+        elif sha256_file(f) != e["sha256"]:
+            problems.append(f"{path}: bytes differ from the manifest")
+        else:
+            files[e["kind"]].append(f)
+        listed.add(path)
+    present = {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file() or p.is_symlink()}
+    problems += [f"{x}: present but not listed in the manifest" for x in sorted(present - listed)]
+    if len(files["release"]) != 1:
+        problems.append("exactly one release entry is required")
+    elif manifest.get("release_sha256") != canonical_digest(json.loads(files["release"][0].read_text())):
+        problems.append("manifest release_sha256 is not the digest of its release entry")
+    return problems, files
+
+
 # ---------------------------------------------------------------- verification
 
 
@@ -347,11 +405,14 @@ def verify(
     platform_sbom: Path | None = None,
     authorizations: list[Path] = (),
     gh=None,
+    extra_checks: list[tuple[str, bool, str]] = (),
     now: datetime | None = None,
 ) -> dict:
     now = now or datetime.now(UTC)
     gh = gh or V.default_gh
     rec = Record()
+    for cid, ok, detail in extra_checks:
+        rec.add(cid, ok, detail)
     coverage = {"verified": [], "not_evaluated": []}
     full = mode == "release"
     try:
@@ -515,7 +576,11 @@ def _finish(rec, subject, coverage, verdicts, auth, mode) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("release", type=Path, help="dev-platform.app-release/v1 record")
+    ap.add_argument(
+        "release", type=Path, nargs="?", help="dev-platform.app-release/v1 record (or use --bundle)"
+    )
+    ap.add_argument("--bundle", type=Path, help="evidence bundle directory (manifest.json + files)")
+    ap.add_argument("--manifest-sha256", help="operator pin of the bundle's manifest.json")
     ap.add_argument(
         "--policy", type=Path, required=True, help="application policy (dev-platform.app-trust/v1)"
     )
@@ -540,6 +605,23 @@ def main(argv: list[str] | None = None) -> int:
         print(f"policy unreadable: {e}", file=sys.stderr)
         return 2
     V = load_platform_verifier(a.platform_verifier, a.platform_verifier_sha256)
+    extra: list[tuple[str, bool, str]] = []
+    if a.bundle:
+        if not a.manifest_sha256:
+            print("--bundle requires --manifest-sha256 (an operator pin)", file=sys.stderr)
+            return 2
+        problems, files = load_bundle(a.bundle, a.manifest_sha256)
+        extra.append(("evidence-bundle", not problems, "; ".join(problems)))
+        if problems:
+            files = {k: [] for k in BUNDLE_KINDS}  # nothing from a bundle that failed its pin is used
+        a.release = a.release or (files["release"][0] if files["release"] else a.bundle / "manifest.json")
+        a.result += files["result"]
+        a.authorization += files["authorization"]
+        a.advisory += files["advisory"]
+        a.platform_sbom = a.platform_sbom or (files["sbom"][0] if files["sbom"] else None)
+    if a.release is None:
+        print("a release record or a valid --bundle is required", file=sys.stderr)
+        return 2
     arts = {}
     for item in a.artifact:
         name, sep, path = item.partition("=")
@@ -560,6 +642,7 @@ def main(argv: list[str] | None = None) -> int:
         advisories=a.advisory,
         platform_sbom=a.platform_sbom,
         authorizations=a.authorization,
+        extra_checks=extra,
     )
     text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
     if a.out:

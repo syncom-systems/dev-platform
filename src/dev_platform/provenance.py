@@ -138,13 +138,15 @@ def select_rollback(
     advisories: list[dict] = (),
     platform_releases: dict | None = None,
     authenticate=None,
+    immutable: set[str] | None = None,
 ) -> dict:
     """Eligible earlier releases (most recently approved first) and why each other one is not.
 
     With `authenticate` (an `appverify.AppVerifier`) every candidate is judged by the independent verifier:
     authenticated, authorized, exactly bound, in force. Without it only the shape of the approval records is
     checked and the output says `approval_authentication: unverified`; that mode is diagnostic and is never
-    an approval (ADR 0016, ADR 0019).
+    an approval (ADR 0016, ADR 0019). With `immutable` (digests of releases from pinned evidence bundles)
+    anything else is ineligible: a rollback target is an exact, previously approved, immutable release.
     """
     plat = platform_releases or {}
     eligible, rejected = [], []
@@ -153,6 +155,11 @@ def select_rollback(
         if app.get("name") != application or app.get("version") == current:
             continue
         entry = {"version": app.get("version"), "release_sha256": records.canonical_digest(rel)}
+        if immutable is not None and entry["release_sha256"] not in immutable:
+            rejected.append(
+                {**entry, "reasons": ["release record is not from a pinned evidence bundle (not immutable)"]}
+            )
+            continue
         if authenticate is not None:
             rec = authenticate(rel)
             ap = rec["approval"]

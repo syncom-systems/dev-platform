@@ -93,6 +93,61 @@ def build_head(work: Path) -> tuple[bool, str, str, str]:
     return True, "", cur, tree
 
 
+def app_release_step(c: dict, cd: Path, work: Path, result: Path, env: dict, ver: str, tree: str) -> dict:
+    """Application-release chain over the pilot's result (v0.3.0). No approval exists for a pilot, so the
+    only correct outcomes are a refusal to assemble (uncertified result) or `unapproved`, also when an
+    unsigned, forged approval is offered. The consumer is never modified beyond its throwaway checkout."""
+    out: dict = {}
+    locks = [n for n in ("Cargo.lock", "MODULE.bazel.lock", "uv.lock") if (cd / n).is_file()]
+    if not locks:
+        return {"app_release": "skipped: no lock file"}
+    art = work / "source.tar"
+    art.write_bytes(subprocess.run(["git", "-C", str(cd), "archive", "--format=tar", "HEAD"],
+                                   capture_output=True, check=True).stdout)  # fmt: skip
+    rev = run(["git", "-C", str(cd), "rev-parse", "HEAD"]).stdout.strip()
+    rel = work / "app-release.json"
+    asm = run([sys.executable, "-m", "dev_platform", "provenance", "assemble", "--result", str(result),
+               "--name", c["id"], "--app-version", "0.0.0-pilot", "--source-uri", f"https://github.com/{c['repo']}",
+               "--artifact", f"source.tar={sha(art)}", *[x for n in locks for x in ("--lock", str(cd / n))],
+               "--root", str(cd), "--out", str(rel)], env=env)  # fmt: skip
+    if asm.returncode:
+        return {"app_release": "refused", "app_release_reason": (asm.stderr or asm.stdout).strip()[-300:]}
+    out["app_release"] = "assembled"
+    policy = work / "app-trust.json"
+    policy.write_text(json.dumps({
+        "schema": "dev-platform.app-trust/v1",
+        "authorization": {"providers": ["github-signed-commit"], "evidence_repo": c["repo"],
+                          "evidence_ref": "main", "approvers": []},
+        "platform_releases": [{"version": ver, "tree_digest": tree}]}))  # fmt: skip
+    forged = work / "forged.json"
+    forged.write_text(json.dumps({
+        "schema": "dev-platform.authorization/v1", "id": "forged",
+        "subject": {"kind": "application-release", "digest": json_digest(json.loads(rel.read_text()))},
+        "decision": "approved",
+        "decided_by": {"id": "nobody", "role": "owner", "identity_assertion": {
+            "provider": "github-signed-commit", "login": "nobody", "path": "authorizations/forged.json"}},
+        "basis": {"kind": "pilot", "reference": "forged on purpose"}, "decided_at": "2026-01-01T00:00:00Z",
+        "scope": {"confers": ["application-release-approval"]},
+        "retention": {"class": "standard", "until": None}}))  # fmt: skip
+    pv = ROOT / "tools" / "verify_release.py"
+    base = [sys.executable, "-I", str(ROOT / "tools" / "verify_app_release.py"), str(rel), "--policy", str(policy),
+            "--platform-verifier", str(pv), "--platform-verifier-sha256", sha(pv), "--mode", "release",
+            "--source-revision", rev, "--root", str(cd), "--result", str(result),
+            *[x for n in locks for x in ("--lock", str(cd / n))], "--artifact", f"source.tar={art}"]  # fmt: skip
+    for key, extra in (
+        ("app_release_state", []),
+        ("app_release_forged_state", ["--authorization", str(forged)]),
+    ):
+        o = work / f"{key}.json"
+        run([*base, *extra, "--out", str(o)])
+        out[key] = json.loads(o.read_text())["approval"]["state"] if o.is_file() else "no-record"
+    return out
+
+
+def json_digest(doc) -> str:
+    return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--consumer-id", required=True)
@@ -199,6 +254,7 @@ def main(argv=None) -> int:
             findings.append(
                 {"step": "certification", "detail": "not certified", "blockers": cert.get("blockers")}
             )
+        rec["steps"].update(app_release_step(c, cd, work, result, env, ver, tree))
     else:
         findings.append({"step": "check", "detail": "no result record produced"})
     return finish()

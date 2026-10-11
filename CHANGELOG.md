@@ -6,6 +6,9 @@
   (`dev-platform.app-trust/v1`), binds source/dependencies/platform/toolchain/evidence/artifacts to the exact release
   digest, and handles revocation, supersession and advisories. `rollback select` now requires the pinned verifier
   (`--unauthenticated` is a labelled diagnostic). Shape validator aligned with the verified assertion shape.
+- Immutable evidence bundles (`dev-platform evidence bundle|bundle-verify`, `verify_app_release.py --bundle`), retention
+  contract, `rollback select --bundle`; qualification `--app-release` rejection cases over real results; pilot assembles
+  and refuses to approve (flight). Stray `uv.lock` removed.
 - Owner steps for formal acceptance of 0.2.1: `docs/owner-acceptance-0.2.1.md` (nothing pre-made).
 
 ## 0.2.1 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)

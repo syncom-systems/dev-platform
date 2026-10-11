@@ -45,6 +45,14 @@ nothing re-derived the links (source, dependencies, platform release, toolchain 
    and reports `approval_authentication: verified`. `--unauthenticated` keeps the old shape-check as a labelled
    diagnostic (`unverified`), never an approval.
 
+9. **Evidence is immutable by one pin.** `dev-platform.app-release-evidence/v1` bundles (`src/dev_platform/bundle.py`)
+   list every file by sha256; the manifest digest is pinned by the operator. The independent verifier reads bundles
+   itself (`--bundle`, `--manifest-sha256`) and uses nothing from a bundle that fails its pin. Rollback targets must
+   come from pinned bundles unless `--allow-unbundled`.
+10. **Exercised against real consumers.** `tools/qualify.py --app-release` runs the chain over the real certified
+   result of each qualification fixture (13 accept/reject cases; GitHub is a double at the `gh api` boundary);
+   `tools/pilot.py` assembles the flight pilot's result and requires `unapproved`, even with a forged approval.
+
 ## Consequences
 - The shape validator (`records.validate_authorization`) now requires the assertion shape the verifiers actually
   authenticate (`login`, `path`) and a `scope.confers` matching the subject kind; it previously asked for a
