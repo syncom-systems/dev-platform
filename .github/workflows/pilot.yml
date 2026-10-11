@@ -1,0 +1,52 @@
+# Genuine consumer pilots (v0.2.0): install a published release with the trusted installer, configure and run
+# it against a real public consumer at a pinned commit. Read-only; nothing is pushed to the consumer and no
+# acceptance or qualification is implied. See tools/pilot.py and pilot/consumers.json.
+name: pilot
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ["pilot/**", "tools/pilot.py", ".github/workflows/pilot.yml"]
+permissions:
+  contents: read
+jobs:
+  pilot:
+    name: pilot ${{ matrix.consumer }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+        consumer: [flight]
+        include:
+          - {consumer: flight, repo: syncom-systems/flight, commit: a7e3765df73dab120ea240f70cc39cdc4354141c, profile: rust-cargo}
+    env: {GH_TOKEN: "${{ github.token }}"}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ matrix.repo }}
+          ref: ${{ matrix.commit }}
+          path: pilot-consumer
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: {python-version: "3.14"}
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+        with: {version: "0.12.3"}
+      - name: The consumer commit must equal the pinned one
+        run: test "$(git -C pilot-consumer rev-parse HEAD)" = "${{ matrix.commit }}"
+      - name: Realize the pinned toolchain profile
+        run: python tools/setup_env.py ${{ matrix.profile }}
+      - name: Pilot (install, configure, execute)
+        run: |
+          export PATH="$PWD/.devenv/bin:$PWD/.devenv/rust/bin:$PATH"
+          mkdir -p pilot-work
+          python tools/pilot.py --consumer-id ${{ matrix.consumer }} --consumer-dir pilot-consumer \
+            --work pilot-work --out pilot-result.json
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```json'; cat pilot-result.json 2>/dev/null || echo '{"error":"no result"}'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with: {name: "pilot-${{ matrix.consumer }}-${{ matrix.os }}", path: "pilot-result.json"}
