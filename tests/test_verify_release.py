@@ -16,7 +16,9 @@ V = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(V)
 
 REV = "c" * 40
-REAL_POLICY = json.loads((ROOT / "trust" / "policy.json").read_text())
+SHIPPED_POLICY = json.loads((ROOT / "trust" / "policy.json").read_text())
+# Continuity has its own tests (tests/test_continuity.py); the rest exercise other properties.
+REAL_POLICY = {k: v for k, v in SHIPPED_POLICY.items() if k != "continuity"}
 # Most tests exercise other properties; environment evidence has its own tests below.
 POLICY = {**REAL_POLICY, "require_environment_evidence": False}
 REPO = "syncom-systems/dev-platform"

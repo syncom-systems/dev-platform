@@ -53,12 +53,19 @@ Verification records are attached to the release and retained in git under `rele
 Fresh machine: obtain the archive, verify the attestation with the independent verifier, check the
 archive digest, unpack to the store (never executing release code first), then run normally.
 
-## Self-release
-A result produced by a release about itself (`mode = self`) is never certifiable. Release N is
-accepted when (a) the workflow attested it at a protected tag, and (b) pinned release N-1 verified it
-by running the full stage over N's source. The first release has no N-1; its acceptance is an owner
-action (verify the attestation, pin the digest) and must be recorded as such. **No release has been
-built, attested or accepted yet.**
+## Self-release and predecessor continuity
+A result produced by a release about itself (`mode = self`) is never certifiable. `trust/policy.json` names
+the predecessor N-1 (version, archive sha256, tree digest); `null` declares a first release. For release N,
+`tools/run_continuity.py` (in a job with a read-only token and no OIDC or attestation permissions) downloads N-1, has the independent
+verifier check it against those pins, then runs N-1's own `dev_platform check --stage full` in N's checkout.
+The resulting `dev-platform.continuity/v1` record is attested by the release workflow and published with the
+release; `tools/verify_release.py --continuity` fails verification unless the record names exactly the policy's
+predecessor, was produced over N's source revision and archive, shows N-1 itself verified (it may be
+verified-unaccepted) and a passing full stage, and carries a valid attestation.
+
+Continuity is *evidence, never authority*: it cannot make N accepted (only an authenticated authorization can),
+and N-1 being accepted does not either. The operator's pins stay the root of trust. The first release's
+acceptance is an owner action recorded as an authorization (ADR 0016).
 
 ## Immutable releases (observed behavior)
 See `releases/probes/immutability-2026-10-10.md` for the probe, including failure cases. Summary: a

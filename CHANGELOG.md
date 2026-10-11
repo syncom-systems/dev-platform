@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Predecessor continuity (#4): `tools/run_continuity.py`, `dev-platform.continuity/v1`, `continuity` check in the
+  verifier, release workflow jobs `continuity`/`attest-continuity`; policy pins v0.1.2 as predecessor. Evidence only.
 - ADR 0018: single admission policy contract. `runners.event_trust` (normative), optional `admission` section in
   `dev-platform.infra/v1`, `dev-platform pr-check` (violations / incomplete / indicators), conformance cases.
 - Lifecycle: unauthenticated notices only suspend (warning); revocation is read from the pinned verifier's

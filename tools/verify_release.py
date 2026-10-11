@@ -282,6 +282,54 @@ def check_environment(
     check_attestation(rec, path, sha256_file(path), exp, policy, gh, None, label="environment-attestation")
 
 
+# ---- predecessor continuity ----------------------------------------------------------------------
+CONTINUITY_SCHEMA = "dev-platform.continuity/v1"
+
+
+def check_continuity(
+    rec: Record, path: Path | None, exp: dict, archive_sha: str, policy: dict, gh: GhRunner
+) -> None:
+    """Release N-1 (named and digest-pinned by the policy) verified N's source by running the full stage.
+    This is continuity *evidence*: it never grants authority (N-1 may itself be unaccepted) and the operator's
+    pins remain the root of trust. A policy that names no predecessor key is a legacy policy; an explicit
+    null predecessor declares a first release."""
+    if "continuity" not in policy:
+        return
+    pred = (policy["continuity"] or {}).get("predecessor")
+    if pred is None:
+        rec.add("continuity", True, "first release: the policy declares no predecessor")
+        return
+    if path is None:
+        rec.add(
+            "continuity", False, f"policy names predecessor {pred.get('version')}; continuity record required"
+        )
+        return
+    try:
+        doc = json.loads(Path(path).read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        rec.add("continuity", False, f"unreadable: {e}")
+        return
+    problems = []
+    if doc.get("schema") != CONTINUITY_SCHEMA:
+        problems.append(f"schema must be {CONTINUITY_SCHEMA}")
+    subj, p, st = doc.get("subject") or {}, doc.get("predecessor") or {}, doc.get("stage") or {}
+    if subj.get("archive_sha256") != archive_sha:
+        problems.append("record is about a different archive")
+    if subj.get("source_revision") != exp["source_revision"] or st.get("revision") != exp["source_revision"]:
+        problems.append("predecessor did not run over this source revision")
+    for k in ("version", "archive_sha256", "tree_digest"):
+        if p.get(k) != pred.get(k):
+            problems.append(f"predecessor {k} differs from the policy pin")
+    v = p.get("verification") or {}
+    if v.get("state") not in ("verified-unaccepted", "accepted") or v.get("all_checks_passed") is not True:
+        problems.append("predecessor was not itself verified")
+    if st.get("name") != "full" or st.get("exit") != 0 or st.get("admission") != "admitted":
+        problems.append("predecessor's full stage over this source did not pass")
+    rec.add("continuity", not problems, "; ".join(problems))
+    path = Path(path)
+    check_attestation(rec, path, sha256_file(path), exp, policy, gh, None, label="continuity-attestation")
+
+
 # ---- owner authorization -------------------------------------------------------------------------
 # Distinct questions, answered in this order, each failing closed:
 #   authenticity  - who made this record? (provider-specific evidence, verified here, never asserted)
@@ -466,6 +514,7 @@ def verify(
     bundle: Path | None = None,
     sbom_bundle: Path | None = None,
     environment: Path | None = None,
+    continuity: Path | None = None,
     now: datetime | None = None,
 ) -> dict:
     rec = Record()
@@ -557,6 +606,7 @@ def verify(
     )
 
     check_environment(rec, environment, manifest, exp, policy, gh)
+    check_continuity(rec, continuity, exp, archive_sha, policy, gh)
     prerelease = "-" in exp["version"]
     auth, verdicts = (
         (None, [])
@@ -608,6 +658,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bundle", type=Path, help="offline provenance attestation bundle")
     ap.add_argument("--sbom-bundle", type=Path, help="offline SBOM attestation bundle")
     ap.add_argument("--environment", type=Path, help="release build-environment record (attested)")
+    ap.add_argument("--continuity", type=Path, help="predecessor continuity record (attested)")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     policy = json.loads(a.policy.read_text())
@@ -630,6 +681,7 @@ def main(argv: list[str] | None = None) -> int:
         bundle=a.bundle,
         sbom_bundle=a.sbom_bundle,
         environment=a.environment,
+        continuity=a.continuity,
     )
     text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
     if a.out:
