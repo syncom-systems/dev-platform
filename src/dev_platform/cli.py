@@ -143,6 +143,12 @@ def build_parser() -> argparse.ArgumentParser:
     ep.add_argument("record", type=Path, nargs="+")
     ev2 = esub.add_parser("verify", help="re-derive every stored digest; exit 1 on any mismatch")
     ev2.add_argument("--store", type=Path, required=True)
+    pc = sub.add_parser(
+        "pr-check",
+        help="static workflow check against the infra profile (violations, incomplete, indicators)",
+    )
+    pc.add_argument("--workflows", type=Path, default=Path(".github/workflows"))
+    pc.add_argument("--infra-profile", type=Path, default=None, help="dev-platform.infra/v1 incl. admission")
     pl = sub.add_parser("plan", help="release planning: readiness, versions, notes (never grants acceptance)")
     psub = pl.add_subparsers(dest="pcmd", required=True)
     for name, hlp in (
@@ -622,6 +628,10 @@ def _plan_snapshot(args) -> dict:
 def cmd_plan(args) -> int:
     from . import lifecycle, planning
 
+    if args.pcmd == "queue":
+        snap = _j(args.snapshot) if args.snapshot else planning.fetch_unassigned(args.repo)
+        print(json.dumps(planning.work_queue(snap["items"]), indent=2, sort_keys=True))
+        return EXIT_OK
     if args.pcmd == "assign":
         snap = _j(args.snapshot) if args.snapshot else planning.fetch_unassigned(args.repo)
         plan = planning.plan_assignments(snap)
@@ -689,6 +699,19 @@ def cmd_plan(args) -> int:
     return EXIT_OK
 
 
+def cmd_pr_check(args) -> int:
+    from . import prcheck
+
+    files = {str(p): p.read_text() for p in sorted(args.workflows.glob("*.y*ml"))}
+    profile = _j(args.infra_profile) if args.infra_profile else None
+    try:
+        out = prcheck.check(files, profile)
+    except ValueError as e:
+        raise ConfigError([str(e)]) from None
+    print(json.dumps(out, indent=2, sort_keys=True))
+    return EXIT_OK if out["admission"] == "ok" else EXIT_UNSATISFIED
+
+
 def cmd_digest(args) -> int:
     print(tree_digest(args.path))
     return EXIT_OK
@@ -707,6 +730,7 @@ _COMMANDS = {
     "evidence": cmd_evidence,
     "release": cmd_release,
     "plan": cmd_plan,
+    "pr-check": cmd_pr_check,
     "validate": cmd_validate,
     "affected": cmd_affected,
 }

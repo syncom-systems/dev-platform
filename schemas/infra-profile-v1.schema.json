@@ -8,6 +8,9 @@
   "required": ["schema", "runners"],
   "properties": {
     "schema": {"const": "dev-platform.infra/v1"},
+    "admission": {"type": "object", "additionalProperties": false, "description": "Optional, organization-owned admission policy for the generic PR checker (ADR 0018). Event trust is never configurable here.", "properties": {
+      "forbidden_triggers": {"type": "array", "uniqueItems": true, "items": {"enum": ["push", "schedule", "workflow_dispatch", "pull_request", "pull_request_target", "workflow_run", "release"]}},
+      "protected_environments": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}}},
     "runners": {"type": "array", "items": {
       "type": "object",
       "additionalProperties": false,

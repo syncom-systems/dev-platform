@@ -5,7 +5,7 @@ import unittest
 
 from dev_platform.config import RunnerSpec
 from dev_platform.errors import ConfigError
-from dev_platform.runners import load_profile, route, validate_profile
+from dev_platform.runners import event_trust, load_profile, route, validate_profile
 from tests.helpers import ROOT
 
 KIT = ROOT / "contracts" / "infra" / "v1"
@@ -46,6 +46,20 @@ class InfraContract(unittest.TestCase):
                     c["event"],
                 )
                 self.assertEqual((r.ok, r.runner_id), (c["ok"], c["runner"]))
+
+    def test_event_trust_derivation_is_normative(self):
+        for c in CASES["event_trust"]:
+            with self.subTest(c):
+                self.assertEqual(event_trust(c["event"], **c["context"]), c["trust"])
+
+    def test_pr_check_admission(self):
+        from dev_platform import prcheck
+
+        for c in CASES["pr_check"]:
+            with self.subTest(c["workflow"]):
+                profile = json.loads((KIT / c["profile"]).read_text())
+                r = prcheck.check({"w.yml": c["workflow"]}, profile)
+                self.assertEqual(r["admission"], c["admission"])
 
     def test_schema_ids_use_the_real_org(self):
         for p in (ROOT / "schemas").glob("*.json"):
