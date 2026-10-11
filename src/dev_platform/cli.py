@@ -15,6 +15,7 @@ from dev_platform import (
     __version__,
     appverify,
     bundle,
+    depsubmit,
     engine,
     evidence,
     isolation,
@@ -195,6 +196,18 @@ def build_parser() -> argparse.ArgumentParser:
     ebv = esub.add_parser("bundle-verify", help="check a bundle against the pinned manifest digest")
     ebv.add_argument("bundle", type=Path)
     ebv.add_argument("--manifest-sha256", required=True)
+    ds = sub.add_parser(
+        "dependency-snapshot",
+        help="GitHub dependency-submission snapshot of the toolchain manifest's tool components",
+    )
+    ds.add_argument("--manifest", type=Path, default=Path("toolchains/manifest.json"))
+    ds.add_argument("--profile", action="append", default=[], help="limit to these profiles")
+    ds.add_argument("--platform-version", required=True)
+    ds.add_argument("--sha", required=True, help="commit the snapshot describes")
+    ds.add_argument("--ref", required=True, help="e.g. refs/heads/main")
+    ds.add_argument("--job-id", required=True)
+    ds.add_argument("--scanned", required=True, help="RFC 3339 UTC timestamp")
+    ds.add_argument("--out", type=Path)
     pc = sub.add_parser(
         "pr-check",
         help="static workflow check against the infra profile (violations, incomplete, indicators)",
@@ -699,6 +712,24 @@ def cmd_provenance(args) -> int:
     return EXIT_OK
 
 
+def cmd_dependency_snapshot(args) -> int:
+    doc = depsubmit.snapshot(
+        json.loads(args.manifest.read_text()),
+        platform_version=args.platform_version,
+        sha=args.sha,
+        ref=args.ref,
+        scanned=args.scanned,
+        job_id=args.job_id,
+        profiles=args.profile or None,
+        manifest_file=str(args.manifest),
+    )
+    text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
+    if args.out:
+        args.out.write_text(text)
+    print(text, end="")
+    return EXIT_OK
+
+
 def cmd_evidence(args) -> int:
     if args.ecmd == "put":
         for f in args.record:
@@ -947,6 +978,7 @@ _COMMANDS = {
     "provenance": cmd_provenance,
     "rollback": cmd_rollback,
     "evidence": cmd_evidence,
+    "dependency-snapshot": cmd_dependency_snapshot,
     "release": cmd_release,
     "plan": cmd_plan,
     "pr-check": cmd_pr_check,

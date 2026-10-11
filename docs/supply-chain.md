@@ -22,10 +22,12 @@ Researched from GitHub documentation; not yet exercised against this repository.
   A `[platform]` pin in `dev-platform.toml` is not a recognized manifest and `dev-platform` is not an
   advisory-database package, so **no native alert will fire for it**. We do not rely on one.
 - **Dependency submission API** accepts snapshots of dependencies not visible in manifests and shows
-  them in the dependency graph, but alerts still require a supported ecosystem. *(planned)* Consumer
-  workflow submits the platform release and its tool components (as their real ecosystems, e.g.
-  `pkg:pypi/ruff@0.17.0`) so ecosystem tools such as ruff *do* get native alerts. Tool components
-  with supported purls are the part GitHub can alert on.
+  them in the dependency graph, but alerts still require a supported ecosystem. `dev-platform dependency-snapshot`
+  builds the snapshot from the toolchain manifest (`.github/workflows/dependency-submission.yml` submits it for this
+  repository; a consumer runs the same command from its pinned release). It submits the tool components that
+  declare a purl (as their real ecosystems, e.g. `pkg:pypi/ruff@0.17.0`), so ecosystem tools such as ruff
+  can get native alerts. Only supported purl types can alert; `pkg:generic`/`pkg:github` components appear in the
+  graph without alerts. The platform release itself is not submitted (not an advisory-database package).
 - **Repository security advisories** on this repo let us publish an advisory for `dev-platform`
   itself *(planned)*; the platform's own `advisory/v1` + `affected` remains the cross-consumer index.
 - **Artifact attestations** (Sigstore; verified with `gh attestation verify`) provide provenance
