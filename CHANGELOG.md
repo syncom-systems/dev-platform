@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Authorization trust boundary (ADR 0016): the verifier authenticates authorization records through a provider
+  registry, enforces an approver registry in the trust policy, scope, validity, supersession and revocation; the
+  separate validate_authorization tool is removed. Policy switch to waive authorization removed. Fixes the defect
+  that any non-git provider name sufficed for `accepted` (v0.1.0 had no authorization and is unaffected).
 - Infra contract conformance kit (contracts/infra/v1) and strict profile validation; schema $ids use the real org.
 - Version-keyed toolchain store; scrubbed-environment execution mode (docs/execution-isolation.md).
 - Owner acceptance packet for 0.1.0 (releases/0.1.0/ACCEPTANCE-PACKET.md), unsigned authorization template, and

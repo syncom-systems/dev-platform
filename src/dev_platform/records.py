@@ -18,7 +18,10 @@ APP_RELEASE = "dev-platform.app-release/v1"
 AUTHORIZATION = "dev-platform.authorization/v1"
 ADVISORY = "dev-platform.advisory/v1"
 _SHA = re.compile(r"^[0-9a-f]{64}$")
-_UNTRUSTED_IDENTITY_PROVIDERS = {"git-commit-author", "git-config"}
+# Explicit registry: an identity provider is supported only if listed here AND the consuming verifier
+# implements its verification. Anything else (including git authorship) fails closed. Note: this checks the
+# shape only; it does not authenticate. See tools/verify_release.py for the authoritative verification.
+IDENTITY_PROVIDERS = {"github-signed-commit"}
 
 
 def canonical_digest(doc: object) -> str:
@@ -97,8 +100,8 @@ def validate_authorization(d: dict) -> list[str]:
             "decided_by.identity_assertion: provider and reference required "
             "(a name in a commit is not an approval identity)"
         )
-    elif ia["provider"] in _UNTRUSTED_IDENTITY_PROVIDERS:
-        e.append(f"decided_by.identity_assertion.provider {ia['provider']!r} cannot establish approval")
+    elif ia["provider"] not in IDENTITY_PROVIDERS:
+        e.append(f"decided_by.identity_assertion.provider {ia['provider']!r} is not a supported provider")
     _req(d.get("basis") or {}, ["kind", "reference"], "basis", e)
     _ts(d.get("decided_at"), "decided_at", e)
     ret = d.get("retention") or {}

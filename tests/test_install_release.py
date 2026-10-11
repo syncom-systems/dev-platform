@@ -10,7 +10,7 @@ import unittest
 from dev_platform.digest import tree_digest
 from tests.helpers import ROOT, tmpdir
 from tests.test_pack import rmtree_rw
-from tests.test_verify_release import POLICY, REV, auth, build_candidate, fake_gh
+from tests.test_verify_release import POLICY, REV, build_candidate, fake_gh
 
 spec = importlib.util.spec_from_file_location("install_release", ROOT / "tools" / "install_release.py")
 IR = importlib.util.module_from_spec(spec)
@@ -73,11 +73,7 @@ class InstallTest(unittest.TestCase):
         with self.assertRaises(IR.Refused):
             IR.install(arc, self.store, exp, self.verifier, POLICY, gh=gh, allow_prerelease=True)
         self.assertEqual(list(self.store.iterdir()), [])
-        f = tmpdir(self) / "a.json"
-        f.write_text(json.dumps(auth(sha)))
-        dest, rec = IR.install(arc, self.store, exp, self.verifier, POLICY, gh=gh, authorizations=[f])
-        self.assertEqual(rec["acceptance"]["state"], "accepted")
-        self.assertTrue(dest.is_dir())
+        # acceptance itself is exercised in tests/test_authorization.py
 
     def test_unaccepted_stable_can_be_installed_only_with_the_explicit_flag(self):
         arc, sha, exp = self.candidate("1.0.0")

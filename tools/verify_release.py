@@ -7,8 +7,10 @@ GitHub CLI (`gh attestation verify`) as the independent signature verifier, then
 certificate fields against the trust policy itself.
 
 A valid signature is necessary, not sufficient: the signer must match the trust policy, and a
-*stable* release is only `accepted` with an effective owner authorization for the archive digest.
-Pre-releases are never `accepted`.
+*stable* release is only `accepted` with an AUTHENTICATED, AUTHORIZED, in-force approval bound to the
+archive digest: the record's identity is verified here by a provider from an explicit registry (unknown
+providers fail closed), the identity must be an approver in the trust policy for this kind of subject and
+claim, and the approval confers only `platform-baseline`. Pre-releases are never `accepted`.
 
 Exit status: 0 when every check passed (see `acceptance.state`), 1 otherwise.
 """
@@ -16,6 +18,7 @@ Exit status: 0 when every check passed (see `acceptance.state`), 1 otherwise.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -25,6 +28,7 @@ import sys
 import tarfile
 import tempfile
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 RECORD_SCHEMA = "dev-platform.verification/v1"
@@ -32,7 +36,6 @@ POLICY_SCHEMA = "dev-platform.trust/v1"
 SLSA = "https://slsa.dev/provenance/v1"
 CYCLONEDX = "https://cyclonedx.org/bom"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$")
-UNTRUSTED_PROVIDERS = {"git-commit-author", "git-config"}  # authorship is not approval
 GhRunner = Callable[[list[str]], tuple[int, str, str]]
 
 
@@ -279,23 +282,178 @@ def check_environment(
     check_attestation(rec, path, sha256_file(path), exp, policy, gh, None, label="environment-attestation")
 
 
-def effective_authorization(paths: list[Path], archive_sha: str) -> dict | None:
-    docs = [json.loads(Path(p).read_text()) for p in paths]
-    mine = [
-        d
-        for d in docs
-        if d.get("schema") == "dev-platform.authorization/v1"
-        and d.get("subject", {}).get("kind") == "platform-release"
-        and d.get("subject", {}).get("digest") == archive_sha
-    ]
-    superseded = {s for d in mine for s in d.get("supersedes", [])}
-    live = sorted((d for d in mine if d["id"] not in superseded), key=lambda d: d["decided_at"])
-    if not live or live[-1]["decision"] != "approved":
-        return None
-    ia = live[-1].get("decided_by", {}).get("identity_assertion", {})
-    if not ia.get("provider") or not ia.get("reference") or ia["provider"] in UNTRUSTED_PROVIDERS:
-        return None
-    return live[-1]
+# ---- owner authorization -------------------------------------------------------------------------
+# Distinct questions, answered in this order, each failing closed:
+#   authenticity  - who made this record? (provider-specific evidence, verified here, never asserted)
+#   authority     - may THAT identity approve THIS kind of subject, conferring THESE claims? (trust policy)
+#   binding       - does the record name exactly this archive digest, and is it the signed file?
+#   validity      - is it in force now? (not in the future, within validity, not superseded or revoked)
+# A valid signature only answers the first question. Unknown providers, unsigned records and unauthorized
+# identities never reach `accepted`. The Git author/committer fields on their own are not evidence.
+AUTH_SCHEMA = "dev-platform.authorization/v1"
+CONFERABLE_CLAIMS = {"platform-baseline"}  # the ONLY claim a platform-release approval can confer
+NOT_CONFERRED = [
+    "release certification (a property of consumer check results)",
+    "qualification of any profile or platform beyond what the release's own qualification evidence shows",
+    "approval of any consumer migration or any other release",
+]
+CLOCK_SKEW = timedelta(minutes=5)
+AUTH_PATH_RE = re.compile(r"^authorizations/[A-Za-z0-9._-]+\.json$")
+
+
+def _api(gh: GhRunner, endpoint: str):
+    code, out, err = gh(["gh", "api", endpoint])
+    if code != 0:
+        raise RuntimeError(f"gh api {endpoint}: {err.strip()[:160] or code}")
+    return json.loads(out)
+
+
+def _login_eq(a: object, b: object) -> bool:
+    return isinstance(a, str) and isinstance(b, str) and a != "" and a.lower() == b.lower()
+
+
+def _auth_github_signed_commit(doc: dict, raw: bytes, auth_policy: dict, gh: GhRunner):
+    """Authenticate via GitHub-verified signed commits. Returns (login, evidence) or raises ValueError.
+
+    Every commit that touched the record's path on the pinned ref must carry a signature GitHub reports
+    as valid, with author AND committer the same account (a squash/rebase merge makes `web-flow` the
+    committer, which proves nothing about the approver). The newest version of the file must be byte-
+    identical to the record under review, so a record edited after signing is rejected.
+    """
+    ia = doc["decided_by"]["identity_assertion"]
+    login, path = ia.get("login"), ia.get("path")
+    if not isinstance(login, str) or not login:
+        raise ValueError("identity_assertion.login required")
+    if not isinstance(path, str) or not AUTH_PATH_RE.match(path):
+        raise ValueError("identity_assertion.path must be authorizations/<name>.json")
+    repo, ref = auth_policy.get("evidence_repo"), auth_policy.get("evidence_ref")
+    if not repo or not ref:
+        raise ValueError("policy lacks authorization.evidence_repo/evidence_ref")
+    try:
+        commits = _api(gh, f"repos/{repo}/commits?sha={ref}&path={path}&per_page=100")
+    except (RuntimeError, ValueError) as e:
+        raise ValueError(f"cannot fetch signing evidence: {e}") from None
+    if not isinstance(commits, list) or not commits:
+        raise ValueError(f"no commit on {ref} touches {path}")
+    if len(commits) >= 100:
+        raise ValueError("history of the record is too long to audit")
+    for c in commits:
+        v = (c.get("commit") or {}).get("verification") or {}
+        sha = str(c.get("sha"))[:12]
+        if not (v.get("verified") is True and v.get("reason") == "valid"):
+            raise ValueError(f"commit {sha} is not a validly signed commit ({v.get('reason')})")
+        for role in ("author", "committer"):
+            if not _login_eq((c.get(role) or {}).get("login"), login):
+                raise ValueError(f"{role} of commit {sha} is not {login}")
+    newest = commits[0]
+    try:
+        blob = _api(gh, f"repos/{repo}/contents/{path}?ref={newest['sha']}")
+        content = base64.b64decode(blob["content"])
+    except (RuntimeError, ValueError, KeyError) as e:
+        raise ValueError(f"cannot read the signed file: {e}") from None
+    if content != raw:
+        raise ValueError("record differs from the signed file (modified after signing?)")
+    return login, {"repo": repo, "ref": ref, "path": path, "commit": newest["sha"], "commits": len(commits)}
+
+
+PROVIDERS = {"github-signed-commit": _auth_github_signed_commit}  # the explicit registry; unknown = refused
+
+
+def _ts(v: object) -> datetime:
+    if not isinstance(v, str):
+        raise ValueError("timestamp must be a string")
+    return datetime.fromisoformat(v.replace("Z", "+00:00")).astimezone(UTC)
+
+
+def assess_authorization(path: Path, archive_sha: str, policy: dict, gh: GhRunner, now: datetime) -> dict:
+    """Judge one record. {'status': 'authentic'|'ignored', 'problems': [...], ...}. Never raises."""
+    verdict: dict = {"file": Path(path).name, "id": None, "status": "ignored", "problems": []}
+    try:
+        raw = Path(path).read_bytes()
+        doc = json.loads(raw)
+        assert isinstance(doc, dict)
+    except (OSError, ValueError, AssertionError):
+        verdict["problems"].append("not a readable JSON object")
+        return verdict
+    verdict["id"] = doc.get("id")
+    try:
+        if doc.get("schema") != AUTH_SCHEMA:
+            raise ValueError(f"schema must be {AUTH_SCHEMA}")
+        for k in ("id", "subject", "decision", "decided_by", "decided_at", "scope"):
+            if k not in doc:
+                raise ValueError(f"missing {k}")
+        if not isinstance(doc["id"], str) or not doc["id"]:
+            raise ValueError("id must be a non-empty string")
+        sub = doc["subject"] if isinstance(doc["subject"], dict) else {}
+        if sub.get("kind") != "platform-release":
+            raise ValueError("subject.kind must be platform-release")
+        if sub.get("digest") != archive_sha:
+            raise ValueError("subject.digest is not this archive's sha256")
+        if doc["decision"] not in ("approved", "rejected", "revoked"):
+            raise ValueError("decision must be approved|rejected|revoked")
+        by = doc["decided_by"] if isinstance(doc["decided_by"], dict) else {}
+        ia = by.get("identity_assertion") if isinstance(by.get("identity_assertion"), dict) else {}
+        provider = ia.get("provider")
+        auth_policy = policy.get("authorization") or {}
+        if provider not in PROVIDERS or provider not in auth_policy.get("providers", []):
+            raise ValueError(f"identity provider {provider!r} is not supported (fail closed)")
+        # 1. authenticity
+        login, evidence = PROVIDERS[provider](doc, raw, auth_policy, gh)
+        verdict["authenticated_as"] = {"provider": provider, "login": login}
+        verdict["evidence"] = evidence
+        # 2. authority
+        who = [
+            a
+            for a in auth_policy.get("approvers", [])
+            if a.get("provider") == provider and _login_eq(a.get("login"), login)
+        ]
+        if not who:
+            raise ValueError(f"{login} is authenticated but is not an approver in the trust policy")
+        approver = who[0]
+        if "platform-release" not in approver.get("may_approve", []):
+            raise ValueError(f"approver {approver.get('id')} may not approve platform releases")
+        verdict["approver"] = approver.get("id")
+        # 3. scope: only the explicitly approved, explicitly permitted claim
+        scope = doc["scope"] if isinstance(doc["scope"], dict) else {}
+        confers = scope.get("confers")
+        if not (isinstance(confers, list) and confers) or not set(confers) <= CONFERABLE_CLAIMS:
+            raise ValueError(f"scope.confers must be a non-empty subset of {sorted(CONFERABLE_CLAIMS)}")
+        if not set(confers) <= set(approver.get("may_confer", [])):
+            raise ValueError("scope.confers exceeds the approver's authority in the trust policy")
+        verdict["scope"] = {"confers": sorted(set(confers)), "not_conferred": NOT_CONFERRED}
+        # 4. validity window
+        decided = _ts(doc["decided_at"])
+        if decided > now + CLOCK_SKEW:
+            raise ValueError("decided_at is in the future")
+        v = doc.get("validity") or {}
+        if v.get("not_before") and _ts(v["not_before"]) > now:
+            raise ValueError("not yet valid")
+        if v.get("not_after") and _ts(v["not_after"]) <= now:
+            raise ValueError("expired")
+        verdict.update(status="authentic", decision=doc["decision"], decided_at=decided.isoformat())
+        verdict["supersedes"] = list(doc.get("supersedes") or [])
+    except ValueError as e:
+        verdict["problems"].append(str(e))
+    except Exception as e:  # defensive: any surprise is a refusal, never an acceptance
+        verdict["problems"].append(f"unexpected {type(e).__name__}: {e}")
+    return verdict
+
+
+def effective_authorization(
+    paths: list[Path], archive_sha: str, policy: dict, gh: GhRunner, now: datetime | None = None
+) -> tuple[dict | None, list[dict]]:
+    """(the one authenticated, authorized, in-force approval or None, a verdict for every record)."""
+    now = now or datetime.now(UTC)
+    verdicts = [assess_authorization(p, archive_sha, policy, gh, now) for p in paths]
+    live = [v for v in verdicts if v["status"] == "authentic"]
+    superseded = {s for v in live for s in v["supersedes"]}
+    live = sorted((v for v in live if v["id"] not in superseded), key=lambda v: v["decided_at"])
+    if not live:
+        return None, verdicts
+    if len(live) > 1 and live[-1]["decided_at"] == live[-2]["decided_at"]:
+        live[-1]["problems"].append("ambiguous: two live decisions share a timestamp (fail closed)")
+        return None, verdicts
+    return (live[-1] if live[-1]["decision"] == "approved" else None), verdicts
 
 
 def verify(
@@ -308,6 +466,7 @@ def verify(
     bundle: Path | None = None,
     sbom_bundle: Path | None = None,
     environment: Path | None = None,
+    now: datetime | None = None,
 ) -> dict:
     rec = Record()
     sbom_doc = None
@@ -399,25 +558,40 @@ def verify(
 
     check_environment(rec, environment, manifest, exp, policy, gh)
     prerelease = "-" in exp["version"]
-    auth = None if prerelease else effective_authorization(list(authorizations), archive_sha)
+    auth, verdicts = (
+        (None, [])
+        if prerelease
+        else effective_authorization(list(authorizations), archive_sha, policy, gh, now)
+    )
+    # Stable releases ALWAYS need an authenticated approval; no policy switch can waive it.
+    rec.add(
+        "policy-requires-authorization",
+        policy.get("stable_requires_authorization", True) is True,
+        "stable_requires_authorization must not be disabled",
+    )
     if not rec.all_passed:
         state, reasons = "failed", [c["id"] for c in rec.checks if c["status"] == "failed"]
     elif prerelease:
         state, reasons = "pre-release", ["pre-releases are never accepted; they are verified artifacts only"]
-    elif policy.get("stable_requires_authorization", True) and auth is None:
-        state, reasons = "verified-unaccepted", ["no effective owner authorization for this archive digest"]
+    elif auth is None:
+        state = "verified-unaccepted"
+        reasons = ["no authenticated, authorized, in-force approval for this archive digest"]
     else:
-        state, reasons = (
-            "accepted",
-            [f"owner authorization {auth['id']}" if auth else "policy does not require authorization"],
-        )
+        state, reasons = "accepted", [f"authenticated approval {auth['id']} by {auth['approver']}"]
     return {
         "schema": RECORD_SCHEMA,
         "subject": subject,
         "expected": {k: v for k, v in exp.items()},
         "policy_sha256": hashlib.sha256(json.dumps(policy, sort_keys=True).encode()).hexdigest(),
         "checks": rec.checks,
-        "acceptance": {"state": state, "reasons": reasons, "authorization": auth["id"] if auth else None},
+        "acceptance": {
+            "state": state,
+            "reasons": reasons,
+            "authorization": auth["id"] if auth else None,
+            "confers": auth["scope"]["confers"] if auth else [],
+            "not_conferred": NOT_CONFERRED,
+            "authorization_evidence": verdicts,
+        },
     }
 
 
@@ -464,6 +638,11 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"{c['status'].upper():7} {c['id']}"
             + (f"  ({c['detail']})" if c["detail"] and c["status"] == "failed" else "")
+        )
+    for v in doc["acceptance"]["authorization_evidence"]:
+        print(
+            f"AUTH    {v['file']}: {v['status']}"
+            + (f"  ({'; '.join(v['problems'])})" if v["problems"] else "")
         )
     print(f"acceptance: {doc['acceptance']['state']}  {'; '.join(doc['acceptance']['reasons'])}")
     return 0 if doc["acceptance"]["state"] != "failed" else 1
