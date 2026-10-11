@@ -22,3 +22,4 @@ revision). Superseded records stay in place.
 | [0014](0014-release-trust-bootstrap-and-execution.md) | Release trust, bootstrap and verify-then-execute | Ratified |
 | [0015](0015-closure-identity-and-trust-base.md) | Closure identity, SBOM correspondence and the verification trust base | Ratified (owner directive, turn 4) |
 | [0016](0016-authorization-trust-boundary.md) | Authorization trust boundary | Ratified (owner directive, 2026-10-11) |
+| [0017](0017-release-lifecycle-and-planning.md) | Release lifecycle and GitHub-native planning | Proposed |

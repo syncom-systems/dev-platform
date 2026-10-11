@@ -1,0 +1,41 @@
+# Release planning automation. Read-mostly: assigns pull requests to the milestone of the issue they close and
+# reports milestone readiness. It never builds, publishes, verifies or approves a release (release.yml is the
+# only publisher; tools/verify_release.py the only authority; ADR 0017).
+name: release-plan
+on:
+  pull_request:
+    types: [opened, edited, reopened]
+  workflow_dispatch:
+    inputs:
+      milestone: {description: "milestone to report readiness for", required: true}
+permissions:
+  contents: read
+jobs:
+  assign:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    env: {GH_TOKEN: "${{ github.token }}"}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: {python-version: "3.14"}
+      - name: Assign PRs to the milestone of the issues they close (best effort; read-only token on forks)
+        run: PYTHONPATH=src python -m dev_platform plan assign --apply || true
+  readiness:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    env: {GH_TOKEN: "${{ github.token }}"}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: {python-version: "3.14"}
+      - name: Milestone readiness (planning data only; implies implementation-complete at most)
+        env: {MILESTONE: "${{ inputs.milestone }}"}
+        run: |
+          PYTHONPATH=src python -m dev_platform plan readiness --milestone "$MILESTONE" | tee "$GITHUB_STEP_SUMMARY" || true

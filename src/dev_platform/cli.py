@@ -143,6 +143,65 @@ def build_parser() -> argparse.ArgumentParser:
     ep.add_argument("record", type=Path, nargs="+")
     ev2 = esub.add_parser("verify", help="re-derive every stored digest; exit 1 on any mismatch")
     ev2.add_argument("--store", type=Path, required=True)
+    pl = sub.add_parser("plan", help="release planning: readiness, versions, notes (never grants acceptance)")
+    psub = pl.add_subparsers(dest="pcmd", required=True)
+    for name, hlp in (
+        ("readiness", "is the milestone's scope complete (=> implementation-complete only)"),
+        ("notes", "generate descriptive release notes from merged work"),
+        ("manifest", "index linking scope, artifact and evidence"),
+    ):
+        pp = psub.add_parser(name, help=hlp)
+        pp.add_argument("--milestone", required=True)
+        pp.add_argument("--repo", default="syncom-systems/dev-platform")
+        pp.add_argument("--snapshot", type=Path, help="offline snapshot JSON instead of the GitHub API")
+        pp.add_argument("--policy", type=Path, default=Path("planning/release-policy.json"))
+        pp.add_argument("--version", help="release version (notes, manifest)")
+        pp.add_argument("--verification", type=Path, help="verification record (notes, manifest)")
+        pp.add_argument("--identity", type=Path, help="release identity.json (manifest)")
+        pp.add_argument("--qualification", type=Path, action="append", default=[], help="qualify result JSON")
+    pa = psub.add_parser(
+        "assign", help="assign PRs to the milestone of the issue they close (dry run unless --apply)"
+    )
+    pa.add_argument("--repo", default="syncom-systems/dev-platform")
+    pa.add_argument("--snapshot", type=Path)
+    pa.add_argument("--apply", action="store_true")
+    pv = psub.add_parser(
+        "version-check", help="does this version follow the versioning policy for these changes"
+    )
+    pv.add_argument("--previous", required=True)
+    pv.add_argument("--new", required=True)
+    pv.add_argument("--kind", action="append", default=[], help="declared change kind (repeatable)")
+    pv.add_argument("--old-manifest", type=Path)
+    pv.add_argument("--new-manifest", type=Path, default=Path("toolchains/manifest.json"))
+    pv.add_argument("--old-schemas", type=Path)
+    pv.add_argument("--new-schemas", type=Path, default=Path("schemas"))
+    pv.add_argument("--criteria-met", action="append", default=[])
+    pv.add_argument("--policy", type=Path, default=Path("planning/release-policy.json"))
+    pt = psub.add_parser(
+        "patches", help="propose security patch releases for an advisory's affected versions"
+    )
+    pt.add_argument("--affected", action="append", required=True)
+    pt.add_argument("--existing", action="append", required=True, help="existing stable versions")
+    pt.add_argument("--policy", type=Path, default=Path("planning/release-policy.json"))
+    ps = psub.add_parser(
+        "state", help="derive the lifecycle state from evidence (accepted only via the pinned verifier)"
+    )
+    ps.add_argument("--milestone", required=True)
+    ps.add_argument("--repo", default="syncom-systems/dev-platform")
+    ps.add_argument("--snapshot", type=Path)
+    ps.add_argument("--policy", type=Path, default=Path("planning/release-policy.json"))
+    ps.add_argument("--archive-sha256", required=True)
+    ps.add_argument("--ci-verification", type=Path)
+    ps.add_argument("--independent-verification", type=Path)
+    ps.add_argument(
+        "--immutable", action="store_true", help="the GitHub release is immutable (checked by the caller)"
+    )
+    ps.add_argument("--notice", type=Path, action="append", default=[], help="superseded/revoked notice JSON")
+    ps.add_argument("--verifier", type=Path, help="tools/verify_release.py (run to observe `accepted`)")
+    ps.add_argument("--verifier-sha256")
+    ps.add_argument(
+        "--verifier-arg", action="append", default=[], help="argument for the verifier (repeatable)"
+    )
     dg = sub.add_parser("digest", help="print the release tree digest of a directory")
     dg.add_argument("path", type=Path)
     return ap
@@ -548,6 +607,88 @@ def cmd_rollback(args) -> int:
     return EXIT_OK if out["eligible"] else EXIT_UNSATISFIED
 
 
+def _j(path):
+    return json.loads(Path(path).read_text())
+
+
+def _plan_snapshot(args) -> dict:
+    from . import planning
+
+    if args.snapshot:
+        return _j(args.snapshot)
+    return planning.fetch_snapshot(args.repo, args.milestone)
+
+
+def cmd_plan(args) -> int:
+    from . import lifecycle, planning
+
+    if args.pcmd == "assign":
+        snap = _j(args.snapshot) if args.snapshot else planning.fetch_unassigned(args.repo)
+        plan = planning.plan_assignments(snap)
+        n = planning.apply_assignments(args.repo, plan, snap.get("milestones", [])) if args.apply else 0
+        print(json.dumps({"assignments": plan, "applied": n}, indent=2, sort_keys=True))
+        return EXIT_OK
+    policy = planning.load_policy(args.policy)
+    if args.pcmd == "version-check":
+        kinds = list(args.kind)
+        if args.old_manifest:
+            kinds += lifecycle.diff_manifests(_j(args.old_manifest), _j(args.new_manifest))
+        if args.old_schemas:
+            kinds += lifecycle.diff_schemas(args.old_schemas, args.new_schemas)
+        problems = lifecycle.check_version(
+            args.previous, args.new, kinds, policy, criteria_met=args.criteria_met
+        )
+        print(json.dumps({"kinds": sorted(set(kinds)), "problems": problems}, indent=2, sort_keys=True))
+        return EXIT_UNSATISFIED if problems else EXIT_OK
+    if args.pcmd == "patches":
+        out = lifecycle.patch_plan(args.affected, args.existing, policy)
+        print(json.dumps({"proposals": out}, indent=2, sort_keys=True))
+        return EXIT_OK
+    snap = _plan_snapshot(args)
+    rd = planning.readiness(snap, policy)
+    if args.pcmd == "readiness":
+        print(json.dumps(rd, indent=2, sort_keys=True))
+        return EXIT_OK if rd["ready"] else EXIT_UNSATISFIED
+    verification = _j(args.verification) if getattr(args, "verification", None) else None
+    if args.pcmd == "notes":
+        print(planning.release_notes(snap, args.version or snap["milestone"]["title"], verification), end="")
+        return EXIT_OK
+    if args.pcmd == "manifest":
+        identity = _j(args.identity) if args.identity else None
+        qual = [_j(q) for q in args.qualification]
+        lc = lifecycle.derive(
+            {
+                "planning": {"ready": rd["ready"]},
+                "archive_sha256": (identity or {}).get("archive_sha256"),
+                "ci_verification": None,
+                "independent_verification": verification,
+            }
+        ).doc()
+        doc = planning.release_manifest(
+            args.version or snap["milestone"]["title"], snap, rd, lc, identity, verification, qual
+        )
+        print(json.dumps(doc, indent=2, sort_keys=True))
+        return EXIT_OK
+    facts = {
+        "planning": {"ready": rd["ready"]},
+        "archive_sha256": args.archive_sha256,
+        "ci_verification": _j(args.ci_verification) if args.ci_verification else None,
+        "independent_verification": _j(args.independent_verification)
+        if args.independent_verification
+        else None,
+        "published": {"immutable": args.immutable},
+        "notices": [_j(n) for n in args.notice],
+    }
+    if args.verifier:
+        if not args.verifier_sha256:
+            raise ConfigError(["--verifier requires --verifier-sha256 (an operator-supplied pin)"])
+        facts["verifier"] = lifecycle.run_verifier(args.verifier, args.verifier_sha256, args.verifier_arg)
+    d = lifecycle.derive(facts).doc()
+    d["readiness"] = {"ready": rd["ready"], "blockers": rd["blockers"]}
+    print(json.dumps(d, indent=2, sort_keys=True))
+    return EXIT_OK
+
+
 def cmd_digest(args) -> int:
     print(tree_digest(args.path))
     return EXIT_OK
@@ -565,6 +706,7 @@ _COMMANDS = {
     "rollback": cmd_rollback,
     "evidence": cmd_evidence,
     "release": cmd_release,
+    "plan": cmd_plan,
     "validate": cmd_validate,
     "affected": cmd_affected,
 }
