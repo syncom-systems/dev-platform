@@ -39,6 +39,8 @@ class RunnerSpec:
     isolation: str = "any"
     credentials: tuple[str, ...] = ()
     fallback: str = "hosted"
+    capabilities: tuple[str, ...] = ()
+    cache: str = "any"
 
 
 @dataclass(frozen=True)
@@ -157,7 +159,7 @@ def parse(data: dict) -> Config:
             errs.append(f"{w}: must be a table")
             continue
         for k in rv:
-            if k not in {"os", "arch", "isolation", "credentials", "fallback"}:
+            if k not in {"os", "arch", "isolation", "credentials", "fallback", "capabilities", "cache"}:
                 errs.append(f"{w}.{k}: unknown key (physical runner names/labels are not allowed here)")
         spec = RunnerSpec(
             name=rname,
@@ -166,7 +168,11 @@ def parse(data: dict) -> Config:
             isolation=rv.get("isolation", "any"),
             credentials=_strlist(rv.get("credentials", []), f"{w}.credentials", errs),
             fallback=rv.get("fallback", "hosted"),
+            capabilities=_strlist(rv.get("capabilities", []), f"{w}.capabilities", errs),
+            cache=rv.get("cache", "any"),
         )
+        if spec.cache not in ("any", "none", "read-only", "read-write"):
+            errs.append(f"{w}.cache: must be any|none|read-only|read-write")
         if spec.os not in ("any", "linux", "macos"):
             errs.append(f"{w}.os: must be any|linux|macos")
         if spec.arch not in ("any", "x86_64", "arm64"):

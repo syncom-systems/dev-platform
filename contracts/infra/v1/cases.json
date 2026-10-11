@@ -57,6 +57,20 @@
       "file": "invalid-admission-trigger.json",
       "valid": false,
       "error": "unknown trigger"
+    },
+    {
+      "file": "valid-capabilities.json",
+      "valid": true
+    },
+    {
+      "file": "invalid-cache-mode.json",
+      "valid": false,
+      "error": "cache"
+    },
+    {
+      "file": "invalid-public-writable-cache.json",
+      "valid": false,
+      "error": "read-write shared cache"
     }
   ],
   "routing": [
@@ -117,6 +131,65 @@
       "event": "untrusted",
       "ok": true,
       "runner": "github-ubuntu"
+    },
+    {
+      "profile": "valid-capabilities.json",
+      "spec": {
+        "capabilities": [
+          "qemu-aarch64"
+        ]
+      },
+      "event": "trusted",
+      "ok": true,
+      "runner": "qemu-box"
+    },
+    {
+      "profile": "valid-capabilities.json",
+      "spec": {
+        "capabilities": [
+          "qemu-aarch64"
+        ],
+        "fallback": "none"
+      },
+      "event": "untrusted",
+      "ok": false,
+      "runner": null
+    },
+    {
+      "profile": "valid-capabilities.json",
+      "spec": {
+        "capabilities": [
+          "tmux"
+        ],
+        "cache": "read-only",
+        "os": "linux",
+        "arch": "x86_64"
+      },
+      "event": "untrusted",
+      "ok": true,
+      "runner": "public-box"
+    },
+    {
+      "profile": "valid-capabilities.json",
+      "spec": {
+        "cache": "read-write",
+        "fallback": "none"
+      },
+      "event": "untrusted",
+      "ok": false,
+      "runner": null
+    },
+    {
+      "profile": "valid-capabilities.json",
+      "spec": {
+        "capabilities": [
+          "gpu"
+        ],
+        "fallback": "none"
+      },
+      "event": "trusted",
+      "ok": false,
+      "runner": null
     }
   ],
   "event_trust": [
