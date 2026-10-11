@@ -27,12 +27,12 @@ jobs:
         with: {fetch-depth: 0, persist-credentials: false}
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with: {python-version: "3.14"}
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: ${{ matrix.repo }}
-          ref: ${{ matrix.commit }}
-          path: pilot-consumer  # after toolchain setup, so no cache step ever sees consumer content
-          persist-credentials: false
+      - name: Fetch the consumer at its pinned commit (read-only, public, no credentials)
+        env: {REPO: "${{ matrix.repo }}", COMMIT: "${{ matrix.commit }}"}
+        run: |
+          git init -q pilot-consumer
+          git -C pilot-consumer fetch -q --depth 1 "https://github.com/$REPO" "$COMMIT"
+          git -C pilot-consumer checkout -q --detach FETCH_HEAD
       - name: The consumer commit must equal the pinned one
         run: test "$(git -C pilot-consumer rev-parse HEAD)" = "${{ matrix.commit }}"
       - name: Realize the pinned toolchain profile (release mode; head mode uses `toolchain provision`)
