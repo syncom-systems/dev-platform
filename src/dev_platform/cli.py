@@ -145,7 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
     ev2.add_argument("--store", type=Path, required=True)
     pc = sub.add_parser(
         "pr-check",
-        help="static check of workflow files against the infra profile (violations / incomplete / indicators)",
+        help="static workflow check against the infra profile (violations, incomplete, indicators)",
     )
     pc.add_argument("--workflows", type=Path, default=Path(".github/workflows"))
     pc.add_argument("--infra-profile", type=Path, default=None, help="dev-platform.infra/v1 incl. admission")
