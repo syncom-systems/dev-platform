@@ -1,0 +1,28 @@
+{
+  "limitations": [
+    "evidence, not authority: the predecessor may itself be unaccepted",
+    "predecessor code ran in the CI runner environment (not hermetic) with its own toolchain bootstrap"
+  ],
+  "predecessor": {
+    "archive_sha256": "3cc47abb71afcd279383f2c46386f46183f460ff3e91af7656a407030ba42044",
+    "tree_digest": "7cc140322520220bce0292e599c8d9e1c36d0785981af02070175d32fc4165b5",
+    "verification": {
+      "all_checks_passed": true,
+      "state": "verified-unaccepted"
+    },
+    "version": "0.2.1"
+  },
+  "schema": "dev-platform.continuity/v1",
+  "stage": {
+    "admission": "admitted",
+    "exit": 0,
+    "name": "full",
+    "result_sha256": "6bc67e01cbbfccf574cfdbc6e991bd2efedfd72704b43eed074b54ae443e0916",
+    "revision": "6ad52306e72ab3c3ad0ad7023c58015634880d31"
+  },
+  "subject": {
+    "archive_sha256": "eb04ce489f3963ab24ed2e634f3213a4d1eabef87c4d667a7f2aaa040b9c604a",
+    "source_revision": "6ad52306e72ab3c3ad0ad7023c58015634880d31",
+    "version": "0.3.0"
+  }
+}
