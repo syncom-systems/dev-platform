@@ -17,7 +17,7 @@ affected, so it can gate or alert in automation. The fix is a new release (ADR 0
 it by editing their pin.
 
 ## GitHub mechanisms: what they do and do not give us
-Researched from GitHub documentation; not yet exercised against this repository.
+Researched from GitHub documentation; the dependency-submission path was exercised on this repository (below).
 - **Dependabot alerts** cover dependencies whose ecosystem the GitHub Advisory Database supports.
   A `[platform]` pin in `dev-platform.toml` is not a recognized manifest and `dev-platform` is not an
   advisory-database package, so **no native alert will fire for it**. We do not rely on one.
@@ -28,6 +28,8 @@ Researched from GitHub documentation; not yet exercised against this repository.
   declare a purl (as their real ecosystems, e.g. `pkg:pypi/ruff@0.17.0`), so ecosystem tools such as ruff
   can get native alerts. Only supported purl types can alert; `pkg:generic`/`pkg:github` components appear in the
   graph without alerts. The platform release itself is not submitted (not an advisory-database package).
+  Observed (run 38164018103): the snapshot is accepted and the dependency graph lists uv, ruff, cpython, rust, bazel and
+  bazelisk; Dependabot alerts: 0. A positive alert has not been observed (no vulnerable pin exists to test with).
 - **Repository security advisories** on this repo let us publish an advisory for `dev-platform`
   itself *(planned)*; the platform's own `advisory/v1` + `affected` remains the cross-consumer index.
 - **Artifact attestations** (Sigstore; verified with `gh attestation verify`) provide provenance

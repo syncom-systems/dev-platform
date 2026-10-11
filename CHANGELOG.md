@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 0.3.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Application-release approval trust (ADR 0019, #52): `tools/verify_app_release.py` (independent, reuses the ADR 0016
   provider registry under a pin) authenticates application approvals, enforces an application-owned policy
   (`dev-platform.app-trust/v1`), binds source/dependencies/platform/toolchain/evidence/artifacts to the exact release
@@ -10,6 +12,9 @@
   contract, `rollback select --bundle`; qualification `--app-release` rejection cases over real results; pilot assembles
   and refuses to approve (flight). Stray `uv.lock` removed.
 - Owner steps for formal acceptance of 0.2.1: `docs/owner-acceptance-0.2.1.md` (nothing pre-made).
+- Dependency submission (#6): `dev-platform dependency-snapshot` and a workflow submit toolchain tool components to GitHub's
+  dependency graph; observed on this repository: accepted, components listed, 0 alerts (only pypi purls can alert).
+- Predecessor continuity: 0.2.1 (digest-pinned in the policy; verified-unaccepted) re-runs the full stage over this source.
 
 ## 0.2.1 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Installer consumes the predecessor-continuity record (found by independent verification of 0.2.0, whose tag's
