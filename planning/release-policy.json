@@ -1,0 +1,43 @@
+{
+  "schema": "dev-platform.release-policy/v1",
+  "_comment": "Planning and versioning policy. It is NOT trust policy: nothing here can confer acceptance, certification or qualification (trust/policy.json and tools/verify_release.py own those).",
+  "assurance": "open-source",
+  "versioning": {
+    "phase": "0.x",
+    "levels": {
+      "patch": ["bugfix", "security-fix", "toolchain-patch"],
+      "minor": ["feature", "profile-added", "tool-added", "toolchain-minor", "schema-added"],
+      "major": [
+        "breaking-config", "breaking-evidence-schema", "breaking-manifest", "breaking-adapter",
+        "profile-removed", "tool-removed", "toolchain-major", "schema-removed"
+      ]
+    },
+    "prerelease_identifiers": ["alpha", "beta", "rc"],
+    "supported_lines": "latest-minor",
+    "one_zero_criteria": [
+      "owner-accepted-baseline",
+      "predecessor-continuity-verified",
+      "two-consumers-in-production-profile",
+      "evidence-schemas-stable-two-minors",
+      "infra-contract-v1-conformance-adopted",
+      "application-release-approvals-authenticated"
+    ]
+  },
+  "milestone": {
+    "required_sections": [
+      "Objective", "Scope", "Verification", "Compatibility", "Security and provenance", "Exit criteria", "Decisions"
+    ]
+  },
+  "profiles": {
+    "open-source": {
+      "description": "Ordinary open-source release: planning completeness and the standard verification gates.",
+      "require_issue_trace": false,
+      "requires_external": []
+    },
+    "regulated": {
+      "description": "Additional traceability and change authorization. The public core can only check that the named external attestations are present; their content and authority are organization policy.",
+      "require_issue_trace": true,
+      "requires_external": ["change-authorization", "traceability-export"]
+    }
+  }
+}

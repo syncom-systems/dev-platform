@@ -90,3 +90,5 @@ The operator obtains the two pins out of band (for example from a reviewed commi
 whose history they trust, compared against a second source). The pins are the root; the release being
 installed cannot supply or alter them. `dev-platform release install` remains the low-level installer
 that takes already-trusted digests and performs no provenance verification.
+
+Planning and lifecycle (milestones, readiness, version policy) are separate from this trust model: see [release management](release-management.md).

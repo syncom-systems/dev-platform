@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- Release planning (ADR 0017): `dev-platform plan` (readiness, assign, version-check, patches, notes, manifest,
+  state), `planning/release-policy.json` (versioning policy, assurance profiles), lifecycle state machine with no
+  edge to `accepted` (observed only from a run of the pinned verifier), `release-plan.yml` (assign/report only),
+  release milestones v0.1.3/v0.2.0/v0.3.0 and a Project; M1-M6 retired. v0.1.2 stays verified-unaccepted.
 - Authorization trust boundary (ADR 0016): the verifier authenticates authorization records through a provider
   registry, enforces an approver registry in the trust policy, scope, validity, supersession and revocation; the
   separate validate_authorization tool is removed. Policy switch to waive authorization removed. Fixes the defect
