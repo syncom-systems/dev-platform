@@ -112,14 +112,59 @@ def validate_authorization(d: dict) -> list[str]:
     return e
 
 
+SEVERITIES = ("low", "moderate", "high", "critical")
+_CONSTRAINT = re.compile(r"^(>=|<=|==|>|<)\s*(\d+(?:\.\d+)*)$")
+
+
+def _vtuple(v: str) -> tuple[int, ...] | None:
+    m = re.match(r"^v?(\d+(?:\.\d+)*)", str(v))
+    return tuple(int(x) for x in m.group(1).split(".")) if m else None
+
+
+def valid_range(spec: str) -> bool:
+    parts = [p.strip() for p in str(spec).split(",")]
+    return bool(parts) and all(_CONSTRAINT.match(p) for p in parts)
+
+
+def in_range(version: str, spec: str) -> bool:
+    """version satisfies every comma-separated constraint. An unparsable version is treated as affected
+    (fail closed)."""
+    have = _vtuple(version)
+    if have is None:
+        return True
+    for part in (p.strip() for p in spec.split(",")):
+        m = _CONSTRAINT.match(part)
+        if not m:
+            return True
+        want = tuple(int(x) for x in m.group(2).split("."))
+        n = max(len(have), len(want))
+        h, w = have + (0,) * (n - len(have)), want + (0,) * (n - len(want))
+        ok = {">=": h >= w, "<=": h <= w, "==": h == w, ">": h > w, "<": h < w}[m.group(1)]
+        if not ok:
+            return False
+    return True
+
+
+def affects(entry: dict, version: str) -> bool:
+    return version in entry.get("versions", []) or any(in_range(version, r) for r in entry.get("ranges", []))
+
+
 def validate_advisory(d: dict) -> list[str]:
     e: list[str] = []
     if d.get("schema") != ADVISORY:
         return [f"schema must be {ADVISORY!r}"]
     _req(d, ["id", "summary", "severity", "affected"], "", e)
+    if d.get("severity") not in SEVERITIES:
+        e.append(f"severity must be one of {list(SEVERITIES)}")
     for i, a in enumerate(d.get("affected") or []):
-        if not a.get("component") or not a.get("versions"):
-            e.append(f"affected[{i}]: component and versions required")
+        if not a.get("component") or not (a.get("versions") or a.get("ranges")):
+            e.append(f"affected[{i}]: component and versions or ranges required")
+        for r in a.get("ranges", []):
+            if not valid_range(r):
+                e.append(f"affected[{i}]: bad range {r!r} (e.g. '>=1.0,<1.2.3')")
+        for k in ("versions", "ranges", "fixed"):
+            if k in a and not (isinstance(a[k], list) and all(isinstance(x, str) and x for x in a[k])):
+                e.append(f"affected[{i}].{k}: list of non-empty strings")
     return e
 
 
@@ -157,12 +202,14 @@ def releases_affected(advisory: dict, releases: dict[str, dict]) -> dict[str, li
     for ver, rel in releases.items():
         sbom = rel.get("sbom_doc", {})
         have = {("dev-platform", ver)} | {(c["name"], c["version"]) for c in sbom.get("components", [])}
-        hits = [
-            f"{a['component']}@{v}"
-            for a in advisory["affected"]
-            for v in a["versions"]
-            if (a["component"], v) in have
-        ]
+        hits = sorted(
+            {
+                f"{name}@{v}"
+                for a in advisory["affected"]
+                for name, v in have
+                if name == a["component"] and affects(a, v)
+            }
+        )
         if hits:
             out[ver] = sorted(hits)
     return out

@@ -38,3 +38,13 @@ Researched from GitHub documentation; not yet exercised against this repository.
 ## Gaps
 Tool digests are mostly `version-only` today; consumers' transitive dependency resolution is out of
 scope here (it is an input digest to the app-release record).
+
+## Advisory impact analysis (v0.2.0)
+`dev-platform.advisory/v1` entries match exact `versions` and/or `ranges` (`>=0.17.0,<0.17.2`; an unparsable
+installed version counts as affected). `dev-platform affected --advisory adv.json --impact [--github REPO]
+[consumer...]` reports, per affected release, whether a later unaffected release already fixes it
+(`upgrade`), whether a patch release on the supported line is needed (`patch-release`, with the next patch
+version and the change kinds `security-fix`/`toolchain-patch` for `plan version-check`), or that the line is
+unsupported (`no-patch-upgrade`); pre-release versions are ignored; consumers pinned to affected releases are
+listed. Output is a proposal: the patch is built and verified through the normal pipeline and acceptance
+remains the owner's separate act.

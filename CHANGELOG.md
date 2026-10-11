@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+- Advisory impact analysis (#7): version ranges, severity enum, `affected --impact [--github REPO]` with fix/patch/
+  upgrade actions per release and pinned consumers. Proposals only.
 - Predecessor continuity (#4): `tools/run_continuity.py`, `dev-platform.continuity/v1`, `continuity` check in the
   verifier, release workflow jobs `continuity`/`attest-continuity`; policy pins v0.1.2 as predecessor. Evidence only.
 - ADR 0018: single admission policy contract. `runners.event_trust` (normative), optional `admission` section in
