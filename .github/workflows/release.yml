@@ -139,5 +139,12 @@ jobs:
             echo "::error::release is not immutable (repository setting missing); do not use or accept it"
             exit 1
           fi
-          gh release verify "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY"
+          # GitHub creates the release attestation asynchronously after publication (v0.1.1 hit "no
+          # attestations" 1s after publishing). Wait a bounded time; any other failure is immediate.
+          ok=0
+          for i in $(seq 1 20); do
+            if out=$(gh release verify "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" 2>&1); then ok=1; break; fi
+            case "$out" in *"no attestations"*) echo "release attestation not yet available ($i/20)"; sleep 15 ;; *) echo "$out"; exit 1 ;; esac
+          done
+          if [ "$ok" != 1 ]; then echo "::error::release attestation never appeared: $out"; exit 1; fi
           gh release verify-asset "$GITHUB_REF_NAME" "out/dev-platform-$VERSION.tar.gz" --repo "$GITHUB_REPOSITORY"
