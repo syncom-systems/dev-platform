@@ -2,17 +2,17 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/syncom-systems/dev-platform/schemas/authorization-v1.schema.json",
   "title": "dev-platform.authorization/v1",
-  "description": "A decision about a subject, with approver identity assertion, basis, UTC timestamp, supersession and retention. Git authorship is never an identity assertion.",
+  "description": "A decision about a subject. Authenticity is verified by the consumer of the record from provider evidence (never taken from the record), authority comes from the trust policy, and scope can only narrow what the approver may confer. Git authorship is never an identity assertion.",
   "type": "object",
   "required": [
-    "schema",
-    "id",
-    "subject",
-    "decision",
-    "decided_by",
     "basis",
     "decided_at",
-    "retention"
+    "decided_by",
+    "decision",
+    "id",
+    "retention",
+    "schema",
+    "subject"
   ],
   "properties": {
     "schema": {
@@ -54,14 +54,32 @@
         "id",
         "role",
         "identity_assertion"
-      ]
+      ],
+      "properties": {
+        "identity_assertion": {
+          "type": "object",
+          "required": [
+            "provider"
+          ],
+          "properties": {
+            "provider": {
+              "enum": [
+                "github-signed-commit"
+              ]
+            },
+            "login": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^authorizations/[A-Za-z0-9._-]+\\.json$"
+            }
+          }
+        }
+      }
     },
     "basis": {
-      "type": "object",
-      "required": [
-        "kind",
-        "reference"
-      ]
+      "type": "object"
     },
     "decided_at": {
       "type": "string",
@@ -79,6 +97,53 @@
         "class",
         "until"
       ]
+    },
+    "scope": {
+      "type": "object",
+      "required": [
+        "confers"
+      ],
+      "properties": {
+        "confers": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "platform-baseline"
+            ]
+          },
+          "minItems": 1,
+          "description": "Exactly what the approval grants. Certification, qualification and consumer migration are never conferrable here."
+        }
+      }
+    },
+    "validity": {
+      "type": "object",
+      "properties": {
+        "not_before": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "not_after": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
     }
+  },
+  "if": {
+    "properties": {
+      "subject": {
+        "properties": {
+          "kind": {
+            "const": "platform-release"
+          }
+        }
+      }
+    }
+  },
+  "then": {
+    "required": [
+      "scope"
+    ]
   }
 }

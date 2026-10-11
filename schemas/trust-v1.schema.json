@@ -32,7 +32,87 @@
       "type": "boolean"
     },
     "stable_requires_authorization": {
+      "const": true,
+      "description": "Cannot be disabled: a stable release is accepted only with an authenticated approval."
+    },
+    "require_environment_evidence": {
       "type": "boolean"
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providers",
+        "evidence_repo",
+        "evidence_ref",
+        "approvers"
+      ],
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "github-signed-commit"
+            ]
+          },
+          "description": "Subset of the verifier's built-in registry; unknown providers fail closed."
+        },
+        "evidence_repo": {
+          "type": "string"
+        },
+        "evidence_ref": {
+          "type": "string"
+        },
+        "approvers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "provider",
+              "login",
+              "may_approve",
+              "may_confer"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "provider": {
+                "enum": [
+                  "github-signed-commit"
+                ]
+              },
+              "login": {
+                "type": "string"
+              },
+              "roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "may_approve": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "platform-release"
+                  ]
+                }
+              },
+              "may_confer": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "platform-baseline"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

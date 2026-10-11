@@ -21,3 +21,4 @@ revision). Superseded records stay in place.
 | [0013](0013-governance-and-auditability.md) | Governance and auditability | Ratified |
 | [0014](0014-release-trust-bootstrap-and-execution.md) | Release trust, bootstrap and verify-then-execute | Ratified |
 | [0015](0015-closure-identity-and-trust-base.md) | Closure identity, SBOM correspondence and the verification trust base | Ratified (owner directive, turn 4) |
+| [0016](0016-authorization-trust-boundary.md) | Authorization trust boundary | Accepted (owner directive, 2026-10-11) |

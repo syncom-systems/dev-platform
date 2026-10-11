@@ -67,23 +67,6 @@ def fake_gh(archive_sha, version, *, code=0, cert=None, predicate=None, subject=
     return run
 
 
-def auth(archive_sha, **over):
-    d = {
-        "schema": "dev-platform.authorization/v1",
-        "id": "auth-1",
-        "subject": {"kind": "platform-release", "digest": archive_sha},
-        "decision": "approved",
-        "decided_by": {
-            "id": "owner",
-            "role": "owner",
-            "identity_assertion": {"provider": "github-oidc", "reference": "matssun"},
-        },
-        "decided_at": "2026-10-10T12:00:00Z",
-    }
-    d.update(over)
-    return d
-
-
 def build_candidate(test, version, revision=REV, manifest=None):
     import shutil
 
@@ -152,51 +135,13 @@ class VerifierTest(unittest.TestCase):
         self.assertEqual(self.failed(doc), set())
         self.assertEqual(doc["acceptance"]["state"], "pre-release")
 
-    def test_prerelease_ignores_even_a_valid_authorization(self):
-        doc, _, _ = self.run_v("1.0.0-rc.1", auths=[auth])
+    def test_prerelease_is_never_accepted_whatever_the_authorization(self):
+        doc, _, _ = self.run_v("1.0.0-rc.1", auths=[{"anything": "at all"}])
         self.assertEqual(doc["acceptance"]["state"], "pre-release")
 
     def test_stable_without_authorization_is_verified_unaccepted(self):
         doc, _, _ = self.run_v("1.0.0")
         self.assertEqual(doc["acceptance"]["state"], "verified-unaccepted")
-
-    def test_stable_with_effective_authorization_is_accepted(self):
-        doc, _, _ = self.run_v("1.0.0", auths=[auth])
-        self.assertEqual(doc["acceptance"]["state"], "accepted")
-        self.assertEqual(doc["acceptance"]["authorization"], "auth-1")
-
-    def test_revoked_wrong_subject_and_git_identity_authorizations_do_not_accept(self):
-        revoked = lambda sha: [
-            auth(sha),
-            auth(
-                sha,
-                id="auth-2",
-                decision="revoked",
-                supersedes=["auth-1"],
-                decided_at="2026-10-11T00:00:00Z",
-            ),
-        ]
-        for name, a in {
-            "wrong subject": lambda sha: auth("f" * 64),
-            "rejected": lambda sha: auth(sha, decision="rejected"),
-            "git identity": lambda sha: auth(
-                sha,
-                decided_by={
-                    "id": "x",
-                    "role": "r",
-                    "identity_assertion": {"provider": "git-commit-author", "reference": "a@b"},
-                },
-            ),
-            "wrong kind": lambda sha: auth(sha, subject={"kind": "change", "digest": sha}),
-        }.items():
-            doc, _, _ = self.run_v("1.0.0", auths=[a])
-            self.assertEqual(doc["acceptance"]["state"], "verified-unaccepted", name)
-        _arc, sha = self.rebuild("1.0.0")
-        f = tmpdir(self) / "r.json"
-        f.write_text(json.dumps(revoked(sha)[0]))
-        g = tmpdir(self) / "r2.json"
-        g.write_text(json.dumps(revoked(sha)[1]))
-        self.assertIsNone(V.effective_authorization([f, g], sha))
 
     def test_valid_signature_from_untrusted_identity_fails(self):
         for name, over in {

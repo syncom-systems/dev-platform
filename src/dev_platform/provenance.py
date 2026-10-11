@@ -156,4 +156,11 @@ def select_rollback(
         )
         eligible.append({**entry, "approved_at": dec["decided_at"], "authorization": dec["id"]})
     eligible.sort(key=lambda e: e["approved_at"], reverse=True)
-    return {"application": application, "current": current, "eligible": eligible, "rejected": rejected}
+    return {
+        "application": application,
+        "current": current,
+        # Approvals are shape-checked against the provider registry but NOT authenticated here (ADR 0016).
+        "approval_authentication": "unverified",
+        "eligible": eligible,
+        "rejected": rejected,
+    }

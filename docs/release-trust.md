@@ -33,11 +33,14 @@ attestation subject digest and predicate type.
 A valid Sigstore signature only proves *some* GitHub workflow signed the bytes. Trust requires the
 signer to match `trust/policy.json` (repository, workflow path, tag-ref pattern). Even then:
 - **Pre-releases** end at `pre-release`: verified artifacts, never accepted, never certified.
-- **Stable releases** end at `verified-unaccepted` unless an effective
-  `dev-platform.authorization/v1` record (kind `platform-release`, digest = archive sha256,
-  non-git identity assertion, not superseded or revoked) exists. Only the owner can create it; the
-  workflow and the verifier cannot. That record is the initial trust anchor, and it is accepted only
-  *after* all technical checks pass.
+- **Stable releases** end at `verified-unaccepted` unless an *authenticated, authorized, in-force*
+  `dev-platform.authorization/v1` record exists: kind `platform-release`, digest = archive sha256, identity
+  verified by the verifier through a registered provider (`github-signed-commit`), signer listed as an approver
+  in `trust/policy.json`, `scope.confers` within that approver's authority and within `platform-baseline`,
+  inside its validity window, not superseded or revoked. Unsigned records, invented providers, git authorship
+  and unlisted identities are ignored. Only the owner can create it; the workflow and the verifier cannot.
+  Acceptance confers `platform-baseline` only, never certification, qualification or consumer migration
+  ([ADR 0016](adr/0016-authorization-trust-boundary.md)).
 Verification records are attached to the release and retained in git under `releases/<version>/`.
 
 ## Trust roots and bootstrap
