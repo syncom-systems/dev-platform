@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "state": "verified-unaccepted (retained; superseded by 0.2.1; NOT accepted; release not certified)",
+  "git_tag": "v0.2.0",
+  "source_revision": "cfc87c284dd447fbfb3675357d1e535c793fc23f",
+  "archive": "dev-platform-0.2.0.tar.gz",
+  "archive_sha256": "2eeeab1e7e9ee962bdfab2e18b1d2856c942b6e2a29290a252064e7329a103d3",
+  "tree_digest_pin": "054f2c9a7742ac4d307ef9942c15367cb8b80cc25ef485c3da32615e42f98539",
+  "release_workflow_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38156034769",
+  "signer": "syncom-systems/dev-platform/.github/workflows/release.yml@refs/tags/v0.2.0",
+  "github_release": {
+    "immutable": true,
+    "prerelease": true,
+    "title": "dev-platform 0.2.0 (verified, NOT accepted)"
+  },
+  "verifier_pins": {
+    "verify_release.py_sha256": "791713d01198f47045c7abb210e73dd94976d266ed12351cfce53ea9d2b466a9",
+    "trust_policy_sha256": "a0cb10a0c2f6af3413713eac439419e2e4e94805b454af3864530e1b0feb3f43",
+    "install_release.py_sha256": "7e98915b33294c9f97ad734e4f8127667e9b45a856921429d82bbba8ca08e93e"
+  },
+  "installer_note": "the installer at this tag cannot supply the continuity record; use the installer pinned by releases/0.2.1/identity.json",
+  "owner_authorization": "none"
+}
