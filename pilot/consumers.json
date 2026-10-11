@@ -1,0 +1,77 @@
+{
+  "schema": "dev-platform.pilot/v1",
+  "description": "Genuine consumer pilots. Read-only: the consumer repository is checked out at a pinned commit in CI, a dev-platform.toml is generated and committed only inside that throwaway checkout; nothing is pushed and no consumer is migrated. The release under test is the one named here, installed with the trusted installer under pins taken from releases/<version>/identity.json.",
+  "release": {
+    "version": "0.1.2",
+    "allow_unaccepted": true
+  },
+  "consumers": [
+    {
+      "id": "flight",
+      "repo": "syncom-systems/flight",
+      "commit": "a7e3765df73dab120ea240f70cc39cdc4354141c",
+      "profile": "rust-cargo",
+      "platforms": [
+        "linux-x86_64",
+        "darwin-arm64"
+      ],
+      "expect": {
+        "release": {
+          "installed": true,
+          "init_exit": 0,
+          "config_valid": true,
+          "generated_checks": [
+            "python.unittest"
+          ]
+        },
+        "head": {
+          "installed": true,
+          "init_exit": 0,
+          "config_valid": true,
+          "generated_checks": [
+            "cargo.test"
+          ],
+          "provision_exit": 0
+        }
+      }
+    },
+    {
+      "id": "flight-rust199",
+      "repo": "syncom-systems/flight",
+      "commit": "a7e3765df73dab120ea240f70cc39cdc4354141c",
+      "profile": "rust-cargo-1.99",
+      "platforms": [
+        "linux-x86_64",
+        "darwin-arm64"
+      ],
+      "expect": {
+        "release": {
+          "installed": true,
+          "init_exit": 2
+        },
+        "head": {
+          "installed": true,
+          "config_valid": true,
+          "generated_checks": [
+            "cargo.test"
+          ],
+          "provision_exit": 0
+        },
+        "head@linux-x86_64": {
+          "check_exit": 0,
+          "admission": "admitted",
+          "certified": true
+        },
+        "head@darwin-arm64": {
+          "check_exit": 1,
+          "certified": false
+        }
+      }
+    }
+  ],
+  "_findings": [
+    "F1 (fixed in head): published 0.1.2 `init` proposed python.unittest for a Rust workspace with an incidental .py file.",
+    "F2: flight's locked dependencies require rustc >= 1.88; the shipped rust-cargo profile pins 1.85.0. Resolved by the new rust-cargo-1.99 profile (a toolchain change is a new release).",
+    "F3: on macOS the consumer's create_session_tui_e2e test times out (it drives a terminal/tmux); the platform has no declared host-tool requirements, so this environment dependency is outside the evidence (issue filed)."
+  ]
+}

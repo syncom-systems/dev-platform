@@ -119,6 +119,14 @@ def build_parser() -> argparse.ArgumentParser:
     tv.add_argument("--manifest", type=Path, default=Path("toolchains/manifest.json"))
     tv.add_argument("--profile", required=True)
     tv.add_argument("--require-certifiable", action="store_true", help="exit 1 unless every tool is strong")
+    tp = tsub.add_parser(
+        "provision", help="realize a profile's pinned tools into a version-keyed local store"
+    )
+    tp.add_argument("--manifest", type=Path, default=Path("toolchains/manifest.json"))
+    tp.add_argument("--pinned", action="store_true", help="use the manifest of the project's pinned release")
+    tp.add_argument("--project", type=Path, default=Path("."))
+    tp.add_argument("--profile", required=True)
+    tp.add_argument("--dest", type=Path, default=Path(".devenv"))
     pv = sub.add_parser("provenance", help="assemble an application-release record from a certified result")
     psub = pv.add_subparsers(dest="pcmd", required=True)
     pa = psub.add_parser("assemble")
@@ -154,6 +162,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pc.add_argument("--workflows", type=Path, default=Path(".github/workflows"))
     pc.add_argument("--infra-profile", type=Path, default=None, help="dev-platform.infra/v1 incl. admission")
+    ic = sub.add_parser("infra", help="provider-side tools for dev-platform.infra/v1 (validate, event trust)")
+    isub = ic.add_subparsers(dest="icmd", required=True)
+    icc = isub.add_parser(
+        "check", help="validate a profile; optionally check workflows and repository visibility"
+    )
+    icc.add_argument("profile", type=Path)
+    icc.add_argument("--workflows", type=Path, help="directory of workflow files to run pr-check on")
+    icc.add_argument(
+        "--repo-visibility", choices=["public", "private"], help="warn on persistent runners if public"
+    )
+    ie = isub.add_parser("event-trust", help="normative event trust for a CI context")
+    ie.add_argument("--event", required=True)
+    ie.add_argument("--head-repo")
+    ie.add_argument("--base-repo")
+    ie.add_argument("--protected-ref", action="store_true")
+    ie.add_argument("--same-repo-pr-opt-in", action="store_true")
+    ie.add_argument("--triggering-event-trust", choices=["trusted", "untrusted"])
     pl = sub.add_parser("plan", help="release planning: readiness, versions, notes (never grants acceptance)")
     psub = pl.add_subparsers(dest="pcmd", required=True)
     for name, hlp in (
@@ -289,7 +314,15 @@ def cmd_init(args) -> int:
         sha = tree_digest(vdir)
     facts = detect(root)
     bazel = is_bazel_workspace(facts)
-    langs = sorted(facts["languages"])
+    # Checks come from build-system markers and real test layout, never from stray files with a language
+    # extension (pilot finding: a Rust workspace with an incidental .py file got a python.unittest check).
+    cargo = bool(facts["build_systems"].get("cargo")) and not bazel
+    py_tests = (root / "tests").is_dir() and any((root / "tests").rglob("test_*.py"))
+    python = "python" in facts["languages"] and py_tests and not bazel
+    langs = sorted(
+        ({"python"} if python or (bazel and "python" in facts["languages"]) else set())
+        | ({"rust"} if cargo or (bazel and "rust" in facts["languages"]) else set())
+    )
     lines = [
         f"schema_version = {SCHEMA_VERSION}",
         "",
@@ -303,7 +336,7 @@ def cmd_init(args) -> int:
         f"bazel_only = {str(bazel).lower()}",
         "# assurance is a declaration; it is never inferred from source files",
         'assurance = "standard"',
-        "languages = [" + ", ".join(f'"{x}"' for x in langs if x in ("python", "rust")) + "]",
+        "languages = [" + ", ".join(f'"{x}"' for x in langs) + "]",
         "",
     ]
     if bazel:
@@ -318,7 +351,7 @@ def cmd_init(args) -> int:
             'inputs = ["**"]',
             "",
         ]
-    elif "python" in langs:
+    if python:
         lines += [
             "[[check]]",
             'id = "python.unittest"',
@@ -329,7 +362,7 @@ def cmd_init(args) -> int:
             'inputs = ["**/*.py"]',
             "",
         ]
-    elif "rust" in langs:
+    if cargo:
         lines += [
             "[[check]]",
             'id = "cargo.test"',
@@ -339,8 +372,10 @@ def cmd_init(args) -> int:
             'inputs = ["**/*.rs", "**/Cargo.toml", "Cargo.lock"]',
             "",
         ]
-    else:
-        raise ConfigError(["no supported language detected; write dev-platform.toml by hand"])
+    if not (bazel or python or cargo):
+        raise ConfigError(
+            ["no supported build system or test layout detected; write dev-platform.toml by hand"]
+        )
     target.write_text("\n".join(lines))
     _emit(args, {"written": str(target), "bazel_only": bazel}, f"wrote {target}")
     return EXIT_OK
@@ -553,7 +588,31 @@ def cmd_affected(args) -> int:
 
 
 def cmd_toolchain(args) -> int:
+    if args.tcmd == "provision" and args.pinned:
+        from . import provision
+
+        cfg = load(args.project)
+        res = resolve(cfg, protected=protected_context(os.environ, False))
+        try:
+            if not res.release:
+                raise ConfigError(["no pinned release resolved (override or self-hosted mode has none)"])
+            done = provision.provision(res.release["toolchains"], args.profile, args.dest)
+        finally:
+            res.dispose()
+        print(
+            json.dumps({"profile": args.profile, "dest": str(args.dest), "installed": done}, sort_keys=True)
+        )
+        print(f"then: export PATH={args.dest / 'bin'}:$PATH  and run: dev-platform toolchain verify")
+        return EXIT_OK
     manifest = toolchain.validate(json.loads(args.manifest.read_text()))
+    if args.tcmd == "provision":
+        from . import provision
+
+        done = provision.provision(manifest, args.profile, args.dest)
+        print(
+            json.dumps({"profile": args.profile, "dest": str(args.dest), "installed": done}, sort_keys=True)
+        )
+        return EXIT_OK
     if args.tcmd == "verify":
         rec = toolchain.verify_profile(manifest, args.profile, Path.cwd())
         print(json.dumps(rec, indent=2, sort_keys=True))
@@ -714,6 +773,38 @@ def cmd_plan(args) -> int:
     return EXIT_OK
 
 
+def cmd_infra(args) -> int:
+    from . import prcheck, runners
+
+    if args.icmd == "event-trust":
+        t = runners.event_trust(
+            args.event,
+            head_repo=args.head_repo,
+            base_repo=args.base_repo,
+            protected_ref=args.protected_ref,
+            same_repo_pr_opt_in=args.same_repo_pr_opt_in,
+            triggering_event_trust=args.triggering_event_trust,
+        )
+        print(json.dumps({"event": args.event, "event_trust": t}, sort_keys=True))
+        return EXIT_OK
+    doc = _j(args.profile)
+    problems = runners.validate_profile(doc)
+    out: dict = {"profile": str(args.profile), "valid": not problems, "problems": problems, "warnings": []}
+    if not problems:
+        persistent = [r["id"] for r in doc["runners"] if r["isolation"] == "persistent"]
+        if args.repo_visibility == "public" and persistent:
+            out["warnings"].append(
+                f"public repository but the profile offers persistent runners {persistent}: select another "
+                "profile for public repositories (persistent runners must never serve untrusted events)"
+            )
+        if args.workflows:
+            files = {str(p): p.read_text() for p in sorted(args.workflows.glob("*.y*ml"))}
+            out["pr_check"] = prcheck.check(files, doc)
+    print(json.dumps(out, indent=2, sort_keys=True))
+    bad = problems or (out.get("pr_check") or {}).get("admission") not in (None, "ok")
+    return EXIT_UNSATISFIED if bad else EXIT_OK
+
+
 def cmd_pr_check(args) -> int:
     from . import prcheck
 
@@ -746,6 +837,7 @@ _COMMANDS = {
     "release": cmd_release,
     "plan": cmd_plan,
     "pr-check": cmd_pr_check,
+    "infra": cmd_infra,
     "validate": cmd_validate,
     "affected": cmd_affected,
 }

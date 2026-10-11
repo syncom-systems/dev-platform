@@ -68,3 +68,53 @@ class InfraContract(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InfraCli(unittest.TestCase):
+    def run_cli(self, *argv):
+        import contextlib
+        import io
+
+        from dev_platform import cli
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = cli.main(["infra", *argv])
+        return code, json.loads(out.getvalue())
+
+    def test_check_valid_and_invalid_profiles(self):
+        code, out = self.run_cli("check", str(KIT / "valid-trusted-credentials.json"))
+        self.assertEqual((code, out["valid"]), (0, True))
+        code, out = self.run_cli("check", str(KIT / "invalid-duplicate-id.json"))
+        self.assertEqual((code, out["valid"]), (1, False))
+
+    def test_persistent_runners_warn_for_public_repositories(self):
+        import tempfile
+        from pathlib import Path
+
+        prof = {"schema": "dev-platform.infra/v1", "runners": [
+            {"id": "p", "labels": ["x"], "os": "linux", "arch": "x86_64", "isolation": "persistent", "trust": "trusted"}
+        ]}  # fmt: skip
+        with tempfile.TemporaryDirectory() as td:
+            f = Path(td) / "p.json"
+            f.write_text(json.dumps(prof))
+            _, out = self.run_cli("check", str(f), "--repo-visibility", "public")
+            self.assertEqual(len(out["warnings"]), 1)
+            _, out = self.run_cli("check", str(f), "--repo-visibility", "private")
+            self.assertEqual(out["warnings"], [])
+
+    def test_workflows_are_checked_against_the_profile(self):
+        code, out = self.run_cli("check", str(KIT / "valid-admission.json"), "--workflows",
+                                 str(ROOT / ".github" / "workflows"))  # fmt: skip
+        self.assertEqual((code, out["pr_check"]["admission"]), (0, "ok"))
+
+    def test_event_trust_cli(self):
+        import contextlib
+        import io
+
+        from dev_platform import cli
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            cli.main(["infra", "event-trust", "--event", "pull_request_target", "--protected-ref"])
+        self.assertEqual(json.loads(out.getvalue())["event_trust"], "untrusted")

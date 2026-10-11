@@ -32,9 +32,19 @@ evidence that any compiler or build-system integration works. Support is claimed
 |---|---|---|---|---|
 | `python` | `fixtures/python-only` | pinned CPython (python-build-standalone) | linux-x86_64, darwin-arm64 | `closure-verified` |
 | `rust-cargo` | `fixtures-real/rust-cargo` | rustc/cargo 1.85.0 official dist (assembled from the pinned tarball's component manifests, not install.sh) | linux-x86_64, darwin-arm64 | `closure-verified`; `cargo test --locked` (rejects an out-of-date lock); host linker outside the evidence |
+| `rust-cargo-1.99` | `fixtures-real/rust-cargo` | rustc/cargo 1.99.0 official dist, same assembly | linux-x86_64, darwin-arm64 (CI `qualify`) | `closure-verified`; same negative cases as `rust-cargo` |
 | `rust-bazel` | `fixtures-real/rust-bazel` | Bazelisk 1.29.0 -> Bazel 8.4.2 -> rules_rust 0.61.0 -> rustc 1.85.0 | linux-x86_64, darwin-arm64 | launcher `closure-verified`; Bazel binary digest enforced by Bazelisk at execution; rules_rust source pinned through the resolved `MODULE.bazel.lock`; `--lockfile_mode=error` |
 
 Each qualification also runs must-be-rejected scenarios (tampered resolved graph, undeclared module
 change, declared Bazel/Rust version drift, failing test) and requires every one to be rejected.
 `rust-cargo` is qualified in CI after v0.1.0: the v0.1.0 manifest does not contain it. Not claimed (no shipped profile, only synthetic evidence): Python-in-Bazel
 (`rules_python`) and mixed consumers, Windows, Linux aarch64.
+
+## Consumer pilot (v0.2.0): flight
+`pilot/consumers.json` + `tools/pilot.py` + workflow `pilot` install a release with the trusted installer, run
+`init`/`doctor`/`check --stage full` against `syncom-systems/flight` at a pinned commit (read-only, nothing
+pushed) and record findings. Observed so far (evidence about adoption friction, not qualification):
+- published 0.1.2: installs and resolves; `init` proposes the wrong check for a Rust workspace with an incidental
+  `.py` file (fixed in head); the pinned rustc 1.85.0 cannot build flight's locked dependencies (need >= 1.88).
+- head with `rust-cargo-1.99`: linux-x86_64 admitted and certified; darwin-arm64 not certified because one test
+  needs a terminal/tmux that is outside the evidence (issue #60).
