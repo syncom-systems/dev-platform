@@ -95,10 +95,13 @@ NEGATIVE = {
         ("failing test", lambda c: _sub(c / "src/lib.rs", "assert_eq!(super::add(2, 3), 5)", "assert_eq!(super::add(2, 3), 6)"), "check"),
         ("lock file out of date (--locked)", lambda c: _sub(c / "Cargo.toml", 'edition = "2021"', 'edition = "2021"\n\n[dependencies]\nsmallvec = "1"'), "check"),
     ],
+    "rust-cargo-1.99": None,  # same cases as rust-cargo, set below
     "python": [
         ("failing test", lambda c: _sub(c / "app.py", "a + b", "a - b"), "check"),
     ],
 }  # fmt: skip
+
+NEGATIVE["rust-cargo-1.99"] = NEGATIVE["rust-cargo"]
 
 
 def commit_all(consumer: Path, genv: dict, msg: str) -> None:

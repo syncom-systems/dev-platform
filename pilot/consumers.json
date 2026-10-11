@@ -33,6 +33,25 @@
           ]
         }
       }
+    },
+    {
+      "id": "flight-rust199",
+      "repo": "syncom-systems/flight",
+      "commit": "a7e3765df73dab120ea240f70cc39cdc4354141c",
+      "profile": "rust-cargo-1.99",
+      "platforms": [
+        "linux-x86_64",
+        "darwin-arm64"
+      ],
+      "expect": {
+        "release": {
+          "installed": true,
+          "init_exit": 2
+        },
+        "head": {
+          "installed": true
+        }
+      }
     }
   ]
 }

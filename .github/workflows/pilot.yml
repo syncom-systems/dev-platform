@@ -16,10 +16,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15]
-        consumer: [flight]
+        consumer: [flight, flight-rust199]
         mode: [release, head]
         include:
           - {consumer: flight, repo: syncom-systems/flight, commit: a7e3765df73dab120ea240f70cc39cdc4354141c, profile: rust-cargo}
+          - {consumer: flight-rust199, repo: syncom-systems/flight, commit: a7e3765df73dab120ea240f70cc39cdc4354141c, profile: rust-cargo-1.99}
     env: {GH_TOKEN: "${{ github.token }}"}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
