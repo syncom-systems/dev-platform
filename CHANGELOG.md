@@ -13,6 +13,7 @@
   zipapp built with `pip --require-hashes`); rollback refusal suite through the complete bundle/CLI/verifier path
   (`tools/qualify_rollback.py`); live GitHub signature/history qualification against a controlled fixture repository
   (`tools/qualify_live.py`; never reaches `approved`, see ADR 0019 item 13). 0.3.0's qualification claims are unchanged.
+- Predecessor continuity: 0.3.0 (digest-pinned in the policy; verified-unaccepted) re-runs the full stage over this source.
 
 ## 0.3.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Application-release approval trust (ADR 0019, #52): `tools/verify_app_release.py` (independent, reuses the ADR 0016
