@@ -82,7 +82,7 @@ jobs:
           export PATH="$PWD/.devenv/bin:$PWD/.devenv/rust/bin:$PATH"
           PYTHONPATH=src python -m dev_platform toolchain measure --profile ${{ matrix.profile }} || true
           PY=python; [ -x .devenv/python/bin/python3 ] && PY=.devenv/python/bin/python3
-          "$PY" tools/qualify.py --fixture ${{ matrix.fixture }} --profile ${{ matrix.profile }} --negative --out qualification.json
+          "$PY" tools/qualify.py --fixture ${{ matrix.fixture }} --profile ${{ matrix.profile }} --negative --app-release --out qualification.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with: {name: "qualification-${{ matrix.profile }}-${{ matrix.os }}", path: qualification.json}

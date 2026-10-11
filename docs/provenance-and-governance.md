@@ -35,6 +35,23 @@ application in the application-owned policy (`dev-platform.app-trust/v1`); it bi
 release record and confers only `application-release-approval`. `dev-platform rollback select` runs it per candidate
 under operator pins. Platform acceptance is a different decision and is neither required nor implied.
 
+## Immutable evidence bundles and retention (ADR 0019)
+`dev-platform evidence bundle --out DIR --release release.json --result r.json --authorization a.json [--advisory ..]`
+writes a write-once directory (files read-only) with a `manifest.json` listing every file by sha256 and prints the
+manifest's own sha256: the one value the operator pins. `tools/verify_app_release.py --bundle DIR --manifest-sha256 PIN`
+(and `dev-platform evidence bundle-verify`) refuse changed, missing, unlisted, symlinked or path-escaping files and a
+release entry that does not match `release_sha256`. A later decision (revocation, re-approval) is a new bundle whose
+`previous` names the old manifest digest; nothing is edited. `rollback select --bundle DIR=PIN` treats only bundled
+releases as immutable targets (`--allow-unbundled` opts out and is labelled).
+
+Retention contract (the storing system's obligations; the platform enforces none of it): a bundle's `retention` is its
+longest-lived record (class order `standard` < `extended` < `regulated` < `permanent`; latest `until`, null =
+indefinite). Do not delete a bundle before its `until`, nor while any retained approved release references the platform
+release archive or evidence it names; keep the manifest digest in a system independent of the bundle. Class durations
+are the operator's policy; none is implied. Authorization records are retained byte-for-byte (authenticity is checked
+against the signed file in the evidence repository's history, which must be retained as well). No claim of regulatory
+compliance is made.
+
 ## Separation of concerns
 Execution identity (result), evidence (result), authorization (authorization record) and release
 (app-release) are separate documents. A commit's author is not an approver; the validator refuses

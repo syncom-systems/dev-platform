@@ -25,7 +25,8 @@
           ],
           "provision_exit": 0,
           "check_exit": 1,
-          "certified": false
+          "certified": false,
+          "app_release": "refused"
         },
         "head": {
           "installed": true,
@@ -36,7 +37,8 @@
           ],
           "provision_exit": 0,
           "check_exit": 1,
-          "certified": false
+          "certified": false,
+          "app_release": "refused"
         }
       }
     },
@@ -69,20 +71,28 @@
         "head@linux-x86_64": {
           "check_exit": 0,
           "admission": "admitted",
-          "certified": true
+          "certified": true,
+          "app_release": "assembled",
+          "app_release_state": "unapproved",
+          "app_release_forged_state": "unapproved"
         },
         "head@darwin-arm64": {
           "check_exit": 1,
-          "certified": false
+          "certified": false,
+          "app_release": "refused"
         },
         "release@linux-x86_64": {
           "check_exit": 0,
           "admission": "admitted",
-          "certified": true
+          "certified": true,
+          "app_release": "assembled",
+          "app_release_state": "unapproved",
+          "app_release_forged_state": "unapproved"
         },
         "release@darwin-arm64": {
           "check_exit": 1,
-          "certified": false
+          "certified": false,
+          "app_release": "refused"
         }
       },
       "config_append": "[[host]]\nname = \"tmux\"\nargv = [\"tmux\", \"-V\"]\npattern = \"tmux (\\\\S+)\"\n"

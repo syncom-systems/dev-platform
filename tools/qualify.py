@@ -144,6 +144,11 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path)
     ap.add_argument("--isolate-env", action="store_true", help="run the checks with a scrubbed environment")
     ap.add_argument("--negative", action="store_true", help="also run the must-be-rejected scenarios")
+    ap.add_argument(
+        "--app-release",
+        action="store_true",
+        help="also run the application-release chain over the certified result, with rejection cases",
+    )
     a = ap.parse_args(argv)
     WORK.mkdir(parents=True, exist_ok=True)
     store = WORK / "store"
@@ -193,6 +198,12 @@ def main(argv=None) -> int:
     if a.negative and ok:
         summary["negative"] = negative_cases(a.profile, consumer, genv, env, py)
         ok = all(n["rejected"] for n in summary["negative"])
+    if a.app_release and ok:
+        sys.path.insert(0, str(ROOT / "tools"))
+        import qualify_app_release
+
+        summary["app_release"] = qualify_app_release.run(consumer, result, env, WORK / "app-release")
+        ok = summary["app_release"].get("all_ok", False) or "skipped" in summary["app_release"]
     if a.out:
         a.out.write_text(json.dumps({"summary": summary, "result": doc}, indent=2, sort_keys=True) + "\n")
     print(json.dumps(summary, indent=2, sort_keys=True))

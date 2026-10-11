@@ -14,6 +14,7 @@ from pathlib import Path
 from dev_platform import (
     __version__,
     appverify,
+    bundle,
     engine,
     evidence,
     isolation,
@@ -153,6 +154,18 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--advisory", type=Path, action="append", default=[])
     rs.add_argument("--store", type=Path, default=None, help="platform release store (for advisories)")
     rs.add_argument("--evidence-store", type=Path, help="content-addressed evidence store (results)")
+    rs.add_argument(
+        "--bundle",
+        action="append",
+        default=[],
+        metavar="DIR=MANIFEST_SHA256",
+        help="pinned evidence bundle (immutable release, results, approvals, advisories)",
+    )
+    rs.add_argument(
+        "--allow-unbundled",
+        action="store_true",
+        help="also consider --release records that are not from a pinned bundle",
+    )
     rs.add_argument("--app-policy", type=Path, help="application policy (dev-platform.app-trust/v1)")
     rs.add_argument("--verifier", type=Path, help="tools/verify_app_release.py")
     rs.add_argument("--verifier-sha256", help="operator pin of --verifier")
@@ -171,6 +184,17 @@ def build_parser() -> argparse.ArgumentParser:
     ep.add_argument("record", type=Path, nargs="+")
     ev2 = esub.add_parser("verify", help="re-derive every stored digest; exit 1 on any mismatch")
     ev2.add_argument("--store", type=Path, required=True)
+    eb = esub.add_parser("bundle", help="write a write-once evidence bundle for one application release")
+    eb.add_argument("--out", type=Path, required=True)
+    eb.add_argument("--release", type=Path, required=True)
+    eb.add_argument("--result", type=Path, action="append", default=[])
+    eb.add_argument("--authorization", type=Path, action="append", default=[])
+    eb.add_argument("--advisory", type=Path, action="append", default=[])
+    eb.add_argument("--sbom", type=Path)
+    eb.add_argument("--previous", help="manifest sha256 of the bundle this one follows")
+    ebv = esub.add_parser("bundle-verify", help="check a bundle against the pinned manifest digest")
+    ebv.add_argument("bundle", type=Path)
+    ebv.add_argument("--manifest-sha256", required=True)
     pc = sub.add_parser(
         "pr-check",
         help="static workflow check against the infra profile (violations, incomplete, indicators)",
@@ -680,13 +704,52 @@ def cmd_evidence(args) -> int:
         for f in args.record:
             print(f"{evidence.put(args.store, json.loads(f.read_text()))}  {f}")
         return EXIT_OK
+    if args.ecmd == "bundle":
+        pin = bundle.build(
+            args.out,
+            args.release,
+            results=args.result,
+            authorizations=args.authorization,
+            advisories=args.advisory,
+            sbom=args.sbom,
+            previous=args.previous,
+        )
+        print(f"{pin}  manifest sha256 of {args.out} (pin this out of band)")
+        return EXIT_OK
+    if args.ecmd == "bundle-verify":
+        problems = bundle.verify(args.bundle, args.manifest_sha256)
+        print(json.dumps({"problems": problems}, indent=2))
+        return EXIT_OK if not problems else EXIT_UNSATISFIED
     good, bad = evidence.scan(args.store)
     print(json.dumps({"records": len(good), "problems": bad}, indent=2))
     return EXIT_OK if not bad else EXIT_UNSATISFIED
 
 
+def _bundle_inputs(specs: list[str]) -> tuple[list[Path], list[Path], list[Path], list[Path]]:
+    """(releases, results, authorizations, advisories) from pinned bundles; a bad bundle aborts selection."""
+    rel, res, auth, adv = [], [], [], []
+    for spec in specs:
+        d, sep, pin = spec.rpartition("=")
+        if not sep:
+            raise ConfigError([f"--bundle wants DIR=MANIFEST_SHA256, got {spec!r}"])
+        problems = bundle.verify(Path(d), pin)
+        if problems:
+            raise ConfigError([f"bundle {d}: {p}" for p in problems])
+        root = Path(d)
+        rel.append(root / "release.json")
+        res += sorted(root.glob("results/*.json"))
+        auth += sorted(root.glob("authorizations/*.json"))
+        adv += sorted(root.glob("advisories/*.json"))
+    return rel, res, auth, adv
+
+
 def cmd_rollback(args) -> int:
-    results = {records.canonical_digest(r): r for r in _load_json(args.result)}
+    b_rel, b_res, b_auth, b_adv = _bundle_inputs(args.bundle)
+    args.authorization = [*args.authorization, *b_auth]
+    args.advisory = [*args.advisory, *b_adv]
+    args.release = [*args.release, *b_rel]
+    results = {records.canonical_digest(r): r for r in _load_json([*args.result, *b_res])}
+    immutable = None if args.allow_unbundled else {records.canonical_digest(r) for r in _load_json(b_rel)}
     if args.evidence_store:
         stored, bad = evidence.scan(args.evidence_store)
         if bad:
@@ -731,6 +794,7 @@ def cmd_rollback(args) -> int:
         advisories=_load_json(args.advisory),
         platform_releases=plat,
         authenticate=authenticate,
+        immutable=immutable,
     )
     print(json.dumps(out, indent=2, sort_keys=True))
     return EXIT_OK if out["eligible"] else EXIT_UNSATISFIED
