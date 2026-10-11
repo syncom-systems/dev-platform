@@ -163,6 +163,15 @@ def policy_problems(policy: object) -> list[str]:
         for i, e in enumerate(pr):
             if not (isinstance(e, dict) and e.get("version") and _SHA.match(str(e.get("tree_digest")))):
                 p.append(f"policy.platform_releases[{i}]: version and tree_digest required")
+            elif e.get("require_acceptance") is not None:
+                if e["require_acceptance"] is not True:
+                    p.append(f"policy.platform_releases[{i}].require_acceptance: only true is meaningful")
+                elif not (
+                    _SHA.match(str(e.get("archive_sha256"))) and _REV.match(str(e.get("source_revision")))
+                ):
+                    p.append(
+                        f"policy.platform_releases[{i}]: require_acceptance needs archive_sha256 and source_revision"
+                    )
     return p
 
 
@@ -316,6 +325,33 @@ def assess(path: Path, release_sha: str, app_name: str, policy: dict, V, gh, now
     return verdict
 
 
+def discover_records(V, gh, auth_policy: dict, into: Path) -> list[Path]:
+    """Every authorizations/*.json at the pinned ref of the evidence repo, as local files (bytes as served)."""
+    import base64
+
+    repo, ref = auth_policy["evidence_repo"], auth_policy["evidence_ref"]
+    try:
+        listing = V._api(gh, f"repos/{repo}/contents/authorizations?ref={ref}")
+    except (RuntimeError, ValueError) as e:
+        raise ValueError(f"cannot list authorizations: {e}") from None
+    if not isinstance(listing, list):
+        raise ValueError("authorizations is not a directory")
+    out = []
+    for item in listing:
+        name, path = str(item.get("name")), str(item.get("path"))
+        if item.get("type") != "file" or not name.endswith(".json") or not V.AUTH_PATH_RE.match(path):
+            continue
+        try:
+            blob = V._api(gh, f"repos/{repo}/contents/{path}?ref={ref}")
+            data = base64.b64decode(blob["content"])
+        except (RuntimeError, ValueError, KeyError) as e:
+            raise ValueError(f"cannot read {path}: {e}") from None
+        f = into / name
+        f.write_bytes(data)
+        out.append(f)
+    return out
+
+
 def effective(verdicts: list[dict]) -> dict | None:
     """The one live, authenticated, authorized approval, or None. Latest live decision wins; ties fail closed."""
     live = [v for v in verdicts if v["status"] == "authentic"]
@@ -404,6 +440,8 @@ def verify(
     advisories: list[Path] = (),
     platform_sbom: Path | None = None,
     authorizations: list[Path] = (),
+    platform_acceptance: dict | None = None,
+    discover: bool = False,
     gh=None,
     extra_checks: list[tuple[str, bool, str]] = (),
     now: datetime | None = None,
@@ -512,6 +550,33 @@ def verify(
     )
     coverage["verified"].append("platform release (against the application's policy)")
 
+    # Where the APPLICATION requires it, the platform release must also be owner-ACCEPTED. That is a separate
+    # decision about a separate subject, established by the platform verifier re-run (see main); here it is only
+    # an additional eligibility condition. It never supplies, and never substitutes for, the application approval.
+    entry = allowed[0] if allowed else {}
+    if entry.get("require_acceptance") is True:
+        pa = platform_acceptance or {}
+        sub, acc = pa.get("subject") or {}, pa.get("acceptance") or {}
+        problems = []
+        if not pa:
+            problems.append(
+                "the policy requires an accepted Dev Platform release but no platform verification was run"
+            )
+        else:
+            if sub.get("archive_sha256") != entry["archive_sha256"]:
+                problems.append("verified platform archive is not the one the policy names")
+            if (
+                sub.get("tree_digest") != pl["release_tree_digest"]
+                or sub.get("version") != pl["release_version"]
+            ):
+                problems.append("verified platform archive is not the release this record was built with")
+            if acc.get("state") != "accepted":
+                problems.append(f"platform release state is {acc.get('state')!r}, not 'accepted'")
+            elif "platform-baseline" not in acc.get("confers", []):
+                problems.append("platform acceptance does not confer platform-baseline")
+        rec.add("platform-acceptance", not problems, "; ".join(problems))
+        coverage["verified"].append("platform acceptance (platform verifier re-run under operator pins)")
+
     # advisories
     advs, sbom = [], None
     adv_bad = []
@@ -537,12 +602,41 @@ def verify(
     )
 
     now = now.astimezone(UTC)
+    authorizations = list(authorizations)
+    scratch = None
+    if discover:
+        # Freshness: a revocation or supersession that nobody handed us still counts if it is in the evidence
+        # repository. Every discovered record is judged exactly like a supplied one (same provider path).
+        import tempfile
+
+        scratch = tempfile.TemporaryDirectory(prefix="discovered-auth-")
+        try:
+            found = discover_records(V, gh, policy["authorization"], Path(scratch.name))
+            rec.add("authorization-discovery", True, "")
+            have = {sha256_file(Path(x)) for x in authorizations if Path(x).is_file()}
+            authorizations += [f for f in found if sha256_file(f) not in have]  # same bytes: judged once
+            coverage["verified"].append(
+                f"authorization records discovered in the evidence repo ({len(found)})"
+            )
+        except ValueError as e:
+            rec.add("authorization-discovery", False, str(e))
     verdicts = [
         assess(p, release_sha, rel["application"]["name"], policy, V, gh, now) for p in authorizations
     ]
+    if scratch:
+        scratch.cleanup()
     # assess() binds every record to this exact release digest, so only decisions about it can count.
     auth = effective(verdicts)
-    return _finish(rec, subject, coverage, verdicts, auth, mode)
+    out = _finish(rec, subject, coverage, verdicts, auth, mode)
+    if platform_acceptance:
+        a = platform_acceptance.get("acceptance") or {}
+        out["platform_acceptance"] = {
+            "archive_sha256": (platform_acceptance.get("subject") or {}).get("archive_sha256"),
+            "state": a.get("state"),
+            "authorization": a.get("authorization"),
+            "confers": a.get("confers", []),
+        }
+    return out
 
 
 def _finish(rec, subject, coverage, verdicts, auth, mode) -> dict:
@@ -597,6 +691,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--advisory", type=Path, action="append", default=[])
     ap.add_argument("--platform-sbom", type=Path)
     ap.add_argument("--authorization", type=Path, action="append", default=[])
+    ap.add_argument(
+        "--discover-authorizations",
+        action="store_true",
+        help="also judge every record found in the evidence repository (so a newer revocation counts)",
+    )
+    ap.add_argument("--platform-archive", type=Path, help="Dev Platform archive the policy requires accepted")
+    ap.add_argument(
+        "--platform-policy", type=Path, help="platform trust policy (a trust anchor, operator-pinned)"
+    )
+    ap.add_argument("--platform-policy-sha256", help="operator pin of --platform-policy")
+    ap.add_argument("--platform-authorization", type=Path, action="append", default=[])
+    ap.add_argument("--platform-bundle", type=Path)
+    ap.add_argument("--platform-sbom-bundle", type=Path)
+    ap.add_argument("--platform-environment", type=Path)
+    ap.add_argument("--platform-continuity", type=Path)
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     try:
@@ -622,6 +731,33 @@ def main(argv: list[str] | None = None) -> int:
     if a.release is None:
         print("a release record or a valid --bundle is required", file=sys.stderr)
         return 2
+    platform_doc = None
+    if a.platform_archive:
+        if not (a.platform_policy and a.platform_policy_sha256):
+            print(
+                "--platform-archive requires --platform-policy and --platform-policy-sha256", file=sys.stderr
+            )
+            return 2
+        if sha256_file(a.platform_policy) != a.platform_policy_sha256:
+            print("platform policy does not match its operator pin", file=sys.stderr)
+            return 2
+        want = sha256_file(a.platform_archive)
+        entry = next(
+            (e for e in policy.get("platform_releases", []) if e.get("require_acceptance") and e.get("archive_sha256") == want),
+            None,
+        )  # fmt: skip
+        if entry:
+            platform_doc = V.verify(
+                a.platform_archive,
+                {"version": entry["version"], "source_revision": entry["source_revision"],
+                 "archive_sha256": want, "ref": f"refs/tags/v{entry['version']}", "tree_digest": entry["tree_digest"]},
+                json.loads(a.platform_policy.read_text()),
+                authorizations=a.platform_authorization,
+                bundle=a.platform_bundle,
+                sbom_bundle=a.platform_sbom_bundle,
+                environment=a.platform_environment,
+                continuity=a.platform_continuity,
+            )  # fmt: skip
     arts = {}
     for item in a.artifact:
         name, sep, path = item.partition("=")
@@ -642,6 +778,8 @@ def main(argv: list[str] | None = None) -> int:
         advisories=a.advisory,
         platform_sbom=a.platform_sbom,
         authorizations=a.authorization,
+        platform_acceptance=platform_doc,
+        discover=a.discover_authorizations,
         extra_checks=extra,
     )
     text = json.dumps(doc, indent=2, sort_keys=True) + "\n"

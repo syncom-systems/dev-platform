@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.4.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
+- Application policies may require an owner-accepted Dev Platform release (`require_acceptance` +
+  `archive_sha256` + `source_revision` in `platform_releases`; schema-added, optional). `verify_app_release.py` and
+  `rollback select` re-run the platform verifier (`--platform-*`) and add the `platform-acceptance` check; application
+  and platform authority stay separate.
+- `--discover-authorizations` (verifier and `rollback select`): records in the evidence repository are judged too, so
+  a revocation missing from a bundle still counts. `rollback select` rejections now carry the authorization evidence.
+- Qualification: Python profile application-release chain over a hash-locked dependency (`fixtures-real/python-locked`,
+  zipapp built with `pip --require-hashes`); rollback refusal suite through the complete bundle/CLI/verifier path
+  (`tools/qualify_rollback.py`); live GitHub signature/history qualification against a controlled fixture repository
+  (`tools/qualify_live.py`; never reaches `approved`, see ADR 0019 item 13). 0.3.0's qualification claims are unchanged.
+
 ## 0.3.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Application-release approval trust (ADR 0019, #52): `tools/verify_app_release.py` (independent, reuses the ADR 0016
   provider registry under a pin) authenticates application approvals, enforces an application-owned policy

@@ -33,7 +33,14 @@ what was *observed* (profile, tool names, observed versions, identity strength).
 reports `approved`, `unapproved` or `failed`. The approval is a record signed by an approver listed for that
 application in the application-owned policy (`dev-platform.app-trust/v1`); it binds the canonical digest of the exact
 release record and confers only `application-release-approval`. `dev-platform rollback select` runs it per candidate
-under operator pins. Platform acceptance is a different decision and is neither required nor implied.
+under operator pins. Platform acceptance is a different decision and is neither required nor implied by default.
+
+An application that wants more may say so in its own policy: a `platform_releases` entry with `require_acceptance:
+true`, `archive_sha256` and `source_revision` adds the check `platform-acceptance`, for which the verifier re-runs
+`tools/verify_release.py` over the named archive (`--platform-archive --platform-policy P --platform-policy-sha256 PIN
+--platform-authorization ..`). The platform policy stays a separate trust anchor; the application approval still has to
+come from the application's own approvers. `--discover-authorizations` also judges every record in the evidence
+repository so a revocation absent from a bundle still counts.
 
 ## Immutable evidence bundles and retention (ADR 0019)
 `dev-platform evidence bundle --out DIR --release release.json --result r.json --authorization a.json [--advisory ..]`

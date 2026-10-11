@@ -53,6 +53,27 @@ nothing re-derived the links (source, dependencies, platform release, toolchain 
    result of each qualification fixture (13 accept/reject cases; GitHub is a double at the `gh api` boundary);
    `tools/pilot.py` assembles the flight pilot's result and requires `unapproved`, even with a forged approval.
 
+11. **Application policy may require an owner-accepted platform release** (0.4.0). A `platform_releases` entry with
+   `require_acceptance: true` also names `archive_sha256` and `source_revision`. The verifier then re-runs the
+   platform verifier (`--platform-archive`, `--platform-policy` with `--platform-policy-sha256`, platform
+   authorizations/bundles) and adds the check `platform-acceptance`: the verified archive must be the one named, the
+   release the record was built with, and `acceptance.state` must be `accepted` conferring `platform-baseline`.
+   This is an extra eligibility condition only. It never supplies an application approval, platform approvers have no
+   authority in the application policy (and the reverse), and a record for one subject cannot bind to the other.
+   The same flags exist on `rollback select`; with the requirement set and no platform verification supplied,
+   every candidate fails closed. Only one platform archive can be verified per run, so candidates built with another
+   platform release are refused rather than guessed at.
+12. **Freshness.** `--discover-authorizations` also judges every `authorizations/*.json` at the policy's evidence
+   ref, through the same provider path. A revocation that no bundle contains therefore still ends eligibility.
+   Without it a stale bundle shows its old approval: the operator must supply the newest evidence or discover.
+13. **Live GitHub qualification** (`tools/qualify_live.py`, private fixture repository, `github-actions[bot]` as
+   the only identity). GitHub signs API-made commits with its own key and records `web-flow` as committer, so such a
+   record is refused by design; the live path therefore reaches `unapproved` for every case, never `approved`. The
+   `approved` positive needs a second GitHub identity with its own signing key (an owner provisioning decision) and
+   is exercised only against the recording `gh` double (`tools/qualify_rollback.py`: complete bundle -> pinned CLI
+   -> verifier-subprocess path with revoked, superseded, vulnerable, tampered, unsigned, edited, non-approver,
+   unbundled and evidence-less releases, each refused with its reason).
+
 ## Consequences
 - The shape validator (`records.validate_authorization`) now requires the assertion shape the verifiers actually
   authenticate (`login`, `path`) and a `scope.confers` matching the subject kind; it previously asked for a

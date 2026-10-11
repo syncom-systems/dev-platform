@@ -115,6 +115,18 @@
           "sbom_sha256": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
+          },
+          "require_acceptance": {
+            "const": true,
+            "description": "the application also requires this Dev Platform release to be owner-accepted (verified by re-running the platform verifier); never an application approval"
+          },
+          "archive_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "source_revision": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{40}$"
           }
         }
       }

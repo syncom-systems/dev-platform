@@ -63,7 +63,7 @@ jobs:
         os: [ubuntu-24.04, macos-15]
         profile: [python, rust-bazel, rust-bazel-9, rust-cargo, rust-cargo-1.99]
         include:
-          - {profile: python, fixture: fixtures/python-only}
+          - {profile: python, fixture: fixtures-real/python-locked}
           - {profile: rust-bazel, fixture: fixtures-real/rust-bazel}
           - {profile: rust-bazel-9, fixture: fixtures-real/rust-bazel-9}
           - {profile: rust-cargo, fixture: fixtures-real/rust-cargo}

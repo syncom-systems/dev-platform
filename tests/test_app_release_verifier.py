@@ -4,10 +4,12 @@ GitHub is faked at the `gh api` boundary; the verifier and the provider registry
 Every must-be-rejected case asserts that the outcome is NOT `approved`.
 """
 
+import base64
 import copy
 import hashlib
 import importlib.util
 import json
+import re
 import unittest
 from datetime import UTC, datetime
 
@@ -182,6 +184,56 @@ class Approved(Case):
     def test_wrong_platform_verifier_pin_is_refused(self):
         with self.assertRaises(SystemExit):
             A.load_platform_verifier(PV_PATH, "0" * 64)
+
+
+class Discovery(Case):
+    """--discover-authorizations: a revocation nobody handed us still counts when it is in the evidence repo."""
+
+    def listing_gh(self, fail=False):
+        base = self.gh
+
+        def gh(argv):
+            if "/contents/authorizations?ref=" in argv[2]:
+                if fail:
+                    return 1, "", "boom"
+                items = [
+                    {"name": p.rsplit("/", 1)[1], "path": p, "type": "file"} for p in sorted(base.history)
+                ]
+                return 0, json.dumps(items), ""
+            m = re.search(r"/contents/([^?]+)\?ref=main$", argv[2])
+            if m:  # head of the branch
+                return (
+                    0,
+                    json.dumps(
+                        {"content": base64.b64encode(base.history[m.group(1)][0]["_content"]).decode()}
+                    ),
+                    "",
+                )
+            return base(argv)
+
+        return gh
+
+    def test_later_revocation_found_in_the_repo_wins(self):
+        ok = self.good_auth()
+        self.signed(approval(self.rel, name="rev", decision="revoked", decided_at="2026-10-11T10:00:00Z"))
+        self.assertEqual(self.state(self.run_v([ok])), "approved")  # stale: the revocation was not supplied
+        doc = self.run_v([ok], discover=True, gh=self.listing_gh())
+        self.assertEqual(self.state(doc), "unapproved")
+
+    def test_supplied_and_discovered_copies_of_a_record_are_judged_once(self):
+        ok = self.good_auth()
+        doc = self.run_v([ok], discover=True, gh=self.listing_gh())
+        self.assertEqual(self.state(doc), "approved", doc["approval"]["authorization_evidence"])
+
+    def test_discovery_can_find_an_approval_too(self):
+        self.good_auth()
+        doc = self.run_v([], discover=True, gh=self.listing_gh())
+        self.assertEqual(self.state(doc), "approved")
+
+    def test_unlistable_repository_fails_closed(self):
+        doc = self.run_v([self.good_auth()], discover=True, gh=self.listing_gh(fail=True))
+        self.assertEqual(self.state(doc), "failed")
+        self.assertIn("authorization-discovery", self.failed(doc))
 
 
 class NoApproval(Case):
@@ -526,3 +578,115 @@ class Advisories(Case):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RequiredPlatformAcceptance(Case):
+    """An application policy may require its Dev Platform release to be owner-ACCEPTED. That is an extra
+    eligibility condition established by re-running the platform verifier; it never approves the application,
+    and platform authority never carries over to application approval (or the reverse)."""
+
+    PLATFORM_OWNER = "platform-owner"
+
+    def setUp(self):
+        from tests import test_authorization as TA
+        from tests import test_verify_release as TV
+
+        super().setUp()
+        self.TA, self.TV = TA, TV
+        self.arc, self.psha = TV.build_candidate(self, "1.0.0")
+        self.pgh = TA.Github()
+        self.pexp = {"version": "1.0.0", "source_revision": "c" * 40, "archive_sha256": self.psha,
+                     "ref": "refs/tags/v1.0.0"}  # fmt: skip
+        self.ppolicy = TA.POLICY
+        tree = self.platform_doc([])["subject"]["tree_digest"]
+        v = "1.0.0"
+        self.res = result(rev=REV, tree=tree)
+        self.res["platform"].update(running_version=v, pinned_version=v)
+        self.res["environment"]["release"]["version"] = v
+        self.rel = provenance.assemble(
+            self.res, name="app", version="1.0.0", source_uri="https://example.invalid/app",
+            artifacts=[{"name": "app.tar", "sha256": hashlib.sha256(b"artifact").hexdigest()}],
+            resolution=provenance.resolution_digest([self.d / "app.lock"], self.d))  # fmt: skip
+        self.tree = tree
+        self.policy["platform_releases"] = [{"version": v, "tree_digest": tree, "require_acceptance": True,
+                                             "archive_sha256": self.psha, "source_revision": "c" * 40}]  # fmt: skip
+
+    def platform_doc(self, files, *, gh=None):
+        att = self.TV.fake_gh(self.psha, "1.0.0")
+
+        def both(argv):
+            return (gh or self.pgh)(argv) if argv[:2] == ["gh", "api"] else att(argv)
+
+        return self.TV.V.verify(self.arc, self.pexp, self.ppolicy, gh=both, authorizations=files, now=NOW)
+
+    def platform_record(self, **kw):
+        rec = self.TA.record(self.psha)
+        rec["decided_by"]["identity_assertion"]["login"] = self.TA.OWNER
+        f = self.d / "platform-auth.json"
+        raw = json.dumps(rec, indent=2).encode()
+        f.write_bytes(raw)
+        self.pgh.sign(
+            "authorizations/auth-1.json", raw, **({"author": self.TA.OWNER, "committer": self.TA.OWNER} | kw)
+        )
+        return f
+
+    def run_pa(self, pdoc, auths=None):
+        auths = [self.good_auth()] if auths is None else auths
+        return self.run_v(auths, platform_acceptance=pdoc)
+
+    def test_accepted_platform_and_authentic_application_approval(self):
+        pdoc = self.platform_doc([self.platform_record()])
+        self.assertEqual(pdoc["acceptance"]["state"], "accepted")
+        doc = self.run_pa(pdoc)
+        self.assertEqual(self.state(doc), "approved", doc["checks"])
+        self.assertEqual(doc["platform_acceptance"]["state"], "accepted")
+        self.assertEqual(
+            doc["approval"]["confers"], ["application-release-approval"]
+        )  # not platform-baseline
+
+    def test_unaccepted_platform_blocks_even_a_valid_application_approval(self):
+        doc = self.run_pa(self.platform_doc([]))
+        self.assertEqual(self.state(doc), "failed")
+        self.assertIn("platform-acceptance", self.failed(doc))
+
+    def test_no_platform_verification_at_all(self):
+        doc = self.run_pa(None)
+        self.assertEqual(self.state(doc), "failed")
+        self.assertIn("platform-acceptance", self.failed(doc))
+
+    def test_unsigned_platform_acceptance_does_not_count(self):
+        doc = self.run_pa(self.platform_doc([self.platform_record(verified=False)]))
+        self.assertIn("platform-acceptance", self.failed(doc))
+
+    def test_acceptance_of_a_different_archive_does_not_count(self):
+        pdoc = self.platform_doc([self.platform_record()])
+        pdoc["subject"]["archive_sha256"] = "9" * 64
+        self.assertIn("platform-acceptance", self.failed(self.run_pa(pdoc)))
+
+    def test_application_approval_alone_does_not_accept_the_platform(self):
+        # the application approver is not in the platform policy: their record cannot accept the platform
+        rec = self.TA.record(self.psha)
+        rec["decided_by"]["identity_assertion"]["login"] = APPROVER
+        f = self.d / "x.json"
+        raw = json.dumps(rec).encode()
+        f.write_bytes(raw)
+        self.pgh.sign("authorizations/auth-1.json", raw, author=APPROVER, committer=APPROVER)
+        pdoc = self.platform_doc([f])
+        self.assertEqual(pdoc["acceptance"]["state"], "verified-unaccepted")
+        self.assertIn("platform-acceptance", self.failed(self.run_pa(pdoc)))
+
+    def test_platform_acceptance_does_not_approve_the_application(self):
+        pdoc = self.platform_doc([self.platform_record()])
+        doc = self.run_pa(pdoc, auths=[])
+        self.assertEqual(self.state(doc), "unapproved")
+        # and the platform record, presented as an application approval, binds to the wrong subject
+        doc = self.run_pa(pdoc, auths=[self.d / "platform-auth.json"])
+        self.assertEqual(self.state(doc), "unapproved")
+
+    def test_policy_requiring_acceptance_must_name_the_archive(self):
+        pol = copy.deepcopy(self.policy)
+        del pol["platform_releases"][0]["archive_sha256"]
+        self.assertTrue(A.policy_problems(pol))
+        pol["platform_releases"][0]["archive_sha256"] = self.psha
+        pol["platform_releases"][0]["require_acceptance"] = False
+        self.assertTrue(A.policy_problems(pol))
