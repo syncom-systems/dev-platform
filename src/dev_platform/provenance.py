@@ -137,16 +137,40 @@ def select_rollback(
     *,
     advisories: list[dict] = (),
     platform_releases: dict | None = None,
+    authenticate=None,
 ) -> dict:
-    """Eligible earlier releases (most recently approved first) and why each other one is not."""
+    """Eligible earlier releases (most recently approved first) and why each other one is not.
+
+    With `authenticate` (an `appverify.AppVerifier`) every candidate is judged by the independent verifier:
+    authenticated, authorized, exactly bound, in force. Without it only the shape of the approval records is
+    checked and the output says `approval_authentication: unverified`; that mode is diagnostic and is never
+    an approval (ADR 0016, ADR 0019).
+    """
     plat = platform_releases or {}
     eligible, rejected = [], []
     for rel in releases:
         app = rel.get("application") or {}
         if app.get("name") != application or app.get("version") == current:
             continue
-        probs = link_problems(rel, results, authorizations, list(advisories), plat)
         entry = {"version": app.get("version"), "release_sha256": records.canonical_digest(rel)}
+        if authenticate is not None:
+            rec = authenticate(rel)
+            ap = rec["approval"]
+            if ap["state"] == "approved":
+                eligible.append(
+                    {
+                        **entry,
+                        "approved_at": ap["decided_at"],
+                        "authorization": ap["authorization"],
+                        "approver": ap["approver"],
+                        "coverage": rec["coverage"],
+                    }
+                )
+            else:
+                failed = [f"{c['id']}: {c['detail']}" for c in rec["checks"] if c["status"] == "failed"]
+                rejected.append({**entry, "reasons": failed or ap["reasons"]})
+            continue
+        probs = link_problems(rel, results, authorizations, list(advisories), plat)
         if probs:
             rejected.append({**entry, "reasons": probs})
             continue
@@ -159,8 +183,7 @@ def select_rollback(
     return {
         "application": application,
         "current": current,
-        # Approvals are shape-checked against the provider registry but NOT authenticated here (ADR 0016).
-        "approval_authentication": "unverified",
+        "approval_authentication": "verified" if authenticate is not None else "unverified",
         "eligible": eligible,
         "rejected": rejected,
     }

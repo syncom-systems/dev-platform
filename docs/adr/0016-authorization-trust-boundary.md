@@ -41,5 +41,5 @@ band like any other). Neither the platform nor its agent adds approvers or creat
 ## Known limits
 - Authenticity depends on GitHub's signature verification and account binding at verification time; a later
   key revocation is not visible in an old verification record.
-- Application-release approvals (`rollback select`) validate record shape and the provider registry only; they
-  are not authenticated yet and the output says so. Do not treat them as authenticated approval.
+- Application-release approvals are authenticated by a separate verifier under an application-owned policy
+  (ADR 0019, `tools/verify_app_release.py`); `rollback select --unauthenticated` remains a labelled diagnostic.

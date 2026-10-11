@@ -36,10 +36,15 @@ def auth(**over):
         "decided_by": {
             "id": "u1",
             "role": "qa-approver",
-            "identity_assertion": {"provider": "github-signed-commit", "reference": "sub-123"},
+            "identity_assertion": {
+                "provider": "github-signed-commit",
+                "login": "qa",
+                "path": "authorizations/a.json",
+            },
         },
         "basis": {"kind": "change-ticket", "reference": "CHG-42"},
         "decided_at": "2026-10-10T12:00:00Z",
+        "scope": {"confers": ["application-release-approval"]},
         "retention": {"class": "regulated", "until": None},
     }
     d.update(over)
@@ -70,7 +75,11 @@ class AuthorizationTest(unittest.TestCase):
 
     def test_git_authorship_is_not_approval(self):
         bad = auth()
-        bad["decided_by"]["identity_assertion"] = {"provider": "git-commit-author", "reference": "a@b"}
+        bad["decided_by"]["identity_assertion"] = {
+            "provider": "git-commit-author",
+            "login": "a",
+            "path": "authorizations/a.json",
+        }
         self.assertTrue(any("not a supported provider" in p for p in R.validate_authorization(bad)))
         bad["decided_by"].pop("identity_assertion")
         self.assertTrue(any("identity_assertion" in p for p in R.validate_authorization(bad)))

@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+- Application-release approval trust (ADR 0019, #52): `tools/verify_app_release.py` (independent, reuses the ADR 0016
+  provider registry under a pin) authenticates application approvals, enforces an application-owned policy
+  (`dev-platform.app-trust/v1`), binds source/dependencies/platform/toolchain/evidence/artifacts to the exact release
+  digest, and handles revocation, supersession and advisories. `rollback select` now requires the pinned verifier
+  (`--unauthenticated` is a labelled diagnostic). Shape validator aligned with the verified assertion shape.
+- Owner steps for formal acceptance of 0.2.1: `docs/owner-acceptance-0.2.1.md` (nothing pre-made).
 
 ## 0.2.1 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Installer consumes the predecessor-continuity record (found by independent verification of 0.2.0, whose tag's

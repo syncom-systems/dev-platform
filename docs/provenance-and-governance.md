@@ -26,6 +26,15 @@ what was *observed* (profile, tool names, observed versions, identity strength).
   `effective_decision` resolves the current decision by explicit supersession; a `revoked` or
   superseded approval no longer authorizes.
 
+## Approving and verifying an application release (ADR 0019)
+`python3 -I tools/verify_app_release.py release.json --policy app-trust.json --platform-verifier tools/verify_release.py
+--platform-verifier-sha256 PIN --mode release --source-revision SHA --lock Cargo.lock --root . --artifact app.tar=app.tar
+--result result.json --advisory adv.json --authorization authorizations/app-1.0.0.json` re-derives every link and
+reports `approved`, `unapproved` or `failed`. The approval is a record signed by an approver listed for that
+application in the application-owned policy (`dev-platform.app-trust/v1`); it binds the canonical digest of the exact
+release record and confers only `application-release-approval`. `dev-platform rollback select` runs it per candidate
+under operator pins. Platform acceptance is a different decision and is neither required nor implied.
+
 ## Separation of concerns
 Execution identity (result), evidence (result), authorization (authorization record) and release
 (app-release) are separate documents. A commit's author is not an approver; the validator refuses

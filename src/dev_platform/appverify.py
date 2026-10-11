@@ -1,0 +1,90 @@
+"""Run the independent application-release verifier (tools/verify_app_release.py) under operator pins.
+
+Like `lifecycle.run_verifier` for platform releases: this module is a *runner*, never an authority. The
+verifier's bytes and the platform verifier's bytes (its provider registry) are checked against pins the
+operator supplies from outside the repository under review; the verifier's record is the only thing consulted.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+from . import records
+from .errors import ConfigError
+
+VERIFICATION = "dev-platform.app-release-verification/v1"
+
+
+def _pinned(path: Path, pin: str, what: str) -> None:
+    got = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    if got != pin:
+        raise ConfigError([f"{what} sha256 {got} does not match the pin {pin}"])
+
+
+class AppVerifier:
+    """Verifies one release at a time with the pinned independent verifier."""
+
+    def __init__(
+        self,
+        verifier: Path,
+        verifier_sha256: str,
+        platform_verifier: Path,
+        platform_verifier_sha256: str,
+        policy: Path,
+        *,
+        results: dict[str, dict],
+        authorizations: list[Path],
+        advisories: list[Path] = (),
+        platform_sbom: Path | None = None,
+        mode: str = "select",
+    ):
+        _pinned(verifier, verifier_sha256, "application verifier")
+        _pinned(platform_verifier, platform_verifier_sha256, "platform verifier")
+        self.argv_base = [
+            sys.executable,
+            "-I",
+            str(verifier),
+            "--policy",
+            str(policy),
+            "--platform-verifier",
+            str(platform_verifier),
+            "--platform-verifier-sha256",
+            platform_verifier_sha256,
+            "--mode",
+            mode,
+        ]
+        self.results = results
+        self.authorizations = list(authorizations)
+        self.advisories = list(advisories)
+        self.platform_sbom = platform_sbom
+
+    def __call__(self, release: dict) -> dict:
+        """The verifier's record for `release`; a missing or malformed record is an error, never approval."""
+        with tempfile.TemporaryDirectory() as td:
+            td = Path(td)
+            (td / "release.json").write_text(json.dumps(release, sort_keys=True))
+            argv = [*self.argv_base, str(td / "release.json"), "--out", str(td / "out.json")]
+            for i, res in enumerate(self.results.values()):
+                (td / f"result-{i}.json").write_text(json.dumps(res, sort_keys=True))
+                argv += ["--result", str(td / f"result-{i}.json")]
+            for a in self.authorizations:
+                argv += ["--authorization", str(a)]
+            for a in self.advisories:
+                argv += ["--advisory", str(a)]
+            if self.platform_sbom:
+                argv += ["--platform-sbom", str(self.platform_sbom)]
+            proc = subprocess.run(argv, capture_output=True, text=True)
+            out = td / "out.json"
+            if not out.is_file():
+                raise ConfigError([f"application verifier produced no record: {proc.stderr.strip()[:200]}"])
+            rec = json.loads(out.read_text())
+        if rec.get("schema") != VERIFICATION:
+            raise ConfigError([f"unexpected verifier record schema {rec.get('schema')!r}"])
+        if (rec.get("subject") or {}).get("release_sha256") != records.canonical_digest(release):
+            raise ConfigError(["verifier record is not bound to the release that was submitted"])
+        return rec
