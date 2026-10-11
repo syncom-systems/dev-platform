@@ -10,7 +10,8 @@ tools below against it. Nothing here requires access to the private repository.
 ```json
 {"schema": "dev-platform.infra/v1",
  "runners": [{"id": "...", "labels": ["..."], "os": "linux", "arch": "x86_64",
-              "isolation": "ephemeral", "trust": "public|trusted", "credentials": ["<class names only>"]}],
+              "isolation": "ephemeral", "trust": "public|trusted", "credentials": ["<class names only>"],
+              "capabilities": ["<optional, e.g. tmux, qemu-aarch64>"], "cache": "none|read-only|read-write"}],
  "admission": {"forbidden_triggers": ["pull_request_target"], "protected_environments": ["<names>"]}}
 ```
 `admission` is optional and organization-owned. Event trust is never configurable: it is derived by the
@@ -24,6 +25,14 @@ platform (`runners.event_trust`).
 | Consumer workflows respect the admission policy | `dev-platform infra check profile.json --workflows .github/workflows` or `dev-platform pr-check --infra-profile profile.json` | a PR-reachable job selects a non-public runner without a protected environment, or uses a forbidden trigger (`failed`); unresolvable workflows (`unavailable`) |
 | Routing semantics are unchanged | the conformance kit `contracts/infra/v1` (profiles, routing, event-trust and pr-check cases) | any case differs |
 | Event trust for a context | `dev-platform infra event-trust --event pull_request --head-repo a/b --base-repo a/b` | n/a (prints `trusted`/`untrusted`) |
+
+## Capabilities, cache and diagnostics (additive, issue #20)
+A runner may offer `capabilities` and a `cache` mode. A project requirement (`[runner.<name>]` in
+`dev-platform.toml`) may ask for `capabilities = [...]` and `cache = "none|read-only|read-write"`; a runner
+without the capability, or with another or unspecified cache mode, does not fit. A `public`-trust runner must
+not have a `read-write` shared cache (profile validation). When nothing fits, the denial names every offered
+runner and the first reason it did not fit (trust, os, arch, isolation, credentials, capability, cache): there is
+no silent downgrade.
 
 ## Consumer side
 A consumer passes the profile with `dev-platform check --infra-profile profile.json --event-trust <trusted|untrusted>`;

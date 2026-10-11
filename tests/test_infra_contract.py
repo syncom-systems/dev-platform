@@ -41,11 +41,24 @@ class InfraContract(unittest.TestCase):
                         os=spec.get("os", "any"),
                         credentials=tuple(spec.get("credentials", ())),
                         fallback=spec.get("fallback", "hosted"),
+                        arch=spec.get("arch", "any"),
+                        capabilities=tuple(spec.get("capabilities", ())),
+                        cache=spec.get("cache", "any"),
                     ),
                     offered,
                     c["event"],
                 )
                 self.assertEqual((r.ok, r.runner_id), (c["ok"], c["runner"]))
+
+    def test_denial_names_every_offered_runner_and_why(self):
+        offered = load_profile(KIT / "valid-capabilities.json")
+        r = route(RunnerSpec("r", capabilities=("gpu",), fallback="none"), offered, "trusted")
+        self.assertFalse(r.ok)
+        self.assertIn("qemu-box: capability: runner lacks ['gpu']", r.reason)
+        self.assertIn("public-box: capability", r.reason)
+        r = route(RunnerSpec("r", cache="read-write", fallback="none"), offered, "untrusted")
+        self.assertIn("public-box: cache: needs read-write, runner offers read-only", r.reason)
+        self.assertIn("qemu-box: trust: not offered to untrusted events", r.reason)
 
     def test_event_trust_derivation_is_normative(self):
         for c in CASES["event_trust"]:

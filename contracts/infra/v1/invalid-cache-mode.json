@@ -1,0 +1,7 @@
+{
+  "schema": "dev-platform.infra/v1",
+  "runners": [
+    {"id": "a", "labels": ["x"], "os": "linux", "arch": "x86_64", "isolation": "ephemeral", "trust": "trusted",
+     "cache": "write-everything"}
+  ]
+}

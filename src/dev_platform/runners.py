@@ -85,7 +85,8 @@ def event_trust(
     return "untrusted"
 
 
-_RUNNER_KEYS = {"id", "labels", "os", "arch", "isolation", "trust", "credentials"}
+_RUNNER_KEYS = {"id", "labels", "os", "arch", "isolation", "trust", "credentials", "capabilities", "cache"}
+CACHE_MODES = ("none", "read-only", "read-write")
 
 
 def validate_profile(doc: object) -> list[str]:
@@ -135,6 +136,17 @@ def validate_profile(doc: object) -> list[str]:
         for k, allowed in enums.items():
             if k in r and r[k] not in allowed:
                 errs.append(f"{w}.{k}: one of {list(allowed)}")
+        caps = r.get("capabilities", [])
+        if not (
+            isinstance(caps, list)
+            and all(isinstance(x, str) and x for x in caps)
+            and len(set(caps)) == len(caps)
+        ):
+            errs.append(f"{w}.capabilities: unique non-empty strings")
+        if "cache" in r and r["cache"] not in CACHE_MODES:
+            errs.append(f"{w}.cache: one of {list(CACHE_MODES)}")
+        elif r.get("cache") == "read-write" and r.get("trust") == "public":
+            errs.append(f"{w}: a public-trust runner must not have a read-write shared cache")
         creds = r.get("credentials", [])
         if not (isinstance(creds, list) and all(isinstance(x, str) and x for x in creds)) or len(
             set(creds)
@@ -161,13 +173,27 @@ def load_profile(path: Path | None) -> list[dict]:
     return offered + [dict(h) for h in HOSTED]
 
 
-def _fits(spec: RunnerSpec, r: dict) -> bool:
-    return (
-        spec.os in ("any", r["os"])
-        and spec.arch in ("any", r["arch"])
-        and (spec.isolation == "any" or r["isolation"] == spec.isolation)
-        and set(spec.credentials) <= set(r.get("credentials", []))
-    )
+def _why_not(spec: RunnerSpec, r: dict, event_trust: str) -> str | None:
+    """None if the runner fits, else the first reason it does not (so a denied job is actionable)."""
+    if event_trust != "trusted" and r["trust"] != "public":
+        return "trust: not offered to untrusted events"
+    if r["kind"] == "hosted" and spec.fallback == "none":
+        return "fallback: hosted runners excluded by the requirement"
+    if spec.os not in ("any", r["os"]):
+        return f"os: needs {spec.os}, runner is {r['os']}"
+    if spec.arch not in ("any", r["arch"]):
+        return f"arch: needs {spec.arch}, runner is {r['arch']}"
+    if spec.isolation != "any" and r["isolation"] != spec.isolation:
+        return f"isolation: needs {spec.isolation}, runner is {r['isolation']}"
+    missing_c = sorted(set(spec.credentials) - set(r.get("credentials", [])))
+    if missing_c:
+        return f"credentials: runner lacks {missing_c}"
+    missing = sorted(set(spec.capabilities) - set(r.get("capabilities", [])))
+    if missing:
+        return f"capability: runner lacks {missing}"
+    if spec.cache != "any" and r.get("cache") != spec.cache:
+        return f"cache: needs {spec.cache}, runner offers {r.get('cache', 'unspecified')}"
+    return None
 
 
 def route(spec: RunnerSpec, offered: list[dict], event_trust: str) -> Route:
@@ -176,11 +202,13 @@ def route(spec: RunnerSpec, offered: list[dict], event_trust: str) -> Route:
         raise ConfigError([f"event_trust must be trusted|untrusted, got {event_trust!r}"])
     if spec.credentials and event_trust != "trusted":
         return Route(False, None, (), "credentials are never available to untrusted events")
-    usable = [r for r in offered if event_trust == "trusted" or r["trust"] == "public"]
-    for r in usable:
-        if r["kind"] == "hosted" and spec.fallback == "none":
-            continue
-        if not _fits(spec, r):
-            continue
-        return Route(True, r["id"], tuple(r["labels"]), f"{r['kind']} runner satisfies requirement")
-    return Route(False, None, (), "no offered runner satisfies the requirement (no silent downgrade)")
+    why = []
+    for r in offered:
+        reason = _why_not(spec, r, event_trust)
+        if reason is None:
+            return Route(True, r["id"], tuple(r["labels"]), f"{r['kind']} runner satisfies requirement")
+        why.append(f"{r['id']}: {reason}")
+    detail = "; ".join(why) or "no runners offered"
+    return Route(
+        False, None, (), f"no offered runner satisfies the requirement (no silent downgrade): {detail}"
+    )

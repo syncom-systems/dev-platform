@@ -24,6 +24,8 @@
         "arch": {"enum": ["x86_64", "arm64"]},
         "isolation": {"enum": ["ephemeral", "persistent"]},
         "trust": {"enum": ["public", "trusted"]},
-        "credentials": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}}}
+        "credentials": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "capabilities": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "cache": {"enum": ["none", "read-only", "read-write"]}}}}
   }
 }

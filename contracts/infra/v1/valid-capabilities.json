@@ -1,0 +1,9 @@
+{
+  "schema": "dev-platform.infra/v1",
+  "runners": [
+    {"id": "qemu-box", "labels": ["org-trusted-qemu"], "os": "linux", "arch": "arm64", "isolation": "ephemeral",
+     "trust": "trusted", "capabilities": ["qemu-aarch64", "tmux"], "cache": "read-write"},
+    {"id": "public-box", "labels": ["org-public"], "os": "linux", "arch": "x86_64", "isolation": "ephemeral",
+     "trust": "public", "capabilities": ["tmux"], "cache": "read-only"}
+  ]
+}
