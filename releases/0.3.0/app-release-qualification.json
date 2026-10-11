@@ -1,0 +1,626 @@
+{
+  "python-macos-15": {
+    "app_release": {
+      "skipped": "fixture has no lock file the chain knows"
+    },
+    "certified": true,
+    "negative_rejected": 1,
+    "negative_total": 1
+  },
+  "python-ubuntu-24.04": {
+    "app_release": {
+      "skipped": "fixture has no lock file the chain knows"
+    },
+    "certified": true,
+    "negative_rejected": 1,
+    "negative_total": 1
+  },
+  "rust-bazel-9-macos-15": {
+    "app_release": {
+      "all_ok": true,
+      "assembled": true,
+      "cases": [
+        [
+          "authenticated approval of the exact release",
+          "approved",
+          "approved"
+        ],
+        [
+          "no approval at all",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "unsigned approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval by an authenticated non-approver",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval of a different release",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "authentic revocation after approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "source revision pin differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "manipulated result (digest no longer matches)",
+          "failed",
+          "failed"
+        ],
+        [
+          "evidence missing",
+          "failed",
+          "failed"
+        ],
+        [
+          "artifact bytes differ",
+          "failed",
+          "failed"
+        ],
+        [
+          "dependency state differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "platform release not allowed by the application policy",
+          "failed",
+          "failed"
+        ],
+        [
+          "security advisory on the platform release",
+          "failed",
+          "failed"
+        ]
+      ]
+    },
+    "certified": true,
+    "negative_rejected": 5,
+    "negative_total": 5
+  },
+  "rust-bazel-9-ubuntu-24.04": {
+    "app_release": {
+      "all_ok": true,
+      "assembled": true,
+      "cases": [
+        [
+          "authenticated approval of the exact release",
+          "approved",
+          "approved"
+        ],
+        [
+          "no approval at all",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "unsigned approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval by an authenticated non-approver",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval of a different release",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "authentic revocation after approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "source revision pin differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "manipulated result (digest no longer matches)",
+          "failed",
+          "failed"
+        ],
+        [
+          "evidence missing",
+          "failed",
+          "failed"
+        ],
+        [
+          "artifact bytes differ",
+          "failed",
+          "failed"
+        ],
+        [
+          "dependency state differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "platform release not allowed by the application policy",
+          "failed",
+          "failed"
+        ],
+        [
+          "security advisory on the platform release",
+          "failed",
+          "failed"
+        ]
+      ]
+    },
+    "certified": true,
+    "negative_rejected": 5,
+    "negative_total": 5
+  },
+  "rust-bazel-macos-15": {
+    "app_release": {
+      "all_ok": true,
+      "assembled": true,
+      "cases": [
+        [
+          "authenticated approval of the exact release",
+          "approved",
+          "approved"
+        ],
+        [
+          "no approval at all",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "unsigned approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval by an authenticated non-approver",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval of a different release",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "authentic revocation after approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "source revision pin differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "manipulated result (digest no longer matches)",
+          "failed",
+          "failed"
+        ],
+        [
+          "evidence missing",
+          "failed",
+          "failed"
+        ],
+        [
+          "artifact bytes differ",
+          "failed",
+          "failed"
+        ],
+        [
+          "dependency state differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "platform release not allowed by the application policy",
+          "failed",
+          "failed"
+        ],
+        [
+          "security advisory on the platform release",
+          "failed",
+          "failed"
+        ]
+      ]
+    },
+    "certified": true,
+    "negative_rejected": 5,
+    "negative_total": 5
+  },
+  "rust-bazel-ubuntu-24.04": {
+    "app_release": {
+      "all_ok": true,
+      "assembled": true,
+      "cases": [
+        [
+          "authenticated approval of the exact release",
+          "approved",
+          "approved"
+        ],
+        [
+          "no approval at all",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "unsigned approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval by an authenticated non-approver",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval of a different release",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "authentic revocation after approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "source revision pin differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "manipulated result (digest no longer matches)",
+          "failed",
+          "failed"
+        ],
+        [
+          "evidence missing",
+          "failed",
+          "failed"
+        ],
+        [
+          "artifact bytes differ",
+          "failed",
+          "failed"
+        ],
+        [
+          "dependency state differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "platform release not allowed by the application policy",
+          "failed",
+          "failed"
+        ],
+        [
+          "security advisory on the platform release",
+          "failed",
+          "failed"
+        ]
+      ]
+    },
+    "certified": true,
+    "negative_rejected": 5,
+    "negative_total": 5
+  },
+  "rust-cargo-1.99-macos-15": {
+    "app_release": {
+      "all_ok": true,
+      "assembled": true,
+      "cases": [
+        [
+          "authenticated approval of the exact release",
+          "approved",
+          "approved"
+        ],
+        [
+          "no approval at all",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "unsigned approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval by an authenticated non-approver",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval of a different release",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "authentic revocation after approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "source revision pin differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "manipulated result (digest no longer matches)",
+          "failed",
+          "failed"
+        ],
+        [
+          "evidence missing",
+          "failed",
+          "failed"
+        ],
+        [
+          "artifact bytes differ",
+          "failed",
+          "failed"
+        ],
+        [
+          "dependency state differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "platform release not allowed by the application policy",
+          "failed",
+          "failed"
+        ],
+        [
+          "security advisory on the platform release",
+          "failed",
+          "failed"
+        ]
+      ]
+    },
+    "certified": true,
+    "negative_rejected": 2,
+    "negative_total": 2
+  },
+  "rust-cargo-1.99-ubuntu-24.04": {
+    "app_release": {
+      "all_ok": true,
+      "assembled": true,
+      "cases": [
+        [
+          "authenticated approval of the exact release",
+          "approved",
+          "approved"
+        ],
+        [
+          "no approval at all",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "unsigned approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval by an authenticated non-approver",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval of a different release",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "authentic revocation after approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "source revision pin differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "manipulated result (digest no longer matches)",
+          "failed",
+          "failed"
+        ],
+        [
+          "evidence missing",
+          "failed",
+          "failed"
+        ],
+        [
+          "artifact bytes differ",
+          "failed",
+          "failed"
+        ],
+        [
+          "dependency state differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "platform release not allowed by the application policy",
+          "failed",
+          "failed"
+        ],
+        [
+          "security advisory on the platform release",
+          "failed",
+          "failed"
+        ]
+      ]
+    },
+    "certified": true,
+    "negative_rejected": 2,
+    "negative_total": 2
+  },
+  "rust-cargo-macos-15": {
+    "app_release": {
+      "all_ok": true,
+      "assembled": true,
+      "cases": [
+        [
+          "authenticated approval of the exact release",
+          "approved",
+          "approved"
+        ],
+        [
+          "no approval at all",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "unsigned approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval by an authenticated non-approver",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval of a different release",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "authentic revocation after approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "source revision pin differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "manipulated result (digest no longer matches)",
+          "failed",
+          "failed"
+        ],
+        [
+          "evidence missing",
+          "failed",
+          "failed"
+        ],
+        [
+          "artifact bytes differ",
+          "failed",
+          "failed"
+        ],
+        [
+          "dependency state differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "platform release not allowed by the application policy",
+          "failed",
+          "failed"
+        ],
+        [
+          "security advisory on the platform release",
+          "failed",
+          "failed"
+        ]
+      ]
+    },
+    "certified": true,
+    "negative_rejected": 2,
+    "negative_total": 2
+  },
+  "rust-cargo-ubuntu-24.04": {
+    "app_release": {
+      "all_ok": true,
+      "assembled": true,
+      "cases": [
+        [
+          "authenticated approval of the exact release",
+          "approved",
+          "approved"
+        ],
+        [
+          "no approval at all",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "unsigned approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval by an authenticated non-approver",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "approval of a different release",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "authentic revocation after approval",
+          "unapproved",
+          "unapproved"
+        ],
+        [
+          "source revision pin differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "manipulated result (digest no longer matches)",
+          "failed",
+          "failed"
+        ],
+        [
+          "evidence missing",
+          "failed",
+          "failed"
+        ],
+        [
+          "artifact bytes differ",
+          "failed",
+          "failed"
+        ],
+        [
+          "dependency state differs",
+          "failed",
+          "failed"
+        ],
+        [
+          "platform release not allowed by the application policy",
+          "failed",
+          "failed"
+        ],
+        [
+          "security advisory on the platform release",
+          "failed",
+          "failed"
+        ]
+      ]
+    },
+    "certified": true,
+    "negative_rejected": 2,
+    "negative_total": 2
+  }
+}
