@@ -97,9 +97,8 @@ class Continuity(unittest.TestCase):
     def test_shipped_policy_pins_the_real_predecessor(self):
         from tests.test_verify_release import SHIPPED_POLICY
 
-        ident = json.loads((ROOT / "releases" / "0.1.2" / "identity.json").read_text())
         pred = SHIPPED_POLICY["continuity"]["predecessor"]
-        self.assertEqual(pred["version"], "0.1.2")
+        ident = json.loads((ROOT / "releases" / pred["version"] / "identity.json").read_text())
         self.assertEqual(pred["archive_sha256"], ident["archive_sha256"])
         self.assertEqual(pred["tree_digest"], ident["tree_digest_pin"])
 

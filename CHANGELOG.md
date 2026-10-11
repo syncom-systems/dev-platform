@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.1 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
+- Installer consumes the predecessor-continuity record (found by independent verification of 0.2.0, whose tag's
+  installer could not install it). 0.2.0 is retained verified-unaccepted and superseded.
+
 ## 0.2.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Declared host requirements (#60): `[[host]]` in dev-platform.toml, recorded in environment evidence (gates
   conformance, never raises assurance). New profiles `rust-cargo-1.99` and `rust-bazel-9` (qualified in CI).
