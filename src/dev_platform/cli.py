@@ -104,6 +104,11 @@ def build_parser() -> argparse.ArgumentParser:
     af.add_argument("--advisory", type=Path, required=True)
     af.add_argument("--store", type=Path, default=None)
     af.add_argument("--json", action="store_true")
+    af.add_argument(
+        "--impact", action="store_true", help="full impact analysis incl. fixes and patch proposals"
+    )
+    af.add_argument("--github", metavar="REPO", help="with --impact: analyse the GitHub releases of REPO")
+    af.add_argument("--policy", type=Path, default=Path("planning/release-policy.json"))
     af.add_argument("consumers", type=Path, nargs="*", help="dev-platform.toml, result or app-release files")
     tc = sub.add_parser("toolchain", help="inspect toolchain closures")
     tsub = tc.add_subparsers(dest="tcmd", required=True)
@@ -528,6 +533,16 @@ def cmd_affected(args) -> int:
                 doc = release.load(d)
                 doc["sbom_doc"] = json.loads((d / doc["sbom"]["path"]).read_text())
                 rels[d.name] = doc
+    if args.impact:
+        from . import advisories
+
+        if args.github:
+            rels = advisories.github_releases(args.github)
+        pins = {str(c): records.consumer_release(c) for c in args.consumers}
+        pol = json.loads(args.policy.read_text())
+        out = advisories.impact(adv, rels, {k: v for k, v in pins.items() if v}, pol)
+        print(json.dumps(out, indent=2, sort_keys=True))
+        return EXIT_UNSATISFIED if out["releases"] else EXIT_OK
     hit = records.releases_affected(adv, rels)
     consumers = sorted(str(c) for c in args.consumers if records.consumer_release(c) in hit)
     out = {"advisory": adv["id"], "affected_releases": hit, "affected_consumers": consumers}
