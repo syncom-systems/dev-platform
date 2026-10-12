@@ -67,7 +67,8 @@
           "type": "array",
           "items": {
             "enum": [
-              "github-signed-commit"
+              "github-signed-commit",
+              "github-environment-approval"
             ]
           },
           "description": "Subset of the verifier's built-in registry; unknown providers fail closed."
@@ -77,6 +78,17 @@
         },
         "evidence_ref": {
           "type": "string"
+        },
+        "environment_approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repo", "workflow", "ref"],
+          "description": "Pinned acceptance workflow for the github-environment-approval provider.",
+          "properties": {
+            "repo": {"type": "string"},
+            "workflow": {"type": "string"},
+            "ref": {"type": "string"}
+          }
         },
         "approvers": {
           "type": "array",
@@ -96,7 +108,8 @@
               },
               "provider": {
                 "enum": [
-                  "github-signed-commit"
+                  "github-signed-commit",
+                  "github-environment-approval"
                 ]
               },
               "login": {

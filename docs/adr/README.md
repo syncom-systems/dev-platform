@@ -25,3 +25,4 @@ revision). Superseded records stay in place.
 | [0017](0017-release-lifecycle-and-planning.md) | Release lifecycle and GitHub-native planning | Proposed |
 | [0018](0018-admission-policy-single-contract.md) | One admission policy contract; the PR checker evaluates, it does not decide | Proposed |
 | [0019](0019-application-release-approval-trust.md) | Application-release approval trust | Proposed |
+| [0020](0020-environment-approval-provider.md) | GitHub Environment approval as an authorization provider | Proposed |

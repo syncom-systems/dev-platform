@@ -1,0 +1,78 @@
+# Owner acceptance of a platform release (docs/owner-acceptance-0.2.1.md). Manual only: never runs in CI, on PRs or
+# on tags. The job waits for a required reviewer on the `owner-approval` environment; whoever clicks Approve in
+# GitHub is recorded in the run, written into the authorization record, and the record is attested (Sigstore).
+# The verifier (tools/verify_release.py, provider github-environment-approval) accepts the record only if the
+# attestation names this workflow at refs/heads/main triggered by workflow_dispatch. This workflow decides
+# nothing by itself: without the approval click the job never starts. Third-party actions are pinned by SHA.
+name: accept
+run-name: "platform ${{ inputs.decision }} ${{ inputs.version }} ${{ inputs.digest }}"
+on:
+  workflow_dispatch:
+    inputs:
+      version: {description: "Release version, e.g. 0.2.1", required: true, type: string}
+      digest: {description: "Archive sha256 you are deciding on", required: true, type: string}
+      decision: {description: "approved | revoked | rejected", required: true, type: choice, options: [approved, revoked, rejected]}
+permissions:
+  contents: read
+jobs:
+  record:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: owner-approval
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Build the authorization record
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          DIGEST: ${{ inputs.digest }}
+          DECISION: ${{ inputs.decision }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "bad version"; exit 1; }
+          [[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]] || { echo "bad digest"; exit 1; }
+          # the digest must be the published archive of that version
+          want=$(gh api "repos/$REPO/releases/tags/v$VERSION" \
+            --jq ".assets[] | select(.name==\"dev-platform-$VERSION.tar.gz\") | .digest")
+          [ "$want" = "sha256:$DIGEST" ] || { echo "digest is not the v$VERSION archive ($want)"; exit 1; }
+          approvers=$(gh api "repos/$REPO/actions/runs/$RUN_ID/approvals" \
+            --jq '[.[] | select(.state=="approved") | .user.login] | unique | join(",")')
+          [[ "$approvers" =~ ^[A-Za-z0-9-]+$ ]] || { echo "need exactly one approver, got '$approvers'"; exit 1; }
+          mkdir -p out
+          python3 - "$approvers" <<'PY'
+          import json, os, sys
+          from datetime import datetime, timezone
+          login = sys.argv[1]
+          v, d, dec, run = os.environ["VERSION"], os.environ["DIGEST"], os.environ["DECISION"], os.environ["RUN_ID"]
+          name = f"platform-{v}-{dec}-{run}"
+          rec = {
+              "schema": "dev-platform.authorization/v1",
+              "id": name,
+              "subject": {"kind": "platform-release", "digest": d},
+              "decision": dec,
+              "decided_by": {"id": "owner", "role": "owner", "identity_assertion": {
+                  "provider": "github-environment-approval", "login": login,
+                  "path": f"authorizations/{name}.json"}},
+              "basis": {"kind": "acceptance-packet", "reference": f"releases/{v}/ACCEPTANCE-PACKET.md"},
+              "decided_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "scope": {"confers": ["platform-baseline"]},
+              "supersedes": [],
+              "retention": {"class": "permanent", "until": None},
+          }
+          json.dump(rec, open(f"out/{name}.json", "w"), indent=2)
+          PY
+          echo "record written; approver: $approvers"
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: out/*.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: authorization-record
+          path: out/*.json
+          if-no-files-found: error

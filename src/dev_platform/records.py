@@ -21,7 +21,7 @@ _SHA = re.compile(r"^[0-9a-f]{64}$")
 # Explicit registry: an identity provider is supported only if listed here AND the consuming verifier
 # implements its verification. Anything else (including git authorship) fails closed. Note: this checks the
 # shape only; it does not authenticate. See tools/verify_release.py for the authoritative verification.
-IDENTITY_PROVIDERS = {"github-signed-commit"}
+IDENTITY_PROVIDERS = {"github-signed-commit", "github-environment-approval"}
 
 
 def canonical_digest(doc: object) -> str:

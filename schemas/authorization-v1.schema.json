@@ -66,7 +66,8 @@
           "properties": {
             "provider": {
               "enum": [
-                "github-signed-commit"
+                "github-signed-commit",
+                "github-environment-approval"
               ]
             },
             "login": {
