@@ -27,3 +27,15 @@ Provider `github-environment-approval`, enabled per policy (`authorization.provi
   the owner), Sigstore. Not trusted to separate the owner from an agent holding the same logged-in session or token.
 - Self-review must be allowed on the environment (single-owner repository).
 - Application-release approval (ADR 0019) is untouched and independent.
+
+## Security consideration: shared session (issue #115)
+The approval is a click by whoever holds the owner's logged-in GitHub session or token. Agents working in this repository
+use the same account, so the record cannot distinguish the owner from an agent acting through that session. This was
+accepted by the owner for platform acceptance ("I trust my login to GitHub") and the v0.2.1 acceptance stands: it is
+reopened only by new evidence of a defect, not by this limitation.
+
+Future stronger assurance, if acceptance ever protects something that warrants it, is a new provider (a new trust-model
+decision of the owner) such as: an approval signed with a key the owner holds (the signed-commit provider already supports
+this and stays available), a passkey-gated Sigstore signature, or a separate identity for agents so that the owner's account
+is never available to them. Until then, consumers must treat acceptance as "approved through the owner's GitHub login", and
+verify it as a current decision (`tools/verify_platform_current.py`), never as a stored fact.
