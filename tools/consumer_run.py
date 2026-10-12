@@ -161,7 +161,19 @@ def main(argv: list[str] | None = None) -> int:
 
     def finish(code: int) -> int:
         (ev / "consumer-run.json").write_text(json.dumps(rec, indent=2, sort_keys=True) + "\n")
-        print(json.dumps(rec["steps"], indent=2, sort_keys=True))
+        st = rec["steps"]
+        shown = {  # status only; free text (problems, output tails) is in consumer-run.json
+            "pins_consistent": st.get("pins_consistent"),
+            "trusted_tools": st.get("trusted_tools"),
+            "installed": st.get("installed"),
+            "provision_deterministic": st.get("provision_deterministic"),
+            "event_trust": st.get("event_trust"),
+            "check_exit": st.get("check_exit"),
+            "bazel_rust_proof": st.get("bazel_rust_proof"),
+            "evidence_verdict": st.get("evidence_verdict"),
+        }
+        print(json.dumps(shown, indent=2, sort_keys=True))
+        print(f"details: {ev / 'consumer-run.json'}")
         return code
 
     pins, cfg, problems = read_pins(cd)
