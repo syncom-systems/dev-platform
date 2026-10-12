@@ -22,9 +22,9 @@
   },
   "continuity": {
     "predecessor": {
-      "version": "0.6.0",
-      "archive_sha256": "98902922986ebead1d6a00943dcc98cc464ce3cc317faf8c39de7299bd778e1d",
-      "tree_digest": "68520aa4ee7c02e84a7eff0f248ac742d7d8eb08295a51a7a40753400407aea9"
+      "version": "0.7.0",
+      "archive_sha256": "eddf140a7cf4a57d97b9380afbe921b220a28ae257d9eb27b7dbd2c8f4c50931",
+      "tree_digest": "911dd9b06d7f6107c55778eb4482d6785b9cef1f919cabd0a846c7bd734a17b1"
     }
   }
 }
