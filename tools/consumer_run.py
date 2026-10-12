@@ -222,6 +222,15 @@ def main(argv: list[str] | None = None) -> int:
         verifications[0] == verifications[1]
     )
     dest = work / "devenv"
+    if (
+        not dest.is_dir()
+        or rec["steps"].get("provision_devenv_exit")
+        or rec["steps"].get("provision_devenv2_exit")
+    ):
+        rec["steps"]["problems"] = [
+            "toolchain provisioning failed (see the release's `toolchain provision --pinned --verify`)"
+        ]
+        return finish(1)
     dirs = [str(dest / "bin")] + [str(p / "bin") for p in sorted(dest.iterdir()) if (p / "bin").is_dir()]
     env["PATH"] = os.pathsep.join([*dirs, env["PATH"]])
     trust_level = a.event_trust or event_trust(env)

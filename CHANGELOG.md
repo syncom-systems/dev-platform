@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 0.8.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - `dev-platform pr-check --facts` (#114, #100): per-file triggers/PR reachability and per-job `runs_on` label sets (or unresolved + reason),
   environment, reusable-workflow `uses` and source line, from the same reader that decides admission; opt-in, never changes the decision.
 - `dev-platform toolchain prove-bazel-rust` (#111): evidence that Bazel compiles with the declared Rust toolchain, not a host

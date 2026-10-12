@@ -34,6 +34,15 @@ not have a `read-write` shared cache (profile validation). When nothing fits, th
 runner and the first reason it did not fit (trust, os, arch, isolation, credentials, capability, cache): there is
 no silent downgrade.
 
+## Compatibility between the platform release and the provider's profile
+The public contract a platform release speaks is the `dev-platform.infra/v1` code it ships (the engine runs the consumer's
+pinned release, so the validator, routing and the resolution check are that release's). Compatibility is therefore decided
+three ways, all fail-closed: the profile must validate under that release's `dev-platform.infra/v1`; a resolver result must
+name `contract: dev-platform.infra/v1` (anything else is `unsupported contract`); and the resolved configuration must equal the
+consumer's pin. A provider that adds a field or a new schema version is incompatible with older releases until the consumer
+pins a platform release that understands it, and the pinned configuration digest changes with it. Releases:
+`dev-platform.infra/v1` and capabilities/cache since 0.1.x; pin, resolver, `check-resolution` and per-job facts 0.8.0.
+
 ## Per-job facts for providers (issue #100)
 `dev-platform pr-check --facts` (or `prcheck.check(files, profile, facts=True)`) adds `facts` to the output: per workflow file the
 `triggers` and the `pr_reachable_triggers`, and per job its resolved `runs_on` label sets (or `unresolved` with the reason),
