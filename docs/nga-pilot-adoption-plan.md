@@ -1,6 +1,8 @@
 # NGA pilot adoption plan (v0.8.1, explicit opt-in, additive)
 
-Status: **plan only.** Nothing here modifies NGA, authorizes a change to it or grants any acceptance. It becomes actionable only when
+Status: **executed** as NGA pull request #178 on v0.8.1 (owner-authorized; one target; with an inline copy of the workflow because the v0.8.1 reusable
+workflow had three defects, fixed in v0.8.2). The migration to the reusable workflow at v0.8.2 is `docs/nga-pilot-migration-0.8.2.md`. The text below is the
+original plan (pins are v0.8.1's). Originally: **plan only.** Nothing here modifies NGA, authorizes a change to it or grants any acceptance. It becomes actionable only when
 the owner authorizes this specific change to the consumer repository. v0.8.1 is **verified-unaccepted**; using it is an explicit
 opt-in recorded in the workflow file (`allow_unaccepted: true`). Nothing about v0.2.1's acceptance extends to it.
 

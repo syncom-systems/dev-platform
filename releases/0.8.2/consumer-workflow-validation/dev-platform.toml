@@ -1,0 +1,21 @@
+schema_version = 1
+
+[platform]
+version = "0.8.2"
+sha256 = "0f9780801f9e2b718e4f953739f8df2b085628ee91db1a60926f0c3060e0e5ad"
+profile = "rust-bazel-9"
+
+[project]
+name = "reusable-workflow-validation"
+bazel_only = true
+assurance = "standard"
+languages = ["rust"]
+
+[[check]]
+id = "bazel.validation"
+adapter = "bazel"
+targets = ["//:demo_test"]
+stages = ["pre-merge", "full"]
+obligation = "change"
+cost = "slow"
+inputs = ["**"]

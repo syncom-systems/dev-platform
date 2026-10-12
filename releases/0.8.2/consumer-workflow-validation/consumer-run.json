@@ -1,0 +1,35 @@
+{
+  "schema": "dev-platform.consumer-run/v1",
+  "steps": {
+    "bazel_rust_proof": true,
+    "check_exit": 0,
+    "check_tail": [
+      "warning: 1 warning emitted",
+      "",
+      "INFO: Found 1 test target...",
+      "Target //:demo_test up-to-date:",
+      "  bazel-bin/demo_test",
+      "INFO: Elapsed time: 107.150s, Critical Path: 2.02s",
+      "INFO: 178 processes: 174 internal, 5 processwrapper-sandbox.",
+      "INFO: Build completed successfully, 178 total actions",
+      "//:demo_test                                                             PASSED in 0.0s",
+      "",
+      "Executed 1 out of 1 test: 1 test passes.",
+      "There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are."
+    ],
+    "doctor_exit": 0,
+    "event_trust": "untrusted",
+    "evidence_verdict": "consistent",
+    "installed": true,
+    "pinned_tools": true,
+    "pins_consistent": true,
+    "provision_deterministic": true,
+    "provision_devenv2_exit": 0,
+    "provision_devenv_exit": 0,
+    "toolchain_verification": {
+      "assurance": "certifiable",
+      "conformant": true,
+      "identity_digest": "7cb9d2773fafd9acdec4a130f540314d471c324b113d128c206c3c1f2391a374"
+    }
+  }
+}
