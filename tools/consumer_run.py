@@ -117,11 +117,11 @@ def trusted_tools(pins: dict, work: Path, repo_url: str, checkout: Path | None) 
         run(["git", "init", "-q", str(src)])
         r = run(["git", "-C", str(src), "fetch", "-q", "--depth", "1", repo_url, rev])
         if r.returncode:
-            return None, f"cannot fetch {rev} from {repo_url}: {r.stderr.strip()[-200:]}"
+            return None, "cannot fetch the pinned revision from the platform repository"
         checkout, ref = src, "FETCH_HEAD"
     head = run(["git", "-C", str(checkout), "rev-parse", ref]).stdout.strip()
     if head != rev:
-        return None, f"platform checkout is {head}, pinned {rev}"
+        return None, "the platform checkout is not at the pinned revision"
     wants = (
         ("tools/verify_release.py", trust / "tools" / "verify_release.py", "verify_release.py_sha256"),
         ("trust/policy.json", trust / "policy.json", "trust_policy_sha256"),
@@ -130,10 +130,10 @@ def trusted_tools(pins: dict, work: Path, repo_url: str, checkout: Path | None) 
     for rel, dest, pin_name in wants:
         r = run(["git", "-C", str(checkout), "show", f"{ref}:{rel}"])
         if r.returncode:
-            return None, f"cannot read {rel} at {rev}"
+            return None, f"cannot read {rel} at the pinned revision"
         dest.write_text(r.stdout)
         if sha(dest) != pins["verifier_pins"][pin_name]:
-            return None, f"{rel} at {rev} does not equal the pinned {pin_name}"
+            return None, f"{rel} at the pinned revision does not equal its pinned digest"
     return trust, ""
 
 

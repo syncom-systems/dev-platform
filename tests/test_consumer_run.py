@@ -94,14 +94,14 @@ class Tools(unittest.TestCase):
         pins["verifier_pins"]["trust_policy_sha256"] = "9" * 64
         trust, why = C.trusted_tools(pins, tmpdir(self), "unused", d)
         self.assertIsNone(trust)
-        self.assertIn("trust_policy_sha256", why)
+        self.assertIn("policy.json", why)
 
     def test_a_checkout_at_another_revision_is_refused(self):
         d, pins = self.repo()
         pins["source_revision"] = "f" * 40
         trust, why = C.trusted_tools(pins, tmpdir(self), "unused", d)
         self.assertIsNone(trust)
-        self.assertIn("pinned", why)
+        self.assertIn("pinned revision", why)
 
 
 class Trust(unittest.TestCase):
