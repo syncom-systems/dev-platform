@@ -166,5 +166,60 @@ class Checker(unittest.TestCase):
         self.assertEqual((r["admission"], r["policy_violations"], r["incomplete"]), ("ok", [], []), r)
 
 
+class Facts(unittest.TestCase):
+    """The parsed facts a provider needs, from the same reader that decides admission (issue #100)."""
+
+    WF2 = """\
+name: y
+on:
+  pull_request:
+  push:
+jobs:
+  build:
+    runs-on: [self-hosted, linux]
+    environment: prod
+    steps:
+      - run: echo
+  matrixed:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - run: echo
+  dynamic:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - run: echo
+  call:
+    uses: org/repo/.github/workflows/x.yml@main
+"""
+
+    def test_facts_are_opt_in_and_do_not_change_the_decision(self):
+        plain = prcheck.check({"y.yml": self.WF2}, None)
+        with_facts = prcheck.check({"y.yml": self.WF2}, None, facts=True)
+        self.assertNotIn("facts", plain)
+        self.assertEqual({k: v for k, v in with_facts.items() if k != "facts"}, plain)
+
+    def test_triggers_reachability_jobs_environment_and_lines(self):
+        f = prcheck.check({"y.yml": self.WF2}, None, facts=True)["facts"][0]
+        self.assertEqual(f["triggers"], ["pull_request", "push"])
+        self.assertEqual(f["pr_reachable_triggers"], ["pull_request"])
+        jobs = {j["name"]: j for j in f["jobs"]}
+        self.assertEqual(jobs["build"]["runs_on"], [["self-hosted", "linux"]])
+        self.assertEqual(jobs["build"]["environment"], "prod")
+        self.assertEqual(jobs["build"]["line"], 6)
+        self.assertEqual(sorted(x[0] for x in jobs["matrixed"]["runs_on"]), ["macos-15", "ubuntu-24.04"])
+        self.assertIsNone(jobs["dynamic"]["runs_on"])
+        self.assertIn("expression", jobs["dynamic"]["unresolved"])
+        self.assertEqual(jobs["call"]["uses"], "org/repo/.github/workflows/x.yml@main")
+        self.assertIsNotNone(jobs["call"]["unresolved"])
+
+    def test_unparseable_workflow_yields_unresolved_facts_and_stays_incomplete(self):
+        out = prcheck.check({"z.yml": "on: pull_request\njobs: &a\n  x: 1\n"}, None, facts=True)
+        self.assertEqual(out["admission"], "unavailable")
+        self.assertIsNotNone(out["facts"][0]["unresolved"])
+
+
 if __name__ == "__main__":
     unittest.main()
