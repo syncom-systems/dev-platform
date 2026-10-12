@@ -1,0 +1,10 @@
+PASSED  platform-authorization-currency
+PASSED  release-record
+PASSED  application-policy
+PASSED  verification-evidence
+PASSED  platform-release
+FAILED  platform-acceptance  (verified platform archive is not the release this record was built with; platform release state is 'failed', not 'accepted')
+PASSED  advisories
+PASSED  authorization-currency
+approval: failed  platform-acceptance
+

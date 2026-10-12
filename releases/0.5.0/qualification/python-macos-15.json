@@ -1,0 +1,410 @@
+{
+  "result": {
+    "admission": "admitted",
+    "certification": {
+      "blockers": [],
+      "certified": true,
+      "limitations": [
+        "tool identity is not complete execution-environment identity: the host kernel, CPU, filesystem and anything not listed above are not part of the evidence",
+        "system libraries named in closure.system_libs are trusted by name or prefix, not by content; the environment is not byte-level hermetic"
+      ],
+      "release_eligible": true
+    },
+    "change_set": {
+      "known": false,
+      "paths": []
+    },
+    "checks": [
+      {
+        "adapter": "python",
+        "command": [
+          "{python}",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests"
+        ],
+        "cost": "fast",
+        "exit_code": 0,
+        "id": "python.unittest",
+        "obligation": "change",
+        "outcome": "passed",
+        "reasons": [
+          "full validation runs every check"
+        ],
+        "selected": true,
+        "state": "verified"
+      }
+    ],
+    "environment": {
+      "assurance": "certifiable",
+      "conformant": true,
+      "identity_digest": "d2239c46a85ad95826cc2c98d770288aaecc059d9502160f7dbd7485db3de0ce",
+      "platform": "darwin-arm64",
+      "profile": "python",
+      "release": {
+        "sbom_sha256": "6340858bcb0d5a615350a6fd37fb32627c1f30392c3fba044eabaddddba9e7f7",
+        "source_digest": "4c24132bb9e936e2810bd63a1e549fdd9b0851bc0a243e0a188981519f8f0f2f",
+        "synthesized": false,
+        "tree_digest": "c20300386f771c7c20d536911407bf298d2985ef3928bd8331cd837a31c0c7b3",
+        "version": "0.5.0"
+      },
+      "scope": {
+        "hermetic": false,
+        "limitations": [
+          "tool identity is not complete execution-environment identity: the host kernel, CPU, filesystem and anything not listed above are not part of the evidence",
+          "system libraries named in closure.system_libs are trusted by name or prefix, not by content; the environment is not byte-level hermetic"
+        ]
+      },
+      "tools": [
+        {
+          "closure": {
+            "digest": "bc602f3eeaca659ab7cec5f741d44971d53021b625fa6dc994f567fc92440b18",
+            "files": 1694,
+            "kind": "prefix",
+            "linkage": {
+              "native_objects": 10,
+              "unknown": [],
+              "violations": []
+            },
+            "platform": "darwin-arm64",
+            "root": "/Users/runner/work/dev-platform/dev-platform/.devenv/tools/python/3.14.7",
+            "scope": "closure bytes pinned; native dependencies limited to the closure and declared system libraries, which are trusted by name, not by content",
+            "status": "ok"
+          },
+          "expected": "3.14.7",
+          "identity": "closure-verified",
+          "name": "python",
+          "observed": "3.14.7",
+          "status": "ok"
+        }
+      ],
+      "weak_tools": []
+    },
+    "executed": true,
+    "execution": {
+      "environment": "inherited",
+      "inherited_dropped": 0,
+      "limits": [
+        "the full parent environment is passed to every check"
+      ],
+      "path": null,
+      "variables": null
+    },
+    "exit": 0,
+    "platform": {
+      "digest": "c20300386f771c7c20d536911407bf298d2985ef3928bd8331cd837a31c0c7b3",
+      "mode": "pinned",
+      "pinned_version": "0.5.0",
+      "running_version": "0.5.0"
+    },
+    "project": {
+      "assurance": "standard",
+      "bazel_only": false,
+      "name": "consumer"
+    },
+    "regressions": [],
+    "revision": "cd512499e53b845e98a7fca29ffc88b9949aeced",
+    "schema": "dev-platform.result/v1",
+    "stage": "full",
+    "unsatisfied_obligations": []
+  },
+  "summary": {
+    "admission": "admitted",
+    "app_release": {
+      "all_ok": true,
+      "artifact": "zipapp of the application with hash-locked dependencies installed by pip",
+      "assembled": true,
+      "cases": [
+        {
+          "actual": "approved",
+          "case": "authenticated approval of the exact release",
+          "expected": "approved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "no approval at all",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "unsigned approval",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "approval by an authenticated non-approver",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "approval of a different release",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "authentic revocation after approval",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "approval, then a revocation published independently and absent from the supplied records",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "historical-approval",
+          "case": "the same evidence inspected as history shows only a historical approval, never approved",
+          "expected": "historical-approval",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "evidence repository unreachable (current state unverifiable)",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "revocation deleted from the evidence history",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "source revision pin differs",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "manipulated result (digest no longer matches)",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "evidence missing",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "artifact bytes differ",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "dependency state differs",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "platform release not allowed by the application policy",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "security advisory on the platform release",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "refused",
+          "case": "dependency with a wrong lock hash is refused at install",
+          "expected": "refused",
+          "ok": true
+        },
+        {
+          "actual": "locked-app 3",
+          "case": "built zipapp runs with the locked dependency",
+          "expected": "locked-app 3",
+          "ok": true
+        }
+      ],
+      "double": "GitHub is a recording double at the gh api boundary; all verification code is real",
+      "release_sha256": "adcd85e6430bc3593da8c4325a288abc573de1d29a6767621f3c947abf72e537",
+      "rollback": {
+        "all_ok": true,
+        "cases": [
+          {
+            "case": "only the authenticated, unrevoked, unsuperseded, unaffected release is eligible",
+            "detail": {
+              "eligible": [
+                "1.0.0"
+              ],
+              "exit": 0
+            },
+            "ok": true
+          },
+          {
+            "case": "revoked release is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-110.json: authentic approved by qa",
+              "rev-110.json: authentic revoked by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "superseded approval (decision replaced) is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-120.json: authentic approved by qa",
+              "sup-120.json: authentic rejected by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "release with an advisory against it is refused",
+            "detail": [
+              "advisories: ADV-APP: qualified-app@1.3.0",
+              "ok-130.json: authentic approved by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval by an authenticated non-approver is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-150.json: ignored (qualify-stranger is authenticated but is not an approver in the application policy)"
+            ],
+            "ok": true
+          },
+          {
+            "case": "unsigned approval is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-160.json: ignored (commit 000000000000 is not a validly signed commit (unsigned))"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval edited in the evidence repository after signing is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-170.json: ignored (commit 000000000000 is not a validly signed commit (unsigned))"
+            ],
+            "ok": true
+          },
+          {
+            "case": "advisory on the Dev Platform release refuses every release built with it",
+            "detail": {
+              "eligible": [],
+              "rejected": [
+                "1.0.0",
+                "1.4.0"
+              ]
+            },
+            "ok": true
+          },
+          {
+            "case": "tampered bundle (byte appended after pinning) aborts selection",
+            "detail": "config error: bundle /Users/runner/work/dev-platform/dev-platform/.devenv/qualify/app-release/rollback/bundle-1.0.0: release.json: bytes differ",
+            "ok": true
+          },
+          {
+            "case": "selection without the pinned verifiers is refused",
+            "detail": "config error: approvals are authenticated by the pinned independent verifier; missing ['--app-policy', '--verifier', '--verifier-sha256', '--platform-verifier',",
+            "ok": true
+          },
+          {
+            "case": "selection with a wrong verifier pin is refused",
+            "detail": "config error: application verifier sha256 c321beaf2ed56398377799801320c62852508d8ee69457b5c37d8d7ee5c9eb34 does not match the pin 000000000000000000000000000000",
+            "ok": true
+          },
+          {
+            "case": "release record outside any pinned bundle is not an immutable target",
+            "detail": [
+              "release record is not from a pinned evidence bundle (not immutable)"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval without the verification evidence is refused (insufficiently verified)",
+            "detail": [
+              "verification-evidence: bc3a63058ce3: not supplied (or differs from its digest)",
+              "ok-100-loose.json: authentic approved by qa",
+              "ok-100.json: authentic approved by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval with nothing newer in the evidence repository is eligible (current state read live)",
+            "detail": [
+              "1.8.0"
+            ],
+            "ok": true
+          },
+          {
+            "case": "a revocation published independently, absent from the pinned bundle, refuses the release",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-180.json: authentic approved by qa",
+              "rev-180.json: authentic revoked by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "evidence repository unreachable: nothing is eligible (current state unverifiable, fail closed)",
+            "detail": [
+              "authorization-currency: authorization state: gh api repos/example/qualified-app/commits/main: HTTP 502: Bad Gateway; 1 GitHub call(s) failed, e.g. repos/example/qualified-app/commits/main: HTTP 502: Bad Gateway"
+            ],
+            "ok": true
+          },
+          {
+            "case": "a revocation deleted from the evidence history is not silently absent: release refused",
+            "detail": [
+              "authorization-currency: authorization state: authorization records were deleted from the evidence history: ['authorizations/rev-190.json']",
+              "ok-190.json: authentic approved by qa"
+            ],
+            "ok": true
+          }
+        ]
+      }
+    },
+    "blockers": [],
+    "certified": true,
+    "checks": {
+      "python.unittest": "verified"
+    },
+    "environment": {
+      "assurance": "certifiable",
+      "conformant": true,
+      "identity_digest": "d2239c46a85ad95826cc2c98d770288aaecc059d9502160f7dbd7485db3de0ce",
+      "tools": {
+        "python": "closure-verified"
+      }
+    },
+    "execution": {
+      "environment": "inherited",
+      "inherited_dropped": 0,
+      "limits": [
+        "the full parent environment is passed to every check"
+      ],
+      "path": null,
+      "variables": null
+    },
+    "negative": [
+      {
+        "blockers": [
+          "check python.unittest is failed"
+        ],
+        "case": "failing test",
+        "rejected": true
+      }
+    ],
+    "platform": "darwin-arm64",
+    "profile": "python"
+  }
+}

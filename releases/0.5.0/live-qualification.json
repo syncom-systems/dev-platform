@@ -1,0 +1,135 @@
+{
+  "all_ok": true,
+  "cases": [
+    {
+      "actual": "unapproved",
+      "case": "record never committed to the evidence repository",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "no commit on 66a579542f1e6e9a762c7237c5e370d9bc4c39a9 touches authorizations/live-20261012003453-uncommitted.json | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | committer of commit d93829cf00b4 is not github-actions[bot] | commit 66a579542f1e is not a validly signed commit (unsigned) | schema must be dev-platform.authorization/v1"
+    },
+    {
+      "case": "live API reports a valid GitHub signature with author github-actions[bot] and committer web-flow",
+      "observed": {
+        "author": "github-actions[bot]",
+        "committer": "web-flow",
+        "reason": "valid",
+        "verified": true
+      },
+      "ok": true
+    },
+    {
+      "actual": "unapproved",
+      "case": "valid GitHub signature but committer web-flow is refused (committer is not the approver)",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "committer of commit 26fa177c40ed is not github-actions[bot] | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | committer of commit d93829cf00b4 is not github-actions[bot] | commit 66a579542f1e is not a validly signed commit (unsigned) | schema must be dev-platform.authorization/v1"
+    },
+    {
+      "actual": "unapproved",
+      "case": "unsigned commit of a record",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "commit 958f843fddd3 is not a validly signed commit (unsigned) | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | committer of commit d93829cf00b4 is not github-actions[bot] | commit 66a579542f1e is not a validly signed commit (unsigned) | committer of commit 26fa177c40ed is not github-actions[bot] | schema must be dev-platform.authorization/v1"
+    },
+    {
+      "actual": "failed",
+      "case": "unreadable evidence repository fails closed",
+      "expected": "failed",
+      "ok": true,
+      "reason": [
+        "authorization-currency"
+      ]
+    },
+    {
+      "actual": "unapproved",
+      "case": "discovering every record in the live evidence repository still approves nothing",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | committer of commit d93829cf00b4 is not github-actions[bot] | commit 66a579542f1e is not a validly signed commit (unsigned) | committer of commit 26fa177c40ed is not github-actions[bot] | commit 958f843fddd3 is not a validly signed commit (unsigned) | schema must be dev-platform.authorization/v1"
+    },
+    {
+      "case": "the current state was read live at one commit of the evidence ref",
+      "currency": {
+        "evidence": {
+          "head_commit": "958f843fddd313c8090edfd01c492897e3782b5c",
+          "head_committed_at": "2026-10-12T00:35:30Z",
+          "history_commits": 11,
+          "records": [
+            "live-20261011220519-bot.json",
+            "live-20261011220519-unsigned.json",
+            "live-20261011222317-bot.json",
+            "live-20261011222317-unsigned.json",
+            "live-20261011222359-bot.json",
+            "live-20261011222359-unsigned.json",
+            "live-20261012003321-bot.json",
+            "live-20261012003321-unsigned.json",
+            "live-20261012003453-bot.json",
+            "live-20261012003453-unsigned.json",
+            "probe.json"
+          ],
+          "ref": "main",
+          "removed": [],
+          "repo": "syncom-systems/dev-platform-qualification-fixture"
+        },
+        "max_age_seconds": 300,
+        "observed_at": "2026-10-12T00:35:44.514664+00:00",
+        "purpose": "operational",
+        "status": "current",
+        "valid_until": "2026-10-12T00:40:44.514664+00:00"
+      },
+      "ok": true
+    },
+    {
+      "actual": "unapproved",
+      "case": "historical inspection of the same record over the live repository is not an approval either",
+      "expected": "unapproved",
+      "ok": true,
+      "reason": "committer of commit 26fa177c40ed is not github-actions[bot]"
+    },
+    {
+      "actual": "failed",
+      "case": "a record deleted from the live evidence history makes the current state unverifiable",
+      "expected": "failed",
+      "ok": true,
+      "reason": "subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | subject.digest is not this exact release record's digest | committer of commit d93829cf00b4 is not github-actions[bot] | commit 66a579542f1e is not a validly signed commit (unsigned) | committer of commit 26fa177c40ed is not github-actions[bot] | commit 958f843fddd3 is not a validly signed commit (unsigned) | schema must be dev-platform.authorization/v1"
+    },
+    {
+      "case": "discovery listed live records",
+      "count": 11,
+      "ok": true
+    },
+    {
+      "case": "rollback select over a bundle whose only approval is the live web-flow-committed record selects nothing",
+      "exit": 1,
+      "ok": true,
+      "rejected": [
+        {
+          "reasons": [
+            "no authenticated, authorized, in-force approval bound to this exact release record",
+            "live-20261012003453-bot.json: ignored (committer of commit 26fa177c40ed is not github-actions[bot])",
+            "live-20261012003321-bot.json: ignored (committer of commit d93829cf00b4 is not github-actions[bot])",
+            "live-20261012003321-unsigned.json: ignored (commit 66a579542f1e is not a validly signed commit (unsigned))",
+            "live-20261012003453-unsigned.json: ignored (commit 958f843fddd3 is not a validly signed commit (unsigned))",
+            "probe.json: ignored (schema must be dev-platform.authorization/v1)"
+          ],
+          "release_sha256": "7f6b79ff8d149d332815bcbadd9fd370daea579520ff22981cf007503b53e650",
+          "version": "0.0.1"
+        }
+      ]
+    }
+  ],
+  "fixture_commits": {
+    "bot_signed_web_flow": "26fa177c40eda0be0ebc89c1919ded73622842df",
+    "head_at_end": "958f843fddd313c8090edfd01c492897e3782b5c",
+    "unsigned": "958f843fddd313c8090edfd01c492897e3782b5c"
+  },
+  "identity": "github-actions[bot]",
+  "limit": "no second GitHub identity with its own signing key exists; the live path therefore never reaches `approved`",
+  "purpose": "operational (current-state) semantics; one case is historical inspection",
+  "ran_at": "2026-10-12T00:36:23.804253+00:00",
+  "reaches_approved": false,
+  "release_sha256": "7f6b79ff8d149d332815bcbadd9fd370daea579520ff22981cf007503b53e650",
+  "repo": "syncom-systems/dev-platform-qualification-fixture",
+  "schema": "dev-platform.live-qualification/v1"
+}
