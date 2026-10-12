@@ -149,6 +149,13 @@ def build_parser() -> argparse.ArgumentParser:
     tp.add_argument("--project", type=Path, default=Path("."))
     tp.add_argument("--profile", required=True)
     tp.add_argument("--dest", type=Path, default=Path(".devenv"))
+    tb = tsub.add_parser(
+        "prove-bazel-rust",
+        help="prove Bazel uses the declared Rust toolchain, not a host rustc (runs bazel, never cargo)",
+    )
+    tb.add_argument("--project", type=Path, default=Path("."))
+    tb.add_argument("--target", default="//...", help="Bazel target pattern whose Rustc actions are examined")
+    tb.add_argument("--out", type=Path, help="write the proof record here")
     pv = sub.add_parser("provenance", help="assemble an application-release record from a certified result")
     psub = pv.add_subparsers(dest="pcmd", required=True)
     pa = psub.add_parser("assemble")
@@ -733,6 +740,15 @@ def cmd_toolchain(args) -> int:
         )
         print(f"then: export PATH={args.dest / 'bin'}:$PATH  and run: dev-platform toolchain verify")
         return EXIT_OK
+    if args.tcmd == "prove-bazel-rust":
+        from . import bazel_rust
+
+        proof = bazel_rust.prove(args.project, target=args.target)
+        text = json.dumps(proof, indent=2, sort_keys=True)
+        if args.out:
+            args.out.write_text(text + "\n")
+        print(text)
+        return EXIT_OK if proof["ok"] else EXIT_UNSATISFIED
     manifest = toolchain.validate(json.loads(args.manifest.read_text()))
     if args.tcmd == "provision":
         from . import provision

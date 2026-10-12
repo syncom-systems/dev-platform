@@ -20,7 +20,13 @@ These steps are exactly what `tools/pilot.py` runs against a real public consume
 5. **Check**: `dev-platform doctor`, then `dev-platform check --stage full --result result.json`. Admission,
    certification and blockers are in the result. Certification means the checks passed under verified tool
    identity on a stated platform; it is not hermetic and not owner acceptance.
-6. **Upgrading** is an explicit edit of the pin in a reviewed change. A toolchain change is a new release.
+6. **Bazel consumers: prove the Rust toolchain** (`rust-bazel*` profiles; Bazel only, Cargo is never run):
+   `dev-platform toolchain prove-bazel-rust --project . --out proof.json` rebuilds with a fresh action-environment nonce while
+   decoy `rustc`/`cargo`/`rustup` sit first on `PATH`, then shows from Bazel's own action graph that every Rustc action names
+   a rustc provided through an external repository (never a host path), resolving outside host Rust locations, reporting
+   exactly the version `MODULE.bazel` declares. It fails if a decoy was executed. Limit: repository rules run at fetch time
+   with Bazel's environment; the action-path proof covers where the toolchain came from.
+7. **Upgrading** is an explicit edit of the pin in a reviewed change. A toolchain change is a new release.
 
 Host tools your checks need that are not in the toolchain profile (a terminal multiplexer, `qemu`, ...) are
 declared in `dev-platform.toml`:

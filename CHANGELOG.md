@@ -1,6 +1,10 @@
 # Changelog
 
 ## Unreleased
+- `dev-platform toolchain prove-bazel-rust` (#111): evidence that Bazel compiles with the declared Rust toolchain, not a host
+  installation: Rustc action paths via external repositories, version equals the `MODULE.bazel` declaration, decoy host
+  `rustc`/`cargo` never executed in a forced re-execution. Runs Bazel and the Bazel-provided `rustc --version` only (no
+  Cargo). Part of the rust-bazel qualification on linux and darwin.
 - Consumer-owned infrastructure configuration pin (ADR 0021, #99, #110): `[infra] provider/config_release/config_digest`
   in `dev-platform.toml`; the engine refuses any resolved identity that differs from the pin; untrusted events never call a
   provider and use only a vendored profile whose sha256 equals the pin; trusted events may use an operator-supplied
