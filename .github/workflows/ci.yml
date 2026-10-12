@@ -10,18 +10,18 @@ jobs:
     name: verify (dev-platform checks itself)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {fetch-depth: 0, persist-credentials: false}
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: {python-version: "3.14"}
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with: {version: "0.12.3"}
       - name: Full-stage self verification
         run: PYTHONPATH=src python -m dev_platform check --stage full --result result.json
       - name: Oldest supported Python (3.11) unit tests
         run: |
           uv run --python 3.11 --no-project env PYTHONPATH=src python -m unittest discover -s tests
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with: {name: result, path: result.json}
 
@@ -34,11 +34,11 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-15]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: {python-version: "3.14"}  # bootstrap only; the verified python is the one setup_env.py extracts
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with: {version: "0.12.3"}
       - run: python tools/setup_env.py
       - run: echo "$PWD/.devenv/venv/bin" >> "$GITHUB_PATH"
@@ -48,7 +48,7 @@ jobs:
         shell: bash  # -eo pipefail: a non-certifiable environment must fail this step even through tee
         run: |
           PYTHONPATH=src python -m dev_platform toolchain verify --profile dev-platform-release --require-certifiable | tee verify.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with: {name: "environment-${{ matrix.os }}", path: "*.json"}
 
@@ -69,11 +69,11 @@ jobs:
           - {profile: rust-cargo, fixture: fixtures-real/rust-cargo}
           - {profile: rust-cargo-1.99, fixture: fixtures-real/rust-cargo}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: {python-version: "3.14"}  # bootstrap only
-      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with: {version: "0.12.3"}
       - run: python tools/setup_env.py ${{ matrix.profile }}
       - name: Qualify (real execution, then must-be-rejected scenarios)
@@ -83,6 +83,6 @@ jobs:
           PYTHONPATH=src python -m dev_platform toolchain measure --profile ${{ matrix.profile }} || true
           PY=python; [ -x .devenv/python/bin/python3 ] && PY=.devenv/python/bin/python3
           "$PY" tools/qualify.py --fixture ${{ matrix.fixture }} --profile ${{ matrix.profile }} --negative --app-release --out qualification.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with: {name: "qualification-${{ matrix.profile }}-${{ matrix.os }}", path: qualification.json}
