@@ -1,0 +1,50 @@
+{
+  "schema": "dev-platform.trust/v1",
+  "description": "Who may produce a dev-platform release. A valid signature is necessary but not sufficient: the signer identity must match this policy, and stable releases additionally require an authenticated owner authorization (docs/release-trust.md, ADR 0016). Release N must carry a continuity record: the named predecessor, digest-pinned here, re-ran the full stage over N's source (evidence, never authority).",
+  "oidc_issuer": "https://token.actions.githubusercontent.com",
+  "signers": [
+    {
+      "repo": "syncom-systems/dev-platform",
+      "workflow": ".github/workflows/release.yml",
+      "ref_pattern": "^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.]+)?$"
+    }
+  ],
+  "require_github_hosted_runner": true,
+  "require_environment_evidence": true,
+  "stable_requires_authorization": true,
+  "authorization": {
+    "providers": [
+      "github-environment-approval"
+    ],
+    "evidence_repo": "syncom-systems/dev-platform",
+    "evidence_ref": "main",
+    "approvers": [
+      {
+        "id": "owner",
+        "provider": "github-environment-approval",
+        "login": "matssun",
+        "roles": [
+          "owner"
+        ],
+        "may_approve": [
+          "platform-release"
+        ],
+        "may_confer": [
+          "platform-baseline"
+        ]
+      }
+    ],
+    "environment_approval": {
+      "repo": "syncom-systems/dev-platform",
+      "workflow": ".github/workflows/accept.yml",
+      "ref": "refs/heads/main"
+    }
+  },
+  "continuity": {
+    "predecessor": {
+      "version": "0.2.0",
+      "archive_sha256": "2eeeab1e7e9ee962bdfab2e18b1d2856c942b6e2a29290a252064e7329a103d3",
+      "tree_digest": "054f2c9a7742ac4d307ef9942c15367cb8b80cc25ef485c3da32615e42f98539"
+    }
+  }
+}

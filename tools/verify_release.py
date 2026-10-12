@@ -404,7 +404,87 @@ def _auth_github_signed_commit(doc: dict, raw: bytes, auth_policy: dict, gh: GhR
     return login, {"repo": repo, "ref": ref, "path": path, "commit": newest["sha"], "commits": len(commits)}
 
 
-PROVIDERS = {"github-signed-commit": _auth_github_signed_commit}  # the explicit registry; unknown = refused
+def _auth_github_environment_approval(doc: dict, raw: bytes, auth_policy: dict, gh: GhRunner):
+    """Authenticate a record produced by the pinned acceptance workflow after a GitHub Environment approval.
+
+    The record is the attested artifact: `gh attestation verify` must show that exactly these bytes were
+    attested by the pinned workflow at the pinned ref, triggered manually (workflow_dispatch), on a
+    GitHub-hosted runner. The workflow wrote `login` from the run's recorded approval, so the approver is
+    whoever GitHub says clicked Approve; the committer of the file in the repository proves nothing here.
+    """
+    ia = doc["decided_by"]["identity_assertion"]
+    login, path = ia.get("login"), ia.get("path")
+    if not isinstance(login, str) or not login:
+        raise ValueError("identity_assertion.login required")
+    if not isinstance(path, str) or not AUTH_PATH_RE.match(path):
+        raise ValueError("identity_assertion.path must be authorizations/<name>.json")
+    ep = auth_policy.get("environment_approval")
+    if not isinstance(ep, dict) or not all(
+        isinstance(ep.get(k), str) and ep[k] for k in ("repo", "workflow", "ref")
+    ):
+        raise ValueError("policy lacks authorization.environment_approval {repo, workflow, ref}")
+    issuer = "https://token.actions.githubusercontent.com"
+    with tempfile.TemporaryDirectory() as td:
+        f = Path(td) / "record.json"
+        f.write_bytes(raw)
+        code, out, err = gh(
+            [
+                "gh",
+                "attestation",
+                "verify",
+                str(f),
+                "--repo",
+                ep["repo"],
+                "--signer-workflow",
+                f"{ep['repo']}/{ep['workflow']}",
+                "--source-ref",
+                ep["ref"],
+                "--cert-oidc-issuer",
+                issuer,
+                "--predicate-type",
+                SLSA,
+                "--deny-self-hosted-runners",
+                "--format",
+                "json",
+            ]
+        )
+    if code != 0:
+        raise ValueError(f"no valid attestation for this record: {err.strip()[:200] or code}")
+    try:
+        results = json.loads(out)
+    except json.JSONDecodeError:
+        raise ValueError("gh output was not JSON") from None
+    digest = hashlib.sha256(raw).hexdigest()
+    for r in results:
+        vr = r.get("verificationResult", {})
+        cert = vr.get("signature", {}).get("certificate", {})
+        stmt = vr.get("statement", {})
+        subjects = {d.get("digest", {}).get("sha256") for d in stmt.get("subject", [])}
+        signer = cert.get("buildSignerURI", "") or ""
+        if (
+            digest in subjects
+            and stmt.get("predicateType") == SLSA
+            and cert.get("issuer") == issuer
+            and cert.get("sourceRepositoryURI") == f"https://github.com/{ep['repo']}"
+            and cert.get("sourceRepositoryRef") == ep["ref"]
+            and signer.startswith(f"https://github.com/{ep['repo']}/{ep['workflow']}@")
+            and cert.get("buildTrigger") == "workflow_dispatch"
+            and cert.get("runnerEnvironment") == "github-hosted"
+        ):
+            return login, {
+                "repo": ep["repo"],
+                "workflow": ep["workflow"],
+                "ref": ep["ref"],
+                "run": cert.get("runInvocationURI"),
+                "source_digest": cert.get("sourceRepositoryDigest"),
+            }
+    raise ValueError("attestation does not match the pinned acceptance workflow, ref, trigger and runner")
+
+
+PROVIDERS = {
+    "github-signed-commit": _auth_github_signed_commit,
+    "github-environment-approval": _auth_github_environment_approval,
+}  # the explicit registry; unknown = refused
 
 
 def _ts(v: object) -> datetime:

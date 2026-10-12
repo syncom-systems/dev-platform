@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- New authorization provider `github-environment-approval` (ADR 0020): the owner accepts a platform release by approving a run
+  of the manual `accept` workflow on the `owner-approval` environment; the workflow attests the resulting record and
+  `verify_release.py` verifies it. Trust anchor change (new `verify_release.py` digest); `github-signed-commit` unchanged.
 
 ## 0.6.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - A current authorization state that cannot be established is its own result, `indeterminate` (exit 5), no longer folded
