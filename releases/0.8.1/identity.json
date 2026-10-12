@@ -1,0 +1,34 @@
+{
+  "version": "0.8.1",
+  "state": "verified-unaccepted (stable candidate; NOT accepted; release not certified)",
+  "git_tag": "v0.8.1",
+  "source_revision": "5fa25c68814ee9f4d284682215fa4c98198103ff",
+  "archive": "dev-platform-0.8.1.tar.gz",
+  "archive_sha256": "5671100327d3b8bdfbf74277ae0b21bde39ec2f1f85d4abde12799647740a898",
+  "tree_digest_pin": "35d5b2c99cc11e3da5b618ae4a19223b97834da2de2ac55f3a4e9f00759bffea",
+  "release_workflow_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38297833603",
+  "signer": "syncom-systems/dev-platform/.github/workflows/release.yml@refs/tags/v0.8.1",
+  "github_release": {
+    "immutable": true,
+    "prerelease": true,
+    "title": "dev-platform 0.8.1 (verified, NOT accepted)"
+  },
+  "verifier_pins": {
+    "verify_release.py_sha256": "a2d53075b8bf11bb14f4a2dffb0b40fc6e66b04af73801951fcd768ba29f6f2e",
+    "trust_policy_sha256": "9074871080b437518cf0c7ad9558409297faf023b09365aa0ac6f52f7dba1120",
+    "install_release.py_sha256": "473a2c73eb71904ea6ee0e010f2288976126d4560e3efd11c33c11e44f15bb93",
+    "verify_app_release.py_sha256": "c53bf1351e4f87e7871e616b7eeaee8eca9cb999218e8f70519321cd361d8172",
+    "verify_platform_current.py_sha256": "55af0f2e20818b879fa998259e0e4d16da96afdbe48cd187e9203658408398fe",
+    "verify_consumer_evidence.py_sha256": "2c5ee2890925d496025d5193e60a0a56953fdbb301f3335845fbb9c63864bbe7",
+    "consumer_run.py_sha256": "d2e6dbced5e540378d33a4beb07a0187af4d16beff5fa1c901d605490b8d012a"
+  },
+  "continuity": {
+    "predecessor": "0.8.0",
+    "predecessor_state": "verified-unaccepted",
+    "stage": "full",
+    "admission": "admitted"
+  },
+  "qualification_ci_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38297824758",
+  "owner_authorization": "none",
+  "relation_to_earlier": "independent candidate; acceptance is per archive digest and no other candidate's state is implied"
+}

@@ -1,0 +1,533 @@
+{
+  "result": {
+    "admission": "admitted",
+    "certification": {
+      "blockers": [],
+      "certified": true,
+      "limitations": [
+        "tool identity is not complete execution-environment identity: the host kernel, CPU, filesystem and anything not listed above are not part of the evidence",
+        "system libraries named in closure.system_libs are trusted by name or prefix, not by content; the environment is not byte-level hermetic",
+        "Bazel-managed toolchains are identified through the pinned Bazel binary digest and the resolved module graph; the Bazel repository cache, host C toolchain and network at fetch time are outside the evidence"
+      ],
+      "release_eligible": true
+    },
+    "change_set": {
+      "known": false,
+      "paths": []
+    },
+    "checks": [
+      {
+        "adapter": "bazel",
+        "command": [
+          "bazel",
+          "test",
+          "--lockfile_mode=error",
+          "--test_output=errors",
+          "//..."
+        ],
+        "cost": "slow",
+        "exit_code": 0,
+        "id": "bazel.test",
+        "obligation": "change",
+        "outcome": "passed",
+        "reasons": [
+          "full validation runs every check"
+        ],
+        "selected": true,
+        "state": "verified"
+      }
+    ],
+    "environment": {
+      "assurance": "certifiable",
+      "conformant": true,
+      "identity_digest": "5bc220b35d6a67c6dcf88108607cf2d1b372c66a661da2d253f855f1ddd58f2f",
+      "platform": "darwin-arm64",
+      "profile": "rust-bazel",
+      "release": {
+        "sbom_sha256": "f60bec3477ab3ade63808c65af5774c11436600916137eb28377bf3c861d9ac4",
+        "source_digest": "98785988fb41d3791ee66578f76c6040e2389c7415d5bfe0eb9508ab64b23d4e",
+        "synthesized": false,
+        "tree_digest": "3bfd29f650a2924b2d2362526116bac0bc442d6b881bcce5d8bdead4c2653f35",
+        "version": "0.8.1"
+      },
+      "scope": {
+        "hermetic": false,
+        "limitations": [
+          "tool identity is not complete execution-environment identity: the host kernel, CPU, filesystem and anything not listed above are not part of the evidence",
+          "system libraries named in closure.system_libs are trusted by name or prefix, not by content; the environment is not byte-level hermetic",
+          "Bazel-managed toolchains are identified through the pinned Bazel binary digest and the resolved module graph; the Bazel repository cache, host C toolchain and network at fetch time are outside the evidence"
+        ]
+      },
+      "tools": [
+        {
+          "closure": {
+            "digest": "cee851f726789227d5561004e9904a52be45c3efb56f8b38b6993d6adbaa0409",
+            "files": 1,
+            "kind": "file",
+            "linkage": {
+              "native_objects": 1,
+              "unknown": [],
+              "violations": []
+            },
+            "platform": "darwin-arm64",
+            "root": "/Users/runner/work/dev-platform/dev-platform/.devenv/tools/bazelisk/1.29.0/bin/bazel",
+            "scope": "closure bytes pinned; native dependencies limited to the closure and declared system libraries, which are trusted by name, not by content",
+            "status": "ok"
+          },
+          "expected": "1.29.0",
+          "identity": "closure-verified",
+          "name": "bazelisk",
+          "observed": "1.29.0",
+          "observed_via": "closure",
+          "status": "ok"
+        },
+        {
+          "binary": {
+            "launcher": "bazelisk",
+            "sha256": "45e9388abf21d1107e146ea366ad080eb93cb6a5f3a4a3b048f78de0bc3faffa",
+            "status": "enforced-at-execution"
+          },
+          "expected": "8.4.2",
+          "identity": "bazel-locked",
+          "name": "bazel",
+          "observed": "8.4.2",
+          "status": "ok"
+        },
+        {
+          "expected": "1.85.0",
+          "identity": "bazel-locked",
+          "integrity": [
+            {
+              "name": "rules_rust",
+              "status": "ok"
+            }
+          ],
+          "name": "rust-toolchain",
+          "observed": "1.85.0",
+          "status": "ok"
+        }
+      ],
+      "weak_tools": []
+    },
+    "executed": true,
+    "execution": {
+      "environment": "inherited",
+      "inherited_dropped": 0,
+      "limits": [
+        "the full parent environment is passed to every check"
+      ],
+      "path": null,
+      "variables": null
+    },
+    "exit": 0,
+    "infra": {
+      "authorization_policy": null,
+      "contract": "dev-platform.infra/v1",
+      "effective_profile_digest": null,
+      "pinned": null,
+      "reasons": [
+        "no [infra] pin: hosted runners only"
+      ],
+      "resolved": null,
+      "source": "none",
+      "status": "hosted-only"
+    },
+    "platform": {
+      "digest": "3bfd29f650a2924b2d2362526116bac0bc442d6b881bcce5d8bdead4c2653f35",
+      "mode": "pinned",
+      "pinned_version": "0.8.1",
+      "running_version": "0.8.1"
+    },
+    "project": {
+      "assurance": "standard",
+      "bazel_only": true,
+      "name": "consumer"
+    },
+    "regressions": [],
+    "revision": "02c4ebcb33ad6c37861eb98a04a61a555daedb68",
+    "schema": "dev-platform.result/v1",
+    "stage": "full",
+    "unsatisfied_obligations": []
+  },
+  "summary": {
+    "admission": "admitted",
+    "app_release": {
+      "all_ok": true,
+      "artifact": "git archive of the consumer HEAD (stand-in)",
+      "assembled": true,
+      "cases": [
+        {
+          "actual": "approved",
+          "case": "authenticated approval of the exact release",
+          "expected": "approved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "no approval at all",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "unsigned approval",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "approval by an authenticated non-approver",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "approval of a different release",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "authentic revocation after approval",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "approval, then a revocation published independently and absent from the supplied records",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "historical-approval",
+          "case": "the same evidence inspected as history shows only a historical approval, never approved",
+          "expected": "historical-approval",
+          "ok": true
+        },
+        {
+          "actual": "indeterminate",
+          "case": "evidence repository unreachable (current state unverifiable)",
+          "expected": "indeterminate",
+          "ok": true
+        },
+        {
+          "actual": "indeterminate",
+          "case": "revocation deleted from the evidence history",
+          "expected": "indeterminate",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "deleted revocation acknowledged in the pinned policy still revokes",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "indeterminate",
+          "case": "history rewritten after it was audited",
+          "expected": "indeterminate",
+          "ok": true
+        },
+        {
+          "actual": "unapproved",
+          "case": "a warm audit state decides exactly as a cold run",
+          "expected": "unapproved",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "source revision pin differs",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "manipulated result (digest no longer matches)",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "evidence missing",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "artifact bytes differ",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "dependency state differs",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "platform release not allowed by the application policy",
+          "expected": "failed",
+          "ok": true
+        },
+        {
+          "actual": "failed",
+          "case": "security advisory on the platform release",
+          "expected": "failed",
+          "ok": true
+        }
+      ],
+      "double": "GitHub is a recording double at the gh api boundary; all verification code is real",
+      "release_sha256": "7c41c07b6057a6cc992bc9e95e8ec43d3e0271d9f9fdc5ade168276046fa153e",
+      "rollback": {
+        "all_ok": true,
+        "cases": [
+          {
+            "case": "only the authenticated, unrevoked, unsuperseded, unaffected release is eligible",
+            "detail": {
+              "eligible": [
+                "1.0.0"
+              ],
+              "exit": 0
+            },
+            "ok": true
+          },
+          {
+            "case": "revoked release is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-110.json: authentic approved by qa",
+              "rev-110.json: authentic revoked by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "superseded approval (decision replaced) is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-120.json: authentic approved by qa",
+              "sup-120.json: authentic rejected by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "release with an advisory against it is refused",
+            "detail": [
+              "advisories: ADV-APP: qualified-app@1.3.0",
+              "ok-130.json: authentic approved by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval by an authenticated non-approver is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-150.json: ignored (qualify-stranger is authenticated but is not an approver in the application policy)"
+            ],
+            "ok": true
+          },
+          {
+            "case": "unsigned approval is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-160.json: ignored (commit 000000000000 is not a validly signed commit (unsigned))"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval edited in the evidence repository after signing is refused",
+            "detail": [
+              "no authenticated, authorized, in-force approval bound to this exact release record",
+              "ok-170.json: ignored (commit 000000000000 is not a validly signed commit (unsigned))"
+            ],
+            "ok": true
+          },
+          {
+            "case": "advisory on the Dev Platform release refuses every release built with it",
+            "detail": {
+              "eligible": [],
+              "rejected": [
+                "1.0.0",
+                "1.4.0"
+              ]
+            },
+            "ok": true
+          },
+          {
+            "case": "tampered bundle (byte appended after pinning) aborts selection",
+            "detail": "config error: bundle /Users/runner/work/dev-platform/dev-platform/.devenv/qualify/app-release/rollback/bundle-1.0.0: release.json: bytes differ",
+            "ok": true
+          },
+          {
+            "case": "selection without the pinned verifiers is refused",
+            "detail": "config error: approvals are authenticated by the pinned independent verifier; missing ['--app-policy', '--verifier', '--verifier-sha256', '--platform-verifier',",
+            "ok": true
+          },
+          {
+            "case": "selection with a wrong verifier pin is refused",
+            "detail": "config error: application verifier sha256 c53bf1351e4f87e7871e616b7eeaee8eca9cb999218e8f70519321cd361d8172 does not match the pin 000000000000000000000000000000",
+            "ok": true
+          },
+          {
+            "case": "release record outside any pinned bundle is not an immutable target",
+            "detail": [
+              "release record is not from a pinned evidence bundle (not immutable)"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval without the verification evidence is refused (insufficiently verified)",
+            "detail": [
+              "verification-evidence: e9c474413346: not supplied (or differs from its digest)",
+              "ok-100-loose.json: authentic approved by qa",
+              "ok-100.json: authentic approved by qa"
+            ],
+            "ok": true
+          },
+          {
+            "case": "approval with nothing newer in the evidence repository is eligible (current state read live)",
+            "detail": [
+              "1.8.0"
+            ],
+            "ok": true
+          },
+          {
+            "case": "a revocation published independently, absent from the pinned bundle, refuses the release",
+            "detail": [
+              [
+                "no authenticated, authorized, in-force approval bound to this exact release record",
+                "ok-180.json: authentic approved by qa",
+                "rev-180.json: authentic revoked by qa"
+              ],
+              "unauthorized"
+            ],
+            "ok": true
+          },
+          {
+            "case": "evidence repository unreachable: nothing is eligible (current state unverifiable, fail closed)",
+            "detail": [
+              [
+                "authorization-currency: [api-failure] authorization state: gh api repos/example/qualified-app/commits/main: HTTP 502: Bad Gateway"
+              ],
+              "indeterminate"
+            ],
+            "ok": true
+          },
+          {
+            "case": "a revocation deleted from the evidence history is not silently absent: release refused",
+            "detail": [
+              [
+                "authorization-currency: [record-removed] authorization state: authorization records were deleted from the evidence history (restore them, or acknowledge the removal in the pinned policy): ['authorizations/rev-190.json']",
+                "ok-190.json: authentic approved by qa"
+              ],
+              "indeterminate"
+            ],
+            "ok": true
+          }
+        ]
+      }
+    },
+    "bazel_rust_toolchain": {
+      "build": {
+        "exit": 0
+      },
+      "declared_versions": [
+        "1.85.0"
+      ],
+      "host_decoy": {
+        "invocations": [],
+        "invoked": false
+      },
+      "observed": [
+        "1.85.0"
+      ],
+      "ok": true,
+      "problems": [],
+      "rustc": [
+        {
+          "bazel_external_repo": true,
+          "path": "bazel-out/darwin_arm64-fastbuild/bin/external/rules_rust++rust+rust_macos_aarch64__aarch64-apple-darwin__stable_tools/rust_toolchain/bin/rustc",
+          "real_path": "/private/var/tmp/_bazel_runner/f3de4e68c8b60dfea571d4c183e98cd6/external/rules_rust++rust+rust_macos_aarch64__aarch64-apple-darwin__stable_tools/bin/rustc",
+          "sha256": "cf4750269faa6c5eba9489e0b92850e2de7e260489d69d89bcfaf23f9fe46015",
+          "version": "1.85.0"
+        },
+        {
+          "bazel_external_repo": true,
+          "path": "bazel-out/darwin_arm64-opt-exec-ST-d57f47055a04/bin/external/rules_rust++rust+rust_macos_aarch64__aarch64-apple-darwin__stable_tools/rust_toolchain/bin/rustc",
+          "real_path": "/private/var/tmp/_bazel_runner/f3de4e68c8b60dfea571d4c183e98cd6/external/rules_rust++rust+rust_macos_aarch64__aarch64-apple-darwin__stable_tools/bin/rustc",
+          "sha256": "cf4750269faa6c5eba9489e0b92850e2de7e260489d69d89bcfaf23f9fe46015",
+          "version": "1.85.0"
+        }
+      ],
+      "schema": "dev-platform.bazel-rust-proof/v1",
+      "target": [
+        "//..."
+      ]
+    },
+    "blockers": [],
+    "certified": true,
+    "checks": {
+      "bazel.test": "verified"
+    },
+    "environment": {
+      "assurance": "certifiable",
+      "conformant": true,
+      "identity_digest": "5bc220b35d6a67c6dcf88108607cf2d1b372c66a661da2d253f855f1ddd58f2f",
+      "tools": {
+        "bazel": "bazel-locked",
+        "bazelisk": "closure-verified",
+        "rust-toolchain": "bazel-locked"
+      }
+    },
+    "execution": {
+      "environment": "inherited",
+      "inherited_dropped": 0,
+      "limits": [
+        "the full parent environment is passed to every check"
+      ],
+      "path": null,
+      "variables": null
+    },
+    "negative": [
+      {
+        "blockers": [
+          "environment does not conform to a platform toolchain profile",
+          "check bazel.test is failed"
+        ],
+        "case": "resolved graph tampered",
+        "rejected": true
+      },
+      {
+        "blockers": [
+          "check bazel.test is failed"
+        ],
+        "case": "undeclared module change (lockfile_mode=error)",
+        "rejected": true
+      },
+      {
+        "blockers": [
+          "environment does not conform to a platform toolchain profile",
+          "check bazel.test is failed"
+        ],
+        "case": "declared bazel version differs",
+        "rejected": true
+      },
+      {
+        "blockers": [
+          "environment does not conform to a platform toolchain profile"
+        ],
+        "case": "declared rust version differs",
+        "rejected": true
+      },
+      {
+        "blockers": [
+          "check bazel.test is failed"
+        ],
+        "case": "failing test",
+        "rejected": true
+      }
+    ],
+    "platform": "darwin-arm64",
+    "profile": "rust-bazel"
+  }
+}

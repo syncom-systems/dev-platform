@@ -1,0 +1,19 @@
+# appended byte
+FAILED  archive-digest  (actual f4fac7853c71fc797d67cb07bd335ee57532485cfb9bb970f024674b428b3a78)
+FAILED  attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:f4fac7853c71fc797d67cb07bd335ee57
+FAILED  sbom-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:f4fac7853c71fc797d67cb07bd33
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  continuity  (record is about a different archive)
+acceptance: failed  archive-digest; attestation-signature; sbom-attestation-signature; sbom-attestation-content; continuity
+# wrong source revision
+FAILED  source-revision  (release.json says 5fa25c68814ee9f4d284682215fa4c98198103ff)
+FAILED  attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 5fa25c68814ee9f4d284682215fa4c98198103ff)
+FAILED  sbom-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 5fa25c68814ee9f4d284682215fa4c98198103ff)
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  environment-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got edadc4d089b0b5dae3f995121ce48b40cec
+FAILED  continuity  (predecessor did not run over this source revision)
+FAILED  continuity-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 5fa25c68814ee9f4d284682215fa4c981981
+acceptance: failed  source-revision; attestation-signature; sbom-attestation-signature; sbom-attestation-content; environment-attestation-signature; continuity; continuit
+# wrong archive digest pin
+FAILED  archive-digest  (actual 5671100327d3b8bdfbf74277ae0b21bde39ec2f1f85d4abde12799647740a898)
+acceptance: failed  archive-digest
