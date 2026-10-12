@@ -195,6 +195,14 @@ def main(argv=None) -> int:
         "blockers": cert["blockers"],
     }
     ok = cert["certified"]
+    if a.profile.startswith("rust-bazel") and ok:
+        # Bazel must have compiled with its declared Rust toolchain, not a host rustc (issue #111).
+        proof_file = WORK / f"{a.profile}.bazel-rust-proof.json"
+        run([*py, "toolchain", "prove-bazel-rust", "--project", str(consumer), "--out", str(proof_file)],
+            ROOT, env, check=False)  # fmt: skip
+        proof = json.loads(proof_file.read_text()) if proof_file.is_file() else {"ok": False}
+        summary["bazel_rust_toolchain"] = proof
+        ok = bool(proof.get("ok"))
     if a.negative and ok:
         summary["negative"] = negative_cases(a.profile, consumer, genv, env, py)
         ok = all(n["rejected"] for n in summary["negative"])
