@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.8.2 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
+Corrective patch for the reusable consumer workflow, found by the first real consumer pilot (NGA, with an inline copy of the workflow):
+- `consumer-pilot.yml` gives `gh attestation verify` the job's read-only token (`GH_TOKEN`, a step variable only; checkouts persist no
+  credentials). `consumer_run.py` hands the token to the installer alone and removes it from the environment of every other process,
+  including the consumer's builds and tests. Before, every install was refused ("attestation-signature ... failed").
+- `consumer-pilot.yml` needs only `contents: read`. Attestation moved to the separate `consumer-pilot-attest.yml`, called as its own job
+  by a caller that chooses it; the `attest` input is removed (a caller passing it now fails loudly instead of the whole workflow failing at
+  startup unless the caller granted `id-token`/`attestations` write). No working caller existed before this release.
+- The consumer, the platform source and the evidence are sibling directories (`consumer/`, `platform/`, `evidence/`), so a run no longer
+  leaves untracked files in the consumer's tree (which failed certification: "working tree has uncommitted changes"); `consumer_run.py` refuses
+  a work, evidence or platform directory inside the consumer directory.
+- Regression tests: `tests/test_consumer_workflows.py` and additions to `tests/test_consumer_run.py`.
+
 ## 0.8.1 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Fix: `consumer_run.py` ran the Bazel Rust toolchain proof over `//...`; it now examines exactly the consumer's own Bazel check targets
   (`toolchain prove-bazel-rust --target` is repeatable; the build and the Rustc aquery use the same set). A consumer with a large
