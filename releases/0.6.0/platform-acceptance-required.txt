@@ -1,0 +1,22 @@
+PASSED  release-record
+PASSED  application-policy
+PASSED  verification-evidence
+PASSED  platform-release
+FAILED  platform-acceptance  (verified platform archive is not the release this record was built with; platform release state is 'failed', not 'accepted')
+PASSED  advisories
+PASSED  authorization-currency
+AUTH    live-20261011220519-bot.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261011220519-unsigned.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261011222317-bot.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261011222317-unsigned.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261011222359-bot.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261011222359-unsigned.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261012003321-bot.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261012003321-unsigned.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261012003453-bot.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261012003453-unsigned.json: ignored  (subject.digest is not this exact release record's digest)
+AUTH    live-20261012082142-bot.json: ignored  (committer of commit 0f266274b716 is not github-actions[bot])
+AUTH    live-20261012082142-unsigned.json: ignored  (commit 0f21944f4164 is not a validly signed commit (unsigned))
+AUTH    probe.json: ignored  (schema must be dev-platform.authorization/v1)
+approval: failed  platform-acceptance
+
