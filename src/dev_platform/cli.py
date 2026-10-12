@@ -253,6 +253,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pc.add_argument("--workflows", type=Path, default=Path(".github/workflows"))
     pc.add_argument("--infra-profile", type=Path, default=None, help="dev-platform.infra/v1 incl. admission")
+    pc.add_argument(
+        "--facts",
+        action="store_true",
+        help="also print the parsed per-file triggers and per-job runner facts",
+    )
     ic = sub.add_parser("infra", help="provider-side tools for dev-platform.infra/v1 (validate, event trust)")
     isub = ic.add_subparsers(dest="icmd", required=True)
     icc = isub.add_parser(
@@ -1072,7 +1077,7 @@ def cmd_pr_check(args) -> int:
     files = {str(p): p.read_text() for p in sorted(args.workflows.glob("*.y*ml"))}
     profile = _j(args.infra_profile) if args.infra_profile else None
     try:
-        out = prcheck.check(files, profile)
+        out = prcheck.check(files, profile, facts=args.facts)
     except ValueError as e:
         raise ConfigError([str(e)]) from None
     print(json.dumps(out, indent=2, sort_keys=True))

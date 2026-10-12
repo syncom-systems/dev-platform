@@ -34,6 +34,13 @@ not have a `read-write` shared cache (profile validation). When nothing fits, th
 runner and the first reason it did not fit (trust, os, arch, isolation, credentials, capability, cache): there is
 no silent downgrade.
 
+## Per-job facts for providers (issue #100)
+`dev-platform pr-check --facts` (or `prcheck.check(files, profile, facts=True)`) adds `facts` to the output: per workflow file the
+`triggers` and the `pr_reachable_triggers`, and per job its resolved `runs_on` label sets (or `unresolved` with the reason),
+declared `environment`, reusable-workflow `uses` and a best-effort source `line`. They come from the same conservative reader that
+decides admission, so a provider needs no private workflow scanner; shapes the reader cannot interpret stay `unresolved` and
+`incomplete`. Facts never change the admission decision.
+
 ## Consumer-owned pin of the configuration release (ADR 0021)
 The consumer declares which configuration release it expects; the platform never takes a path on faith.
 ```toml

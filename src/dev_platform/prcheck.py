@@ -236,7 +236,47 @@ def _resolve_runs_on(job: dict, expr_ok: bool = True) -> list[list[str]]:
     return [values]
 
 
-def check_workflow(path: str, text: str, profile_runners: list[dict], admission: dict) -> dict:
+def _job_line(text: str, name: str) -> int | None:
+    """Best-effort 1-based line of `<name>:` under `jobs:` (the subset parser keeps no positions)."""
+    in_jobs = False
+    for i, line in enumerate(text.splitlines(), 1):
+        if re.match(r"^jobs:\s*(#.*)?$", line):
+            in_jobs = True
+        elif in_jobs and re.match(rf"^\s+{re.escape(name)}:\s*(#.*)?$", line):
+            return i
+    return None
+
+
+def job_facts(doc: dict, text: str) -> list[dict]:
+    """Per job: resolved runner label sets (or `unresolved` + reason), environment, source line."""
+    jobs = doc.get("jobs")
+    if not isinstance(jobs, dict):
+        return []
+    facts = []
+    for name, job in jobs.items():
+        f: dict = {"name": str(name), "line": _job_line(text, str(name)), "runs_on": None,
+                   "unresolved": None, "environment": None, "uses": None}  # fmt: skip
+        if not isinstance(job, dict):
+            f["unresolved"] = "job is not a mapping"
+        else:
+            env = job.get("environment")
+            env_name = env.get("name") if isinstance(env, dict) else env
+            f["environment"] = env_name if isinstance(env_name, str) else None
+            f["uses"] = job["uses"] if isinstance(job.get("uses"), str) else None
+            if "uses" in job and "runs-on" not in job:
+                f["unresolved"] = "reusable workflow call has no runs-on"
+            else:
+                try:
+                    f["runs_on"] = _resolve_runs_on(job)
+                except Unsupported as e:
+                    f["unresolved"] = str(e)
+        facts.append(f)
+    return facts
+
+
+def check_workflow(
+    path: str, text: str, profile_runners: list[dict], admission: dict, facts: list | None = None
+) -> dict:
     out = {"policy_violations": [], "incomplete": [], "risk_indicators": []}
 
     def inc(msg):
@@ -249,8 +289,14 @@ def check_workflow(path: str, text: str, profile_runners: list[dict], admission:
         trig = _triggers(doc)
     except Unsupported as e:
         inc(str(e))
+        if facts is not None:
+            facts.append({"file": path, "triggers": None, "pr_reachable_triggers": None, "jobs": [],
+                          "unresolved": str(e)})  # fmt: skip
         return out
     reachable = [t for t in trig if t in PR_REACHABLE]
+    if facts is not None:
+        facts.append({"file": path, "triggers": trig, "pr_reachable_triggers": reachable,
+                      "jobs": job_facts(doc, text), "unresolved": None})  # fmt: skip
     for t in trig:
         if t in admission["forbidden_triggers"]:
             out["policy_violations"].append({"file": path, "rule": "forbidden-trigger", "detail": t})
@@ -322,8 +368,10 @@ def check_workflow(path: str, text: str, profile_runners: list[dict], admission:
     return out
 
 
-def check(files: dict[str, str], profile: dict | None) -> dict:
-    """files: {path: text}. profile: parsed dev-platform.infra/v1 or None (public default)."""
+def check(files: dict[str, str], profile: dict | None, *, facts: bool = False) -> dict:
+    """files: {path: text}. profile: parsed dev-platform.infra/v1 or None (public default).
+    With facts=True the parsed per-file triggers and per-job runner/environment facts are returned as `facts`
+    (the same conservative reader that decides admission; unresolvable shapes stay `incomplete`)."""
     if profile is not None:
         problems = runners.validate_profile(profile)
         if problems:
@@ -331,8 +379,9 @@ def check(files: dict[str, str], profile: dict | None) -> dict:
     offered = (profile or {}).get("runners", []) + [dict(h) for h in runners.HOSTED]
     admission = {**DEFAULT_ADMISSION, **((profile or {}).get("admission") or {})}
     out = {"policy_violations": [], "incomplete": [], "risk_indicators": []}
+    collected: list[dict] = []
     for path in sorted(files):
-        r = check_workflow(path, files[path], offered, admission)
+        r = check_workflow(path, files[path], offered, admission, collected if facts else None)
         for k in out:
             out[k] += r[k]
     out["admission"] = (
@@ -344,4 +393,6 @@ def check(files: dict[str, str], profile: dict | None) -> dict:
     out["note"] = (
         "risk_indicators are heuristic and never change admission; no findings is not a proof of safety"
     )
+    if facts:
+        out["facts"] = collected
     return out
