@@ -95,8 +95,9 @@ def build_head(work: Path) -> tuple[bool, str, str, str]:
 
 def app_release_step(c: dict, cd: Path, work: Path, result: Path, env: dict, ver: str, tree: str) -> dict:
     """Application-release chain over the pilot's result (v0.3.0). No approval exists for a pilot, so the
-    only correct outcomes are a refusal to assemble (uncertified result) or `unapproved`, also when an
-    unsigned, forged approval is offered. The consumer is never modified beyond its throwaway checkout."""
+    only correct outcomes are a refusal to assemble (uncertified result) or a non-approval (`unapproved`, or
+    `failed` when the consumer's evidence repository cannot be read: the decision is current-state and fails
+    closed), also when an unsigned, forged approval is offered. The consumer is never modified beyond its throwaway checkout."""
     out: dict = {}
     locks = [n for n in ("Cargo.lock", "MODULE.bazel.lock", "uv.lock") if (cd / n).is_file()]
     if not locks:

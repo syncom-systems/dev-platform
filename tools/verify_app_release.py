@@ -18,7 +18,14 @@ Questions, each answered separately and failing closed:
 (rollback) re-derives everything that digests alone can establish and reports the rest under
 `coverage.not_evaluated`: it is weaker, and says so.
 
-Exit status: 0 when state is `approved`; 1 when `failed`; 3 when `unapproved`; 2 on bad usage.
+Two purposes, never mixed up. The default, `operational`, is a CURRENT decision (deploy, release eligibility,
+rollback): the authorization state is read from the evidence repository at one commit (every record, a revocation
+nobody supplied included), the history is audited for deleted records, and anything that cannot be established
+(unreachable, truncated, moved while reading, a failed call) makes the decision `failed`. `--historical` inspects only
+the supplied records, looks for nothing newer, and can never yield `approved`.
+
+Exit status: 0 when state is `approved`; 1 when `failed`; 3 when `unapproved`; 4 when `historical-approval`
+(authentic once, not a current authorization); 2 on bad usage.
 """
 
 from __future__ import annotations
@@ -29,11 +36,12 @@ import importlib.util
 import json
 import re
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 RECORD_SCHEMA = "dev-platform.app-release-verification/v1"
 POLICY_SCHEMA = "dev-platform.app-trust/v1"
+PURPOSES = ("operational", "historical")
 APP_RELEASE = "dev-platform.app-release/v1"
 AUTH_SCHEMA = "dev-platform.authorization/v1"
 RESULT_SCHEMA = "dev-platform.result/v1"
@@ -156,6 +164,11 @@ def policy_problems(policy: object) -> list[str]:
         p.append("policy.authorization.providers: non-empty list required")
     if not isinstance(auth.get("approvers"), list):
         p.append("policy.authorization.approvers: list required")
+    fr = policy.get("freshness")
+    if fr is not None:
+        age = fr.get("max_age_seconds") if isinstance(fr, dict) else None
+        if not (isinstance(age, int) and not isinstance(age, bool) and 1 <= age <= MAX_AGE_CAP):
+            p.append(f"policy.freshness.max_age_seconds: integer 1..{MAX_AGE_CAP} required")
     pr = policy.get("platform_releases")
     if not (isinstance(pr, list) and pr):
         p.append("policy.platform_releases: the Dev Platform releases this application accepts (non-empty)")
@@ -325,31 +338,143 @@ def assess(path: Path, release_sha: str, app_name: str, policy: dict, V, gh, now
     return verdict
 
 
-def discover_records(V, gh, auth_policy: dict, into: Path) -> list[Path]:
-    """Every authorizations/*.json at the pinned ref of the evidence repo, as local files (bytes as served)."""
+DEFAULT_MAX_AGE = 300  # seconds an operational verification stays current unless the policy says otherwise
+MAX_AGE_CAP = 3600
+_COMMIT = re.compile(r"^[0-9a-f]{40}$")
+
+
+class Observed:
+    """Wraps the `gh` runner and remembers every call that failed.
+
+    A revocation that could not be authenticated because GitHub could not be reached looks exactly like a record
+    that is not authentic. For current-state decisions the two must differ, so a failed call anywhere is recorded
+    and makes the current authorization state incomplete (fail closed).
+    """
+
+    def __init__(self, gh) -> None:
+        self.gh = gh
+        self.failures: list[str] = []
+
+    def __call__(self, argv):
+        out = self.gh(argv)
+        if out[0] != 0 and argv[:2] == [
+            "gh",
+            "api",
+        ]:  # attestation refusals are the platform verdict, not an outage
+            self.failures.append(f"{argv[2] if len(argv) > 2 else argv}: {(out[2] or '').strip()[:100]}")
+        return out
+
+
+def _not_found(e: Exception) -> bool:
+    return "404" in str(e) or "not found" in str(e).lower()
+
+
+def snapshot(V, gh, auth_policy: dict, into: Path) -> dict:
+    """One consistent view of the authorization evidence: every record at ONE commit of the evidence ref.
+
+    Resolves the ref to a commit id first and reads only at that id, so the listing and every record are the same
+    state of the repository. Also audits the history of `authorizations/`: a record that was committed and later
+    deleted (for example a revocation) is not silently absent, it makes the state unverifiable. Raises ValueError
+    for anything that cannot be established; the caller turns that into a failed check.
+    """
     import base64
 
     repo, ref = auth_policy["evidence_repo"], auth_policy["evidence_ref"]
     try:
-        listing = V._api(gh, f"repos/{repo}/contents/authorizations?ref={ref}")
-    except (RuntimeError, ValueError) as e:
-        raise ValueError(f"cannot list authorizations: {e}") from None
-    if not isinstance(listing, list):
-        raise ValueError("authorizations is not a directory")
-    out = []
-    for item in listing:
-        name, path = str(item.get("name")), str(item.get("path"))
-        if item.get("type") != "file" or not name.endswith(".json") or not V.AUTH_PATH_RE.match(path):
-            continue
+        head = V._api(gh, f"repos/{repo}/commits/{ref}")
+        sha = head.get("sha") if isinstance(head, dict) else None
+        if not (isinstance(sha, str) and _COMMIT.match(sha)):
+            raise ValueError("the evidence ref does not resolve to a commit")
+        committed = ((head.get("commit") or {}).get("committer") or {}).get("date")
+        ever: set[str] = set()
+        commits: list[dict] = []
+        for page in range(1, 6):
+            chunk = V._api(gh, f"repos/{repo}/commits?sha={sha}&path=authorizations&per_page=100&page={page}")
+            if not isinstance(chunk, list):
+                raise ValueError("history of authorizations is not a list")
+            commits += chunk
+            if len(chunk) < 100:
+                break
+        else:
+            raise ValueError("history of authorizations is too long to audit")
+        for c in commits:
+            detail = V._api(gh, f"repos/{repo}/commits/{c['sha']}")
+            for f in detail.get("files") or []:
+                name = str(f.get("filename"))
+                if not name.startswith("authorizations/"):
+                    continue
+                if f.get("status") == "removed":
+                    ever.add(
+                        name
+                    )  # present before, so it must be absent now only by deletion: compared below
+                elif f.get("status") == "renamed" and f.get("previous_filename"):
+                    ever.add(str(f["previous_filename"]))
+                    ever.add(name)
+                else:
+                    ever.add(name)
         try:
-            blob = V._api(gh, f"repos/{repo}/contents/{path}?ref={ref}")
-            data = base64.b64decode(blob["content"])
-        except (RuntimeError, ValueError, KeyError) as e:
-            raise ValueError(f"cannot read {path}: {e}") from None
-        f = into / name
-        f.write_bytes(data)
-        out.append(f)
-    return out
+            listing = V._api(gh, f"repos/{repo}/contents/authorizations?ref={sha}")
+        except (RuntimeError, ValueError) as e:
+            if not (_not_found(e) and not commits):
+                raise ValueError(f"cannot list authorizations: {e}") from None
+            listing = []  # no directory and no history: there is genuinely nothing to find
+            if isinstance(gh, Observed):
+                gh.failures.pop()  # that refusal was the answer, not an outage
+        if not isinstance(listing, list):
+            raise ValueError("authorizations is not a directory")
+        present: set[str] = set()
+        out = []
+        for item in listing:
+            name, path = str(item.get("name")), str(item.get("path"))
+            if item.get("type") != "file" or not name.endswith(".json") or not V.AUTH_PATH_RE.match(path):
+                continue
+            try:
+                blob = V._api(gh, f"repos/{repo}/contents/{path}?ref={sha}")
+                data = base64.b64decode(blob["content"])
+            except (RuntimeError, ValueError, KeyError) as e:
+                raise ValueError(f"cannot read {path}: {e}") from None
+            f = into / name
+            f.write_bytes(data)
+            out.append(f)
+            present.add(path)
+    except (RuntimeError, ValueError, KeyError, AttributeError, TypeError) as e:
+        raise ValueError(str(e)) from None
+    removed = sorted(p for p in ever - present if V.AUTH_PATH_RE.match(p))
+    return {
+        "repo": repo,
+        "ref": ref,
+        "head_commit": sha,
+        "head_committed_at": committed,
+        "records": sorted(Path(x).name for x in out),
+        "files": out,
+        "history_commits": len(commits),
+        "removed": removed,
+    }
+
+
+def current_authorizations(
+    V, gh: Observed, auth_policy: dict, into: Path, label: str
+) -> tuple[dict, dict, list[str]]:
+    """(snapshot, policy pinned to the snapshot commit, problems)."""
+    try:
+        snap = snapshot(V, gh, auth_policy, into)
+    except ValueError as e:
+        return {}, auth_policy, [f"{label}: {e}"]
+    problems = []
+    if snap["removed"]:
+        problems.append(
+            f"{label}: authorization records were deleted from the evidence history: {snap['removed']}"
+        )
+    return snap, {**auth_policy, "evidence_ref": snap["head_commit"]}, problems
+
+
+def still_current(V, gh, auth_policy: dict, head_commit: str) -> bool:
+    """True when the evidence ref still points at the commit that was read (nothing was published meanwhile)."""
+    try:
+        head = V._api(gh, f"repos/{auth_policy['evidence_repo']}/commits/{auth_policy['evidence_ref']}")
+        return isinstance(head, dict) and head.get("sha") == head_commit
+    except (RuntimeError, ValueError):
+        return False
 
 
 def effective(verdicts: list[dict]) -> dict | None:
@@ -423,6 +548,56 @@ def load_bundle(directory: Path, pin: str) -> tuple[list[str], dict]:
     return problems, files
 
 
+def platform_verification(V, entry: dict, archive_sha: str, a, plat_policy: dict, gh, now=None):
+    """Re-run the platform verifier for a policy that requires an accepted Dev Platform release.
+
+    Acceptance is itself a current decision: unless inspecting history, the platform authorization records are read
+    from the platform policy's evidence repository at one commit and judged with the supplied ones, so an
+    acceptance that was revoked (or never was) is not reported accepted from stale evidence. Returns
+    (platform verification record, extra checks for the application record, platform currency or None).
+    """
+    import tempfile
+
+    historical = bool(getattr(a, "historical", False))
+    gh = Observed(gh)
+    auths = list(a.platform_authorization)
+    extra: list[tuple[str, bool, str]] = []
+    currency = None
+    scratch = tempfile.TemporaryDirectory(prefix="current-platform-auth-")
+    try:
+        if not historical:
+            snap, pinned, problems = current_authorizations(
+                V,
+                gh,
+                plat_policy.get("authorization") or {},
+                Path(scratch.name),
+                "platform authorization state",
+            )
+            auths += list(snap.get("files", []))
+            plat_policy = {**plat_policy, "authorization": pinned}
+            currency = {k: v for k, v in snap.items() if k != "files"}
+        doc = V.verify(
+            a.platform_archive,
+            {"version": entry["version"], "source_revision": entry["source_revision"],
+             "archive_sha256": archive_sha, "ref": f"refs/tags/v{entry['version']}", "tree_digest": entry["tree_digest"]},
+            plat_policy,
+            gh=gh,
+            authorizations=auths,
+            bundle=a.platform_bundle,
+            sbom_bundle=a.platform_sbom_bundle,
+            environment=a.platform_environment,
+            continuity=a.platform_continuity,
+            **({"now": now} if now else {}),
+        )  # fmt: skip
+        if not historical:
+            if gh.failures:
+                problems = [*problems, f"{len(gh.failures)} GitHub call(s) failed, e.g. {gh.failures[0]}"]
+            extra.append(("platform-authorization-currency", not problems, "; ".join(problems)))
+    finally:
+        scratch.cleanup()
+    return doc, extra, currency
+
+
 # ---------------------------------------------------------------- verification
 
 
@@ -441,13 +616,15 @@ def verify(
     platform_sbom: Path | None = None,
     authorizations: list[Path] = (),
     platform_acceptance: dict | None = None,
-    discover: bool = False,
+    purpose: str = "operational",
     gh=None,
     extra_checks: list[tuple[str, bool, str]] = (),
     now: datetime | None = None,
 ) -> dict:
+    if purpose not in PURPOSES:
+        raise ValueError(f"purpose must be one of {PURPOSES}")
     now = now or datetime.now(UTC)
-    gh = gh or V.default_gh
+    gh = Observed(gh or V.default_gh)
     rec = Record()
     for cid, ok, detail in extra_checks:
         rec.add(cid, ok, detail)
@@ -603,31 +780,67 @@ def verify(
 
     now = now.astimezone(UTC)
     authorizations = list(authorizations)
-    scratch = None
-    if discover:
-        # Freshness: a revocation or supersession that nobody handed us still counts if it is in the evidence
-        # repository. Every discovered record is judged exactly like a supplied one (same provider path).
+    currency: dict = {"purpose": purpose, "status": "historical", "observed_at": now.isoformat()}
+    verdicts: list[dict] = []
+    if purpose == "operational":
+        # Freshness: a current decision needs the CURRENT authorization state. Every record in the evidence
+        # repository (a revocation nobody handed us included) is read at one commit and judged exactly like a
+        # supplied one; anything that cannot be established makes the decision fail, never approve.
         import tempfile
 
-        scratch = tempfile.TemporaryDirectory(prefix="discovered-auth-")
-        try:
-            found = discover_records(V, gh, policy["authorization"], Path(scratch.name))
-            rec.add("authorization-discovery", True, "")
-            have = {sha256_file(Path(x)) for x in authorizations if Path(x).is_file()}
-            authorizations += [f for f in found if sha256_file(f) not in have]  # same bytes: judged once
+        auth_policy = policy["authorization"]
+        max_age = int((policy.get("freshness") or {}).get("max_age_seconds", DEFAULT_MAX_AGE))
+        problems: list[str] = []
+        snap: dict = {}
+        for _attempt in range(3):
+            gh.failures.clear()
+            with tempfile.TemporaryDirectory(prefix="current-auth-") as td:
+                snap, pinned_auth, problems = current_authorizations(
+                    V, gh, auth_policy, Path(td), "authorization state"
+                )
+                if not snap:
+                    verdicts = []
+                    break
+                have = {sha256_file(Path(x)) for x in authorizations if Path(x).is_file()}
+                judged = list(authorizations) + [f for f in snap["files"] if sha256_file(f) not in have]
+                pinned_policy = {**policy, "authorization": pinned_auth}
+                verdicts = [
+                    assess(p, release_sha, rel["application"]["name"], pinned_policy, V, gh, now)
+                    for p in judged
+                ]
+            if still_current(V, gh, auth_policy, snap["head_commit"]):
+                break
+            problems = ["the evidence ref moved while it was being read (fail closed; re-run)"]
+        if gh.failures:
+            problems.append(f"{len(gh.failures)} GitHub call(s) failed, e.g. {gh.failures[0]}")
+        rec.add("authorization-currency", not problems, "; ".join(problems))
+        ok = not problems
+        public = {k: v for k, v in snap.items() if k != "files"}
+        currency = {
+            "purpose": purpose,
+            "status": "current" if ok else "unverifiable",
+            "observed_at": now.isoformat(),
+            "max_age_seconds": max_age,
+            "valid_until": (now + timedelta(seconds=max_age)).isoformat() if ok else None,
+            "evidence": public,
+        }
+        if ok:
             coverage["verified"].append(
-                f"authorization records discovered in the evidence repo ({len(found)})"
+                f"current authorization state: {len(snap['records'])} record(s) at {snap['head_commit'][:12]}"
             )
-        except ValueError as e:
-            rec.add("authorization-discovery", False, str(e))
-    verdicts = [
-        assess(p, release_sha, rel["application"]["name"], policy, V, gh, now) for p in authorizations
-    ]
-    if scratch:
-        scratch.cleanup()
+    else:
+        # Historical inspection: only the supplied records, nothing discovered. It can show that an approval
+        # was once authentic; it cannot show that it still is, so it never yields `approved`.
+        verdicts = [
+            assess(p, release_sha, rel["application"]["name"], policy, V, gh, now) for p in authorizations
+        ]
+        coverage["not_evaluated"].append(
+            "current authorization state (historical inspection: later revocations are not looked for)"
+        )
     # assess() binds every record to this exact release digest, so only decisions about it can count.
     auth = effective(verdicts)
-    out = _finish(rec, subject, coverage, verdicts, auth, mode)
+    out = _finish(rec, subject, coverage, verdicts, auth, mode, purpose)
+    out["currency"] = currency
     if platform_acceptance:
         a = platform_acceptance.get("acceptance") or {}
         out["platform_acceptance"] = {
@@ -639,13 +852,19 @@ def verify(
     return out
 
 
-def _finish(rec, subject, coverage, verdicts, auth, mode) -> dict:
+def _finish(rec, subject, coverage, verdicts, auth, mode, purpose="operational") -> dict:
     if not rec.all_passed:
         state = "failed"
         reasons = [c["id"] for c in rec.checks if c["status"] == "failed"]
     elif auth is None:
         state = "unapproved"
         reasons = ["no authenticated, authorized, in-force approval bound to this exact release record"]
+    elif purpose != "operational":
+        state = "historical-approval"
+        reasons = [
+            f"approval {auth['id']} by {auth['approver']} was authentic against the supplied records; "
+            "it is NOT a current authorization (revocations were not looked for)"
+        ]
     else:
         state = "approved"
         reasons = [f"authenticated approval {auth['id']} by {auth['approver']}"]
@@ -692,9 +911,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--platform-sbom", type=Path)
     ap.add_argument("--authorization", type=Path, action="append", default=[])
     ap.add_argument(
-        "--discover-authorizations",
+        "--historical",
         action="store_true",
-        help="also judge every record found in the evidence repository (so a newer revocation counts)",
+        help="inspection only: judge just the supplied records, look for nothing newer. Never yields `approved` "
+        "(a possible approval is reported as `historical-approval`, exit 4). The default is a current decision.",
     )
     ap.add_argument("--platform-archive", type=Path, help="Dev Platform archive the policy requires accepted")
     ap.add_argument(
@@ -732,6 +952,7 @@ def main(argv: list[str] | None = None) -> int:
         print("a release record or a valid --bundle is required", file=sys.stderr)
         return 2
     platform_doc = None
+    plat_currency = None
     if a.platform_archive:
         if not (a.platform_policy and a.platform_policy_sha256):
             print(
@@ -747,17 +968,10 @@ def main(argv: list[str] | None = None) -> int:
             None,
         )  # fmt: skip
         if entry:
-            platform_doc = V.verify(
-                a.platform_archive,
-                {"version": entry["version"], "source_revision": entry["source_revision"],
-                 "archive_sha256": want, "ref": f"refs/tags/v{entry['version']}", "tree_digest": entry["tree_digest"]},
-                json.loads(a.platform_policy.read_text()),
-                authorizations=a.platform_authorization,
-                bundle=a.platform_bundle,
-                sbom_bundle=a.platform_sbom_bundle,
-                environment=a.platform_environment,
-                continuity=a.platform_continuity,
-            )  # fmt: skip
+            platform_doc, more, plat_currency = platform_verification(
+                V, entry, want, a, json.loads(a.platform_policy.read_text()), V.default_gh
+            )
+            extra += more
     arts = {}
     for item in a.artifact:
         name, sep, path = item.partition("=")
@@ -779,9 +993,11 @@ def main(argv: list[str] | None = None) -> int:
         platform_sbom=a.platform_sbom,
         authorizations=a.authorization,
         platform_acceptance=platform_doc,
-        discover=a.discover_authorizations,
+        purpose="historical" if a.historical else "operational",
         extra_checks=extra,
     )
+    if plat_currency is not None:
+        doc["currency"]["platform_authorization_state"] = plat_currency
     text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
     if a.out:
         a.out.write_text(text)
@@ -795,7 +1011,7 @@ def main(argv: list[str] | None = None) -> int:
             + (f"  ({'; '.join(v['problems'])})" if v["problems"] else "")
         )
     print(f"approval: {doc['approval']['state']}  {'; '.join(doc['approval']['reasons'])}")
-    return {"approved": 0, "failed": 1, "unapproved": 3}[doc["approval"]["state"]]
+    return {"approved": 0, "failed": 1, "unapproved": 3, "historical-approval": 4}[doc["approval"]["state"]]
 
 
 if __name__ == "__main__":

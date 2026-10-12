@@ -152,7 +152,7 @@ class IndependentReader(Base):
 
     def test_intact_bundle_without_approval_is_unapproved_not_failed(self):
         pin = self.build(authorizations=[])
-        code, rec = self.run_main("--manifest-sha256", pin)
+        code, rec = self.run_main("--manifest-sha256", pin, "--historical")  # bundle inspection, no network
         self.assertEqual((code, rec["approval"]["state"]), (3, "unapproved"))
         self.assertIn("evidence-bundle", {c["id"] for c in rec["checks"]})
 

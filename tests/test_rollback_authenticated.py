@@ -149,6 +149,37 @@ class Runner(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("authenticated by the pinned independent verifier", err.getvalue())
 
+    def current_rec(self, **cur):
+        from datetime import UTC, datetime, timedelta
+
+        now = datetime.now(UTC)
+        c = {"purpose": "operational", "status": "current", "observed_at": now.isoformat(),
+             "valid_until": (now + timedelta(seconds=300)).isoformat()}  # fmt: skip
+        c.update(cur)
+        return {"approval": {"state": "approved"}, "currency": c}
+
+    def test_an_approval_is_usable_only_with_a_fresh_current_state_verification(self):
+        from datetime import UTC, datetime, timedelta
+
+        appverify.AppVerifier._current(self.current_rec())  # fresh: accepted
+        old = datetime.now(UTC) - timedelta(hours=1)
+        for bad in (
+            {"purpose": "historical"},
+            {"status": "unverifiable"},
+            {"observed_at": old.isoformat(), "valid_until": (old + timedelta(seconds=300)).isoformat()},
+            {"observed_at": (datetime.now(UTC) + timedelta(hours=1)).isoformat()},
+            {"observed_at": None},
+        ):
+            with self.assertRaises(ConfigError, msg=bad):
+                appverify.AppVerifier._current(self.current_rec(**bad))
+        rec = self.current_rec()
+        del rec["currency"]  # a record with no currency block at all
+        with self.assertRaises(ConfigError):
+            appverify.AppVerifier._current(rec)
+
+    def test_non_approvals_need_no_currency(self):
+        appverify.AppVerifier._current({"approval": {"state": "unapproved"}})
+
     def test_subprocess_verifier_end_to_end_without_authorizations(self):
         c = Select("setUp")
         c.setUp()
@@ -156,7 +187,11 @@ class Runner(unittest.TestCase):
             rel = c.releases["1.0.0"]
             pol = c.w("policy.json", c.policy)
             rec = self.mk(policy=pol, results=c.results)(rel)
-            self.assertEqual(rec["approval"]["state"], "unapproved")
+            # current-state decision with an evidence repository that cannot be read here: fails closed
+            self.assertEqual(rec["approval"]["state"], "failed")
+            self.assertIn(
+                "authorization-currency", {x["id"] for x in rec["checks"] if x["status"] == "failed"}
+            )
             self.assertEqual(rec["subject"]["release_sha256"], records.canonical_digest(rel))
         finally:
             c.doCleanups()

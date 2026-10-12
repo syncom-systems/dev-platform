@@ -12,11 +12,13 @@ import json
 import subprocess
 import sys
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from . import records
 from .errors import ConfigError
 
+FUTURE_SKEW = timedelta(seconds=60)
 VERIFICATION = "dev-platform.app-release-verification/v1"
 
 
@@ -43,7 +45,6 @@ class AppVerifier:
         platform_sbom: Path | None = None,
         mode: str = "select",
         platform_args: list[str] = (),
-        discover: bool = False,
     ):
         _pinned(verifier, verifier_sha256, "application verifier")
         _pinned(platform_verifier, platform_verifier_sha256, "platform verifier")
@@ -63,12 +64,34 @@ class AppVerifier:
         # --platform-archive/--platform-policy/... passed through verbatim: the verifier re-runs the platform
         # verifier for policies that require an accepted Dev Platform release (checked against its own pins).
         self.argv_base += list(platform_args)
-        if discover:
-            self.argv_base.append("--discover-authorizations")
         self.results = results
         self.authorizations = list(authorizations)
         self.advisories = list(advisories)
         self.platform_sbom = platform_sbom
+
+    @staticmethod
+    def _current(rec: dict) -> None:
+        """An approval counts for a current decision only if it read the current state, just now."""
+        if rec.get("approval", {}).get("state") != "approved":
+            return
+        cur = rec.get("currency") or {}
+        if cur.get("purpose") != "operational" or cur.get("status") != "current":
+            raise ConfigError(["verifier record is not a current-state verification (fail closed)"])
+        try:
+            seen = datetime.fromisoformat(cur["observed_at"])
+            until = datetime.fromisoformat(cur["valid_until"])
+        except (KeyError, TypeError, ValueError):
+            raise ConfigError(
+                ["verifier record has no usable observed_at/valid_until (fail closed)"]
+            ) from None
+        now = datetime.now(UTC)
+        if seen > now + FUTURE_SKEW or now > until:
+            raise ConfigError(
+                [
+                    f"verification is not fresh (observed {cur['observed_at']}, "
+                    f"valid until {cur['valid_until']})"
+                ]
+            )
 
     def __call__(self, release: dict) -> dict:
         """The verifier's record for `release`; a missing or malformed record is an error, never approval."""
@@ -92,6 +115,7 @@ class AppVerifier:
             rec = json.loads(out.read_text())
         if rec.get("schema") != VERIFICATION:
             raise ConfigError([f"unexpected verifier record schema {rec.get('schema')!r}"])
+        self._current(rec)
         if (rec.get("subject") or {}).get("release_sha256") != records.canonical_digest(release):
             raise ConfigError(["verifier record is not bound to the release that was submitted"])
         return rec

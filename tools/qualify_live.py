@@ -202,7 +202,9 @@ def main(argv=None) -> int:
         probs = " | ".join(p for v in out["approval"]["authorization_evidence"] for p in v["problems"])
         got = out["approval"]["state"]
         failed = [c["id"] for c in out["checks"] if c["status"] == "failed"]
-        ok = got == want_state and needle in (probs + " ".join(failed))
+        ok = got == want_state and needle in (
+            probs + " ".join(failed + [c["detail"] for c in out["checks"] if c["status"] == "failed"])
+        )
         cases.append(
             {"case": name, "ok": ok, "expected": want_state, "actual": got, "reason": probs or failed}
         )
@@ -255,8 +257,8 @@ def main(argv=None) -> int:
         "unreadable evidence repository fails closed",
         [bot_file],
         policy(repo="syncom-systems/does-not-exist-qualification"),
-        "unapproved",
-        "cannot fetch signing evidence",
+        "failed",
+        "authorization-currency",
     )
     # 5. discovery against the live repository: every record in it is judged, none can approve
     out = judge(
@@ -265,7 +267,44 @@ def main(argv=None) -> int:
         policy(),
         "unapproved",
         "committer of commit",
-        discover=True,
+    )
+    cur = out["currency"]
+    live_head = json.loads(gh("api", f"repos/{a.repo}/commits/main"))["sha"]
+    cases.append({"case": "the current state was read live at one commit of the evidence ref", "ok": cur["status"] == "current" and cur["evidence"]["head_commit"] == live_head and cur["evidence"]["removed"] == [] and cur["evidence"]["history_commits"] >= 2 and cur["valid_until"] is not None, "currency": cur})  # fmt: skip
+    judge(
+        "historical inspection of the same record over the live repository is not an approval either",
+        [bot_file],
+        policy(),
+        "unapproved",
+        "committer of commit",
+        purpose="historical",
+    )
+    # 5b. a record deleted from the evidence history (on a scratch branch of the fixture) makes the state unverifiable
+    branch = f"qual-deleted-{stamp}"
+    main_sha = json.loads(gh("api", f"repos/{a.repo}/git/ref/heads/main"))["object"]["sha"]
+    gh(
+        "api",
+        "-X",
+        "POST",
+        f"repos/{a.repo}/git/refs",
+        "-f",
+        f"ref=refs/heads/{branch}",
+        "-f",
+        f"sha={main_sha}",
+    )
+    dpath = f"authorizations/live-{stamp}-deleted.json"
+    put = json.loads(gh("api", "-X", "PUT", f"repos/{a.repo}/contents/{dpath}", "-f", "message=record to be deleted",
+                        "-f", f"content={base64.b64encode(b'{}').decode()}", "-f", f"branch={branch}"))  # fmt: skip
+    gh("api", "-X", "DELETE", f"repos/{a.repo}/contents/{dpath}", "-f", "message=delete the record",
+       "-f", f"sha={put['content']['sha']}", "-f", f"branch={branch}")  # fmt: skip
+    deleted_pol = policy()
+    deleted_pol["authorization"]["evidence_ref"] = branch
+    judge(
+        "a record deleted from the live evidence history makes the current state unverifiable",
+        [],
+        deleted_pol,
+        "failed",
+        "authorization-currency",
     )
     cases.append({"case": "discovery listed live records", "ok": len(out["approval"]["authorization_evidence"]) >= 2, "count": len(out["approval"]["authorization_evidence"])})  # fmt: skip
     # 6. complete CLI path: bundle -> rollback select, real gh, real verifier subprocess
@@ -324,6 +363,7 @@ def main(argv=None) -> int:
         "schema": "dev-platform.live-qualification/v1",
         "repo": a.repo, "identity": BOT, "ran_at": datetime.now(UTC).isoformat(),
         "reaches_approved": False,
+        "purpose": "operational (current-state) semantics; one case is historical inspection",
         "limit": "no second GitHub identity with its own signing key exists; the live path therefore never reaches `approved`",
         "fixture_commits": {"bot_signed_web_flow": sha, "unsigned": unsigned_sha,
                             "head_at_end": json.loads(gh("api", f"repos/{a.repo}/commits/main"))["sha"]},

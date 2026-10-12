@@ -26,7 +26,9 @@ SHIM = """#!/usr/bin/env python3
 import json, os, sys
 sys.path.insert(0, {tools!r})
 from qualify_app_release import RecordedGitHub
-code, out, err = RecordedGitHub.load(os.environ["QUAL_GH_HISTORY"])(sys.argv)
+if os.environ.get("QUAL_GH_OUTAGE"):
+    sys.stderr.write("HTTP 502: Bad Gateway"); sys.exit(1)
+code, out, err = RecordedGitHub.load(os.environ["QUAL_GH_HISTORY"])(["gh", *sys.argv[1:]])
 sys.stdout.write(out); sys.stderr.write(err); sys.exit(code)
 """
 
@@ -152,6 +154,9 @@ def run(
     bundle("1.6.0", [sign("1.6.0", "ok-160", sign={"verified": False})])
     p170 = sign("1.7.0", "ok-170")
     p170.write_text(p170.read_text().replace("qualification", "edited-after-signing"))
+    # the edit also reaches the evidence repository, as an unsigned commit (the genuine signed copy is then history)
+    double.commit({"authorizations/ok-170.json": p170.read_bytes()}, verified=False, author="qualify-approver",
+                  committer="qualify-approver")  # fmt: skip
     bundle("1.7.0", [p170])
     code, out, _ = select(["1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.5.0", "1.6.0", "1.7.0"])
     record("only the authenticated, unrevoked, unsuperseded, unaffected release is eligible",
@@ -163,7 +168,11 @@ def run(
         ("1.3.0", "ADV-APP", "release with an advisory against it is refused"),
         ("1.5.0", "not an approver", "approval by an authenticated non-approver is refused"),
         ("1.6.0", "not a validly signed", "unsigned approval is refused"),
-        ("1.7.0", "modified after signing", "approval edited after signing is refused"),
+        (
+            "1.7.0",
+            "not a validly signed",
+            "approval edited in the evidence repository after signing is refused",
+        ),
     ):
         r = reasons(out, v)
         record(label, r is not None and v not in eligible(out) and needle in " ".join(r), r)
@@ -220,19 +229,37 @@ def run(
         eligible(out) == [] and any("verification-evidence" in x for x in reasons(out, "1.0.0") or []),
         reasons(out, "1.0.0"),
     )
-    # --- freshness: a revocation that exists only in the evidence repository --------------------------------
+    # --- freshness: current-state authorization is mandatory for a rollback decision ------------------------
     bundle("1.8.0", [sign("1.8.0", "ok-180")])
-    rev_of("1.8.0", "rev-180")  # committed after the bundle was written; no bundle contains it
-    code, stale, _ = select(["1.8.0"])
-    _, fresh, _ = select(["1.8.0"], "--discover-authorizations")
+    code, before, _ = select(["1.8.0"])
+    record("approval with nothing newer in the evidence repository is eligible (current state read live)",
+           eligible(before) == ["1.8.0"] and before["authorization_state"] == "current"
+           and before["eligible"][0]["currency"]["status"] == "current", eligible(before))  # fmt: skip
+    rev_of("1.8.0", "rev-180")  # published after the bundle was written; no bundle contains it
+    code, fresh, _ = select(["1.8.0"])
     record(
-        "stale bundle alone still shows the old approval (stated limitation: supply the newest evidence)",
-        eligible(stale) == ["1.8.0"],
-        eligible(stale),
-    )
-    record(
-        "with --discover-authorizations the later revocation in the evidence repository refuses it",
+        "a revocation published independently, absent from the pinned bundle, refuses the release",
         eligible(fresh) == [] and reasons(fresh, "1.8.0") is not None,
         reasons(fresh, "1.8.0"),
+    )
+    bundle("1.9.0", [sign("1.9.0", "ok-190")])
+    senv["QUAL_GH_OUTAGE"] = "1"
+    try:
+        code, out, _ = select(["1.9.0"])
+    finally:
+        del senv["QUAL_GH_OUTAGE"]
+    record(
+        "evidence repository unreachable: nothing is eligible (current state unverifiable, fail closed)",
+        eligible(out) == [] and any("authorization-currency" in x for x in reasons(out, "1.9.0") or []),
+        reasons(out, "1.9.0"),
+    )
+    rev_of("1.9.0", "rev-190")
+    double.delete("authorizations/rev-190.json", author="intruder", committer="intruder")
+    code, out, _ = select(["1.9.0"])
+    record(
+        "a revocation deleted from the evidence history is not silently absent: release refused",
+        eligible(out) == []
+        and any("deleted from the evidence history" in x for x in reasons(out, "1.9.0") or []),
+        reasons(out, "1.9.0"),
     )
     return {"cases": cases, "all_ok": all(c["ok"] for c in cases)}
