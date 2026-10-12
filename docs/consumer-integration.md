@@ -27,13 +27,28 @@ refuses a different release, a different configuration digest, or a provider tha
    declared version; decoy host `rustc`/`cargo` are never executed; Cargo is never run);
 7. writes the evidence bundle and judges it with `tools/verify_consumer_evidence.py` against the consumer's own pins.
 
-Exit status is 0 only when the evidence verdict is `consistent` (0.8.0 printed `verified`; the word was changed because it overstated: consistency with pins is not trustworthy execution). The reusable workflow `.github/workflows/consumer-pilot.yml`
-wraps this for GitHub Actions; call it as an additional job (not a required check unless you decide so):
+Exit status is 0 only when the evidence verdict is `consistent` (0.8.0 printed `verified`; the word was changed because it overstated: consistency with pins is not trustworthy execution). The reusable workflow `.github/workflows/consumer-pilot.yml` wraps this for GitHub Actions; call it as an additional job (not a
+required check unless you decide so). It needs only `contents: read`; a caller grants nothing else:
 ```yaml
 jobs:
   dev-platform:
     uses: syncom-systems/dev-platform/.github/workflows/consumer-pilot.yml@<full commit sha of the pinned release>
-    with: {platform_source_revision: "<same sha>", allow_unaccepted: true, attest: true}
+    with: {platform_source_revision: "<same sha>", allow_unaccepted: true, runs_on: ubuntu-24.04}
+```
+Layout on the runner: the consumer is checked out to `consumer/`, the platform source (at the pinned revision) to `platform/` and
+the evidence to `evidence/` (artifact `dp-evidence`), three siblings, so nothing the run writes can dirty the consumer's working
+tree; `consumer_run.py` refuses a work, evidence or platform directory inside the consumer directory. The job's read-only token is
+given to `gh attestation verify` (the installer) only and removed from every later process, including the consumer's builds and
+tests; checkouts persist no credentials. v0.8.0 and v0.8.1 shipped without the token, with the attestation permissions required of
+every caller and with the platform source and evidence inside the consumer tree; use v0.8.2 or later.
+
+Optional attestation of the evidence is a separate workflow and a separate job, the only one that holds `id-token` and
+`attestations` write; it checks nothing out and runs no code:
+```yaml
+  attest:
+    needs: dev-platform
+    if: always() && needs.dev-platform.result != 'skipped'
+    uses: syncom-systems/dev-platform/.github/workflows/consumer-pilot-attest.yml@<same sha>
     permissions: {contents: read, id-token: write, attestations: write}
 ```
 

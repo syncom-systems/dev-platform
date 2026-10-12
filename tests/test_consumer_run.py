@@ -115,6 +115,68 @@ class Targets(unittest.TestCase):
         self.assertEqual(C.bazel_targets({}), [])
 
 
+class Credentials(unittest.TestCase):
+    def test_take_credentials_removes_the_tokens(self):
+        env = {"GH_TOKEN": "t1", "GITHUB_TOKEN": "t2", "PATH": "/bin"}
+        self.assertEqual(C.take_credentials(env), {"GH_TOKEN": "t1", "GITHUB_TOKEN": "t2"})
+        self.assertEqual(env, {"PATH": "/bin"})
+
+    def test_only_the_installer_receives_the_token(self):
+        d = consumer(self)
+        seen = []
+
+        def fake_run(argv, **kw):
+            seen.append((argv, kw.get("env")))
+            return subprocess.CompletedProcess(argv, 0, stdout="{}\n", stderr="")
+
+        saved = (C.run, C.pinned_tools, dict(C.os.environ))
+        C.os.environ["GH_TOKEN"] = "sentinel-token"
+        C.run, C.pinned_tools = fake_run, lambda *a, **k: (tmpdir(self), "")
+        try:
+            C.main(
+                ["--consumer-dir", str(d), "--work", str(tmpdir(self)), "--evidence-dir", str(tmpdir(self))]
+            )
+            leaked = "GH_TOKEN" in C.os.environ
+        finally:
+            C.run, C.pinned_tools = saved[0], saved[1]
+            C.os.environ.clear()
+            C.os.environ.update(saved[2])
+        self.assertFalse(leaked, "the token stays in the process environment")
+        self.assertGreaterEqual(len(seen), 2)  # the install and at least one later process
+        self.assertEqual((seen[0][1] or {}).get("GH_TOKEN"), "sentinel-token")
+        for argv, env in seen[1:]:
+            self.assertNotIn("GH_TOKEN", env or {}, argv)
+            self.assertNotIn("GITHUB_TOKEN", env or {}, argv)
+
+
+class Placement(unittest.TestCase):
+    def run_main(self, work=None, evidence=None, checkout=None):
+        d = consumer(self)
+        w = work(d) if work else tmpdir(self)
+        e = evidence(d) if evidence else tmpdir(self)
+        args = ["--consumer-dir", str(d), "--work", str(w), "--evidence-dir", str(e)]
+        if checkout:
+            args += ["--dev-platform-checkout", str(checkout(d))]
+        code = C.main(args)
+        rec = json.loads((e / "consumer-run.json").read_text())
+        return code, rec["steps"]
+
+    def test_outputs_inside_the_consumer_tree_are_refused(self):
+        for kw in (
+            {"evidence": lambda d: d / "dp-evidence"},
+            {"work": lambda d: d / ".dp-work"},
+            {"checkout": lambda d: d / ".dev-platform-src"},
+        ):
+            code, steps = self.run_main(**kw)
+            self.assertEqual(code, 1)
+            self.assertTrue(any("inside the consumer working tree" in p for p in steps["problems"]), steps)
+            self.assertNotIn("pinned_tools", steps)  # refused before anything ran
+
+    def test_sibling_directories_are_accepted(self):
+        _code, steps = self.run_main()
+        self.assertNotIn("inside the consumer working tree", " ".join(steps.get("problems", [])))
+
+
 class Trust(unittest.TestCase):
     def test_outside_ci_is_untrusted(self):
         self.assertEqual(C.event_trust({}), "untrusted")

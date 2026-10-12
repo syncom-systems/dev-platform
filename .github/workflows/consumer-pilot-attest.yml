@@ -1,0 +1,27 @@
+# Optional, separate attestation of the evidence bundle produced by consumer-pilot.yml in the same workflow run.
+# Call it as its own job AFTER the pilot job; only this job receives id-token and attestations write, and it checks
+# nothing out and runs no code: it attests exactly the files the read-only pilot job uploaded.
+#
+#   attest:
+#     needs: dev-platform
+#     if: always() && needs.dev-platform.result != 'skipped'
+#     uses: syncom-systems/dev-platform/.github/workflows/consumer-pilot-attest.yml@<full commit sha of the pinned release>
+#     permissions: {contents: read, id-token: write, attestations: write}
+name: consumer-pilot-attest
+on:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  attest:
+    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with: {name: dp-evidence, path: dp-evidence}
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with: {subject-path: "dp-evidence/*.json"}
