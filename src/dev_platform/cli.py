@@ -182,11 +182,6 @@ def build_parser() -> argparse.ArgumentParser:
             metavar=meta,
             help="only for policies that require an accepted Dev Platform release",
         )
-    rs.add_argument(
-        "--discover-authorizations",
-        action="store_true",
-        help="also judge every record in the policy's evidence repository (a newer revocation then counts)",
-    )
     rs.add_argument("--platform-policy-sha256", help="operator pin of --platform-policy")
     rs.add_argument("--platform-authorization", type=Path, action="append", default=[])
     rs.add_argument(
@@ -845,7 +840,6 @@ def cmd_rollback(args) -> int:
             advisories=args.advisory,
             platform_sbom=args.platform_sbom,
             platform_args=_platform_args(args),
-            discover=args.discover_authorizations,
         )
     out = provenance.select_rollback(
         args.application,

@@ -13,7 +13,6 @@ qualification fixtures do not publish one. The chain, not the artifact kind, is 
 
 from __future__ import annotations
 
-import base64
 import copy
 import hashlib
 import importlib.util
@@ -28,6 +27,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from recorded_repo import Repo  # noqa: E402
+
 LOCKS = ("Cargo.lock", "MODULE.bazel.lock", "uv.lock", "requirements.txt", "poetry.lock")
 APPROVER, STRANGER = "qualify-approver", "qualify-stranger"
 REPO = "example/qualified-app"
@@ -41,50 +43,15 @@ def _load(name: str, path: Path):
     return mod
 
 
-class RecordedGitHub:
-    """`gh api` double: commit history with verification fields, and file contents by commit."""
+class RecordedGitHub(Repo):
+    """A recorded evidence repository (tools/recorded_repo.py) whose signed commits are the approver's by default."""
 
     def __init__(self) -> None:
-        self.history: dict[str, list[dict]] = {}
+        super().__init__()
+        self.commit({"README.md": b"evidence repository\n"}, author="qualify-bot", committer="qualify-bot")
 
-    def sign(self, path: str, raw: bytes, *, verified=True, author=APPROVER, committer=APPROVER) -> None:
-        c = {
-            "sha": f"{len(self.history.get(path, [])) + 1:040x}",
-            "commit": {"verification": {"verified": verified, "reason": "valid" if verified else "unsigned"}},
-            "author": {"login": author},
-            "committer": {"login": committer},
-            "_content": raw,
-        }
-        self.history.setdefault(path, []).insert(0, c)
-
-    def __call__(self, argv):
-        ep = argv[2]
-        m = re.search(r"/commits\?sha=([^&]+)&path=([^&]+)", ep)
-        if m:
-            hist = [{k: v for k, v in c.items() if k != "_content"} for c in self.history.get(m.group(2), [])]
-            return 0, json.dumps(hist), ""
-        m = re.search(r"/contents/(authorizations)\?ref=", ep)
-        if m:  # directory listing at the branch head
-            return 0, json.dumps([{"name": p.rsplit("/", 1)[1], "path": p, "type": "file"}
-                                  for p in sorted(self.history)]), ""  # fmt: skip
-        m = re.search(r"/contents/([^?]+)\?ref=(\w+)", ep)
-        if m:
-            for i, c in enumerate(self.history.get(m.group(1), [])):
-                if c["sha"] == m.group(2) or (m.group(2) == "main" and i == 0):
-                    return 0, json.dumps({"content": base64.b64encode(c["_content"]).decode()}), ""
-        return 1, "", "not found"
-
-    def dump(self, path: Path) -> None:
-        enc = {p: [{**c, "_content": base64.b64encode(c["_content"]).decode()} for c in cs]
-               for p, cs in self.history.items()}  # fmt: skip
-        Path(path).write_text(json.dumps(enc))
-
-    @classmethod
-    def load(cls, path: Path) -> RecordedGitHub:
-        g = cls()
-        for p, cs in json.loads(Path(path).read_text()).items():
-            g.history[p] = [{**c, "_content": base64.b64decode(c["_content"])} for c in cs]
-        return g
+    def sign(self, path, raw, *, verified=True, author=APPROVER, committer=APPROVER, **kw) -> None:
+        super().sign(path, raw, verified=verified, author=author, committer=committer, **kw)
 
 
 def _artifact(consumer: Path, work: Path, git) -> tuple[Path, str, str, list[dict]]:
@@ -180,7 +147,7 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
         return d
 
     def verify(auths, *, release=rel, pol=policy, gh=None, rev_pin=rev, lock_files=locks, artifact=art,
-               results=None, advisories=()):  # fmt: skip
+               results=None, advisories=(), purpose="operational"):  # fmt: skip
         paths = []
         for i, a in enumerate(auths):
             p = work / f"auth-{i}.json"
@@ -194,7 +161,8 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
         out = A.verify(
             rp, pol, V, mode="release", source_revision=rev_pin, locks=lock_files, lock_root=consumer,
             artifacts={art_name: artifact}, results=[result_path] if results is None else results,
-            advisories=list(advisories), authorizations=paths, gh=gh or default_gh, now=NOW)  # fmt: skip
+            advisories=list(advisories), authorizations=paths, gh=gh or default_gh, now=NOW,
+            purpose=purpose)  # fmt: skip
         return out["approval"]["state"]
 
     cases, default_gh = [], None
@@ -219,6 +187,59 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
         [{"doc": approval("a3", release={**rel, "application": {**rel["application"], "version": "9.9.9"}})}]))  # fmt: skip
     case("authentic revocation after approval", "unapproved", lambda: verify(
         [{"doc": approval("a4")}, {"doc": approval("r4", decision="revoked", decided_at="2026-10-11T10:00:00Z")}]))  # fmt: skip
+
+    # authorization freshness: the current state is read from the evidence repository, not from what was supplied
+    def revoked_elsewhere(name, **kw):
+        """Only the approval is supplied; its revocation was published to the evidence repository on its own."""
+        gh = RecordedGitHub()
+        rv = work / f"{name}-rev.json"
+        doc = approval(f"r-{name}", decision="revoked", decided_at="2026-10-11T10:00:00Z")
+        rv.write_text(json.dumps(doc, sort_keys=True, indent=2) + "\n")
+        verify(
+            [{"doc": approval(f"a-{name}")}], gh=gh, **{**kw, "purpose": "historical"}
+        )  # commits the approval
+        gh.sign(f"authorizations/r-{name}.json", rv.read_bytes())
+        return gh
+
+    def current_decision():
+        gh = revoked_elsewhere("cur")
+        return verify([{"doc": approval("a-cur")}], gh=gh)
+
+    def historical_inspection():
+        gh = revoked_elsewhere("hist")
+        return verify([{"doc": approval("a-hist")}], gh=gh, purpose="historical")
+
+    case(
+        "approval, then a revocation published independently and absent from the supplied records",
+        "unapproved",
+        current_decision,
+    )
+    case(
+        "the same evidence inspected as history shows only a historical approval, never approved",
+        "historical-approval",
+        historical_inspection,
+    )
+
+    def outage():
+        gh = RecordedGitHub()
+        gh.fail = lambda ep: True
+        return verify(good(), gh=gh)
+
+    case("evidence repository unreachable (current state unverifiable)", "failed", outage)
+
+    def deleted_revocation():
+        gh = RecordedGitHub()
+        verify(
+            [
+                {"doc": approval("a7")},
+                {"doc": approval("r7", decision="revoked", decided_at="2026-10-11T10:00:00Z")},
+            ],
+            gh=gh,
+        )
+        gh.delete("authorizations/r7.json", author="intruder", committer="intruder")
+        return verify([], gh=gh)
+
+    case("revocation deleted from the evidence history", "failed", deleted_revocation)
     case("source revision pin differs", "failed", lambda: verify(good(), rev_pin="0" * 40))
     stale = copy.deepcopy(result)
     stale["revision"] = "f" * 40

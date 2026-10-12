@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.5.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
+- Authorization freshness is mandatory (ADR 0019 item 12; breaking for 0.x). `tools/verify_app_release.py` defaults to
+  the `operational` purpose: every record in the policy's evidence repository is read at one commit and judged, the
+  history is audited for deleted records, and the result is `failed` when the current state cannot be established.
+  `--discover-authorizations` is removed (it is no longer optional). `--historical` is the explicit inspection
+  purpose: it never yields `approved` (it yields `historical-approval`, exit 4). Records carry `currency`
+  (`observed_at`, `valid_until`, evidence commit); `AppVerifier` rejects an `approved` record that is not a fresh
+  current-state one. Policy `freshness.max_age_seconds` (default 300).
+- Platform acceptance required by an application policy is read as current state too; new
+  `tools/verify_platform_current.py` answers "is this platform release currently accepted?" without changing
+  `tools/verify_release.py` (the trust anchor).
+- Test and qualification doubles model one repository (history, trees, deletions); new end-to-end negative cases:
+  a revocation published independently of an old bundle, outage, deleted record, ref moving while read.
+
 ## 0.4.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Application policies may require an owner-accepted Dev Platform release (`require_acceptance` +
   `archive_sha256` + `source_revision` in `platform_releases`; schema-added, optional). `verify_app_release.py` and

@@ -40,11 +40,11 @@ class Chain(unittest.TestCase):
         self.assertTrue(out["assembled"], out)
         bad = [x for x in out["cases"] if not x["ok"]]
         self.assertEqual(bad, [])
-        self.assertGreaterEqual(len(out["cases"]), 13)
+        self.assertGreaterEqual(len(out["cases"]), 16)
         self.assertTrue(out["all_ok"])
         rb = out["rollback"]
         self.assertEqual([x for x in rb["cases"] if not x["ok"]], [])
-        self.assertGreaterEqual(len(rb["cases"]), 14)
+        self.assertGreaterEqual(len(rb["cases"]), 16)
         self.assertTrue(rb["all_ok"])
 
     def test_fixture_without_lock_is_reported_not_silently_ok(self):

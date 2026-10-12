@@ -182,6 +182,7 @@ def select_rollback(
                         "authorization": ap["authorization"],
                         "approver": ap["approver"],
                         "coverage": rec["coverage"],
+                        "currency": rec["currency"],
                     }
                 )
             else:
@@ -202,6 +203,7 @@ def select_rollback(
         "application": application,
         "current": current,
         "approval_authentication": "verified" if authenticate is not None else "unverified",
+        "authorization_state": "current" if authenticate is not None else "not evaluated (diagnostic)",
         "eligible": eligible,
         "rejected": rejected,
     }

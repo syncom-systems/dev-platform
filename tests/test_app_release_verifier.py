@@ -4,18 +4,16 @@ GitHub is faked at the `gh api` boundary; the verifier and the provider registry
 Every must-be-rejected case asserts that the outcome is NOT `approved`.
 """
 
-import base64
 import copy
 import hashlib
 import importlib.util
 import json
-import re
 import unittest
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from dev_platform import provenance, records
+from tests.gh_repo import Repo
 from tests.helpers import ROOT, tmpdir
-from tests.test_authorization import Github
 from tests.test_provenance import SHA, result
 
 spec = importlib.util.spec_from_file_location("verify_app_release", ROOT / "tools" / "verify_app_release.py")
@@ -98,7 +96,8 @@ def approval(rel, name="appr-1", login=APPROVER, **over):
 class Case(unittest.TestCase):
     def setUp(self):
         self.d = tmpdir(self)
-        self.gh = Github()
+        self.gh = Repo()
+        self.gh.commit({"README.md": b"evidence"}, author="bot", committer="bot")
         self.res = result(rev=REV, tree=TREE)
         (self.d / "app.lock").write_text("pins\n")
         (self.d / "app.tar").write_bytes(b"artifact")
@@ -186,54 +185,185 @@ class Approved(Case):
             A.load_platform_verifier(PV_PATH, "0" * 64)
 
 
-class Discovery(Case):
-    """--discover-authorizations: a revocation nobody handed us still counts when it is in the evidence repo."""
+class CurrentState(Case):
+    """Operational decisions need the CURRENT authorization state; historical inspection never claims it."""
 
-    def listing_gh(self, fail=False):
-        base = self.gh
+    REVOKED = {"decision": "revoked", "decided_at": "2026-10-11T10:00:00Z"}
 
-        def gh(argv):
-            if "/contents/authorizations?ref=" in argv[2]:
-                if fail:
-                    return 1, "", "boom"
-                items = [
-                    {"name": p.rsplit("/", 1)[1], "path": p, "type": "file"} for p in sorted(base.history)
-                ]
-                return 0, json.dumps(items), ""
-            m = re.search(r"/contents/([^?]+)\?ref=main$", argv[2])
-            if m:  # head of the branch
-                return (
-                    0,
-                    json.dumps(
-                        {"content": base64.b64encode(base.history[m.group(1)][0]["_content"]).decode()}
-                    ),
-                    "",
-                )
-            return base(argv)
+    def revoke(self, **sign):
+        return self.signed(approval(self.rel, name="rev", **self.REVOKED), **sign)
 
-        return gh
+    def test_historical_approval_then_independent_revocation_absent_from_the_bundle(self):
+        ok = self.good_auth()  # the only record the old evidence bundle holds
+        self.revoke()  # published afterwards, directly to the evidence repository
+        hist = self.run_v([ok], purpose="historical")
+        self.assertEqual(self.state(hist), "historical-approval")  # authentic once, never `approved`
+        self.assertEqual(hist["currency"]["status"], "historical")
+        self.assertIn("NOT a current authorization", hist["approval"]["reasons"][0])
+        self.assertTrue(
+            any("later revocations are not looked for" in x for x in hist["coverage"]["not_evaluated"])
+        )
+        cur = self.run_v([ok])
+        self.assertEqual(self.state(cur), "unapproved")
+        self.assertEqual(cur["currency"]["status"], "current")
+        names = {v["file"]: v["status"] for v in cur["approval"]["authorization_evidence"]}
+        self.assertEqual(
+            names, {"appr-1.json": "authentic", "rev.json": "authentic"}
+        )  # revocation was judged
 
-    def test_later_revocation_found_in_the_repo_wins(self):
+    def test_the_default_is_operational(self):
+        self.assertEqual(self.run_v([self.good_auth()])["currency"]["purpose"], "operational")
+
+    def test_historical_never_yields_approved(self):
+        self.assertEqual(
+            self.state(self.run_v([self.good_auth()], purpose="historical")), "historical-approval"
+        )
+        self.assertEqual(self.state(self.run_v([], purpose="historical")), "unapproved")
+
+    def test_unknown_purpose_is_refused(self):
+        with self.assertRaises(ValueError):
+            self.run_v([], purpose="whenever")
+
+    def test_current_state_is_identified_and_expires(self):
+        doc = self.run_v([self.good_auth()])
+        cur = doc["currency"]
+        self.assertEqual(cur["max_age_seconds"], A.DEFAULT_MAX_AGE)
+        self.assertEqual(cur["observed_at"], NOW.isoformat())
+        self.assertEqual(cur["valid_until"], (NOW + timedelta(seconds=A.DEFAULT_MAX_AGE)).isoformat())
+        ev = cur["evidence"]
+        self.assertEqual(ev["head_commit"], self.gh.commits[-1]["sha"])
+        self.assertEqual(ev["records"], ["appr-1.json"])
+        self.assertEqual(ev["removed"], [])
+        self.policy["freshness"] = {"max_age_seconds": 60}
+        self.assertEqual(self.run_v([self.good_auth()])["currency"]["max_age_seconds"], 60)
+
+    def test_freshness_policy_is_bounded(self):
+        for bad in ({"max_age_seconds": 0}, {"max_age_seconds": 3601}, {"max_age_seconds": "5"}, {}, []):
+            self.policy["freshness"] = bad
+            self.assertTrue(any("freshness" in x for x in A.policy_problems(self.policy)), bad)
+        self.policy["freshness"] = {"max_age_seconds": 3600}
+        self.assertFalse(any("freshness" in x for x in A.policy_problems(self.policy)))
+
+    def test_unreachable_evidence_repository_fails_closed(self):
         ok = self.good_auth()
-        self.signed(approval(self.rel, name="rev", decision="revoked", decided_at="2026-10-11T10:00:00Z"))
-        self.assertEqual(self.state(self.run_v([ok])), "approved")  # stale: the revocation was not supplied
-        doc = self.run_v([ok], discover=True, gh=self.listing_gh())
-        self.assertEqual(self.state(doc), "unapproved")
-
-    def test_supplied_and_discovered_copies_of_a_record_are_judged_once(self):
-        ok = self.good_auth()
-        doc = self.run_v([ok], discover=True, gh=self.listing_gh())
-        self.assertEqual(self.state(doc), "approved", doc["approval"]["authorization_evidence"])
-
-    def test_discovery_can_find_an_approval_too(self):
-        self.good_auth()
-        doc = self.run_v([], discover=True, gh=self.listing_gh())
-        self.assertEqual(self.state(doc), "approved")
-
-    def test_unlistable_repository_fails_closed(self):
-        doc = self.run_v([self.good_auth()], discover=True, gh=self.listing_gh(fail=True))
+        self.gh.fail = lambda ep: True
+        doc = self.run_v([ok])
         self.assertEqual(self.state(doc), "failed")
-        self.assertIn("authorization-discovery", self.failed(doc))
+        self.assertIn("authorization-currency", self.failed(doc))
+        self.assertEqual(doc["currency"]["status"], "unverifiable")
+        self.assertIsNone(doc["currency"]["valid_until"])
+
+    def test_listing_outage_fails_closed(self):
+        ok = self.good_auth()
+        self.gh.fail = lambda ep: "/contents/authorizations?ref=" in ep
+        self.assertEqual(self.state(self.run_v([ok])), "failed")
+
+    def test_history_outage_fails_closed(self):
+        ok = self.good_auth()
+        self.gh.fail = lambda ep: "&per_page=100&page=" in ep
+        self.assertEqual(self.state(self.run_v([ok])), "failed")
+
+    def test_unreadable_record_fails_closed(self):
+        ok = self.good_auth()
+        self.revoke()
+        self.gh.fail = lambda ep: "/contents/authorizations/rev.json" in ep
+        self.assertEqual(self.state(self.run_v([ok])), "failed")
+
+    def test_a_revocation_that_cannot_be_authenticated_does_not_leave_the_approval_standing(self):
+        ok = self.good_auth()
+        self.revoke()
+        # the commit history of the revocation is unreachable: it looks "not authentic", but it is unknown
+        self.gh.fail = lambda ep: "&path=authorizations/rev.json" in ep
+        doc = self.run_v([ok])
+        self.assertEqual(self.state(doc), "failed")
+        self.assertIn("authorization-currency", self.failed(doc))
+
+    def test_unresolvable_ref_fails_closed(self):
+        ok = self.good_auth()
+        self.policy["authorization"]["evidence_ref"] = "no-such-branch"
+        self.assertEqual(self.state(self.run_v([ok])), "failed")
+
+    def test_revocation_deleted_from_the_evidence_history_is_not_silently_absent(self):
+        ok = self.good_auth()
+        self.revoke()
+        self.gh.delete("authorizations/rev.json", author="intruder", committer="intruder")
+        doc = self.run_v([ok])
+        self.assertEqual(self.state(doc), "failed")
+        self.assertIn("deleted from the evidence history", " ".join(c["detail"] for c in doc["checks"]))
+        self.assertEqual(doc["currency"]["status"], "unverifiable")
+
+    def test_deleted_approval_is_also_flagged(self):
+        self.good_auth()
+        self.gh.delete("authorizations/appr-1.json", author=APPROVER, committer=APPROVER)
+        self.assertEqual(self.state(self.run_v([])), "failed")
+
+    def test_revocation_by_someone_who_may_not_revoke_does_not_revoke(self):
+        ok = self.good_auth()
+        stranger = approval(self.rel, name="rev", login=OTHER, **self.REVOKED)
+        self.signed(stranger, author=OTHER, committer=OTHER)
+        doc = self.run_v([ok])
+        self.assertEqual(self.state(doc), "approved")
+        self.assertTrue(any("not an approver" in x for v in doc["approval"]["authorization_evidence"]
+                            for x in v["problems"]))  # fmt: skip
+
+    def test_publication_during_the_read_is_picked_up_by_a_second_read(self):
+        ok = self.good_auth()
+        fired = []
+
+        def publish_once(ep):
+            if "/contents/authorizations?ref=" in ep and not fired:
+                fired.append(ep)
+                self.revoke()
+
+        self.gh.hooks.append(publish_once)
+        doc = self.run_v([ok])
+        self.assertEqual(self.state(doc), "unapproved")  # the revocation published mid-read was not missed
+        self.assertEqual(doc["currency"]["evidence"]["head_commit"], self.gh.commits[-1]["sha"])
+
+    def test_a_ref_that_never_stops_moving_fails_closed(self):
+        ok = self.good_auth()
+        n = []
+
+        def keep_publishing(ep):
+            if "/contents/authorizations?ref=" in ep:
+                n.append(1)
+                self.gh.commit({f"notes/{len(n)}.txt": b"x"}, author="bot", committer="bot")
+
+        self.gh.hooks.append(keep_publishing)
+        doc = self.run_v([ok])
+        self.assertEqual(self.state(doc), "failed")
+        self.assertIn("moved while it was being read", " ".join(c["detail"] for c in doc["checks"]))
+
+    def test_history_too_long_to_audit_fails_closed(self):
+        ok = self.good_auth()
+        for i in range(500):
+            self.gh.commit({"authorizations/notes.txt": str(i).encode()}, author="bot", committer="bot")
+        self.assertEqual(self.state(self.run_v([ok])), "failed")
+
+    def test_empty_authorizations_directory_is_a_complete_answer_not_an_outage(self):
+        doc = self.run_v([])
+        self.assertEqual(self.state(doc), "unapproved")
+        self.assertEqual(doc["currency"]["status"], "current")
+        self.assertEqual(doc["currency"]["evidence"]["records"], [])
+
+    def test_provider_evidence_is_pinned_to_the_commit_that_was_read(self):
+        ok = self.good_auth()
+        ev = self.run_v([ok])["approval"]["authorization_evidence"][0]["evidence"]
+        self.assertEqual(ev["ref"], self.gh.commits[-1]["sha"])
+
+    def test_supplied_and_discovered_copies_are_judged_once(self):
+        doc = self.run_v([self.good_auth()])
+        self.assertEqual(len(doc["approval"]["authorization_evidence"]), 1)
+
+    def test_discovery_can_find_an_approval_the_caller_did_not_supply(self):
+        self.good_auth()
+        self.assertEqual(self.state(self.run_v([])), "approved")
+
+    def test_a_later_approval_supersedes_a_revocation(self):
+        ok = self.good_auth()
+        self.revoke()
+        self.signed(approval(self.rel, name="again", decided_at="2026-10-11T12:00:00Z"))
+        self.assertEqual(self.state(self.run_v([ok])), "approved")
 
 
 class NoApproval(Case):
@@ -260,7 +390,17 @@ class NoApproval(Case):
     def test_record_modified_after_signing(self):
         doc = approval(self.rel)
         p = self.signed(doc)
-        p.write_text(json.dumps({**doc, "basis": {"kind": "review", "reference": "edited"}}))
+        edited = json.dumps({**doc, "basis": {"kind": "review", "reference": "edited"}}).encode()
+        p.write_bytes(edited)
+        out = self.run_v([p])
+        # the edited local copy is judged and refused; the genuine committed record is found by discovery
+        self.assertTrue(any("modified after signing" in x for v in out["approval"]["authorization_evidence"]
+                            for x in v["problems"]))  # fmt: skip
+        self.assertEqual(self.state(out), "approved")
+        # edited IN the repository by an unsigned commit: nothing authentic remains
+        self.gh.commit(
+            {f"authorizations/{doc['id']}.json": edited}, verified=False, author=APPROVER, committer=APPROVER
+        )
         self.assertEqual(self.state(self.run_v([p])), "unapproved")
 
     def test_invented_and_authorship_providers(self):
@@ -302,7 +442,7 @@ class NoApproval(Case):
         for confers in (["platform-baseline"], ["application-release-approval", "certification"], []):
             p = self.signed(approval(self.rel, scope={"confers": confers}))
             self.assertEqual(self.state(self.run_v([p])), "unapproved", confers)
-            self.gh.history.clear()
+            self.gh.wipe()
 
     def test_approver_may_confer_less_than_asked(self):
         self.policy["authorization"]["approvers"][0]["may_confer"] = []
@@ -335,7 +475,7 @@ class NoApproval(Case):
         ):
             p = self.signed(approval(self.rel, **over))
             self.assertEqual(self.state(self.run_v([p])), "unapproved", over)
-            self.gh.history.clear()
+            self.gh.wipe()
 
     def test_rejected_decision(self):
         self.assertEqual(self.state(self.run_v([self.good_auth(decision="rejected")])), "unapproved")
@@ -594,7 +734,8 @@ class RequiredPlatformAcceptance(Case):
         super().setUp()
         self.TA, self.TV = TA, TV
         self.arc, self.psha = TV.build_candidate(self, "1.0.0")
-        self.pgh = TA.Github()
+        self.pgh = Repo()
+        self.pgh.commit({"README.md": b"platform evidence"}, author="bot", committer="bot")
         self.pexp = {"version": "1.0.0", "source_revision": "c" * 40, "archive_sha256": self.psha,
                      "ref": "refs/tags/v1.0.0"}  # fmt: skip
         self.ppolicy = TA.POLICY
@@ -682,6 +823,72 @@ class RequiredPlatformAcceptance(Case):
         # and the platform record, presented as an application approval, binds to the wrong subject
         doc = self.run_pa(pdoc, auths=[self.d / "platform-auth.json"])
         self.assertEqual(self.state(doc), "unapproved")
+
+    # ---- the platform acceptance is a current decision too (read live, not from what was supplied)
+    def current_platform(self, supplied=(), *, historical=False, fail=None):
+        import types
+
+        att = self.TV.fake_gh(self.psha, "1.0.0")
+        self.pgh.fail = fail
+
+        def both(argv):
+            return self.pgh(argv) if argv[:2] == ["gh", "api"] else att(argv)
+
+        ns = types.SimpleNamespace(platform_authorization=list(supplied), platform_archive=self.arc,
+                                   platform_bundle=None, platform_sbom_bundle=None, platform_environment=None,
+                                   platform_continuity=None, historical=historical)  # fmt: skip
+        return A.platform_verification(
+            V, self.policy["platform_releases"][0], self.psha, ns, self.ppolicy, both, now=NOW
+        )
+
+    def platform_revocation(self):
+        rec = self.TA.record(self.psha, name="rev", decision="revoked", decided_at="2026-10-11T10:00:00Z")
+        rec["decided_by"]["identity_assertion"]["login"] = self.TA.OWNER
+        raw = json.dumps(rec, indent=2).encode()
+        self.pgh.sign("authorizations/rev.json", raw, author=self.TA.OWNER, committer=self.TA.OWNER)
+
+    def test_platform_acceptance_in_the_evidence_repository_is_discovered(self):
+        self.platform_record()
+        pdoc, checks, cur = self.current_platform()  # nothing supplied
+        self.assertEqual(pdoc["acceptance"]["state"], "accepted")
+        self.assertEqual(checks, [("platform-authorization-currency", True, "")])
+        self.assertEqual(cur["head_commit"], self.pgh.commits[-1]["sha"])
+
+    def test_platform_revocation_absent_from_the_supplied_records_is_found(self):
+        f = self.platform_record()
+        self.platform_revocation()
+        pdoc, checks, _ = self.current_platform([f])
+        self.assertNotEqual(pdoc["acceptance"]["state"], "accepted")
+        doc = self.run_v([self.good_auth()], platform_acceptance=pdoc, extra_checks=checks)
+        self.assertEqual(self.state(doc), "failed")
+        self.assertIn("platform-acceptance", self.failed(doc))
+
+    def test_platform_historical_inspection_does_not_look_for_the_revocation(self):
+        f = self.platform_record()
+        self.platform_revocation()
+        pdoc, checks, cur = self.current_platform([f], historical=True)
+        self.assertEqual(pdoc["acceptance"]["state"], "accepted")  # as of the supplied records only
+        self.assertEqual((checks, cur), ([], None))
+        out = self.run_v([self.good_auth()], platform_acceptance=pdoc, purpose="historical")
+        self.assertEqual(
+            self.state(out), "historical-approval"
+        )  # and the application result is not `approved`
+
+    def test_platform_evidence_outage_fails_closed(self):
+        f = self.platform_record()
+        pdoc, checks, _ = self.current_platform([f], fail=lambda ep: True)
+        self.assertFalse(checks[0][1])
+        doc = self.run_v([self.good_auth()], platform_acceptance=pdoc, extra_checks=checks)
+        self.assertEqual(self.state(doc), "failed")
+        self.assertIn("platform-authorization-currency", self.failed(doc))
+
+    def test_platform_record_deleted_from_history_fails_closed(self):
+        f = self.platform_record()
+        self.platform_revocation()
+        self.pgh.delete("authorizations/rev.json", author="intruder", committer="intruder")
+        _, checks, _ = self.current_platform([f])
+        self.assertFalse(checks[0][1])
+        self.assertIn("deleted", checks[0][2])
 
     def test_policy_requiring_acceptance_must_name_the_archive(self):
         pol = copy.deepcopy(self.policy)

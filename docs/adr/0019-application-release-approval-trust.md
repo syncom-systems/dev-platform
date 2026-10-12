@@ -63,9 +63,29 @@ nothing re-derived the links (source, dependencies, platform release, toolchain 
    The same flags exist on `rollback select`; with the requirement set and no platform verification supplied,
    every candidate fails closed. Only one platform archive can be verified per run, so candidates built with another
    platform release are refused rather than guessed at.
-12. **Freshness.** `--discover-authorizations` also judges every `authorizations/*.json` at the policy's evidence
-   ref, through the same provider path. A revocation that no bundle contains therefore still ends eligibility.
-   Without it a stale bundle shows its old approval: the operator must supply the newest evidence or discover.
+12. **Authorization freshness is mandatory for every current decision** (0.5.0; replaces the opt-in
+   `--discover-authorizations` of 0.4.0). Two purposes, never mixed up:
+   - `operational` (the default of `verify_app_release.py`, and the only mode of `rollback select`): the verifier
+     resolves the policy's `evidence_ref` to ONE commit, reads every `authorizations/*.json` and judges it exactly
+     like a supplied record (the provider is queried at that commit, so its evidence names the commit), audits the
+     history of `authorizations/` and re-resolves the ref afterwards (it retries, then fails, when the ref moved).
+     Check `authorization-currency` fails, and the state is `failed`, when anything cannot be established: ref
+     unresolvable, any `gh api` call failed (a revocation that could not be authenticated looks like one that is not
+     authentic, so a failed call anywhere ends the decision), history too long to audit (500 commits), a record
+     read failing, the ref moving while read, or an `authorizations/` record that was committed and later deleted.
+     The record carries `currency` (`status`, `observed_at`, `valid_until`, the evidence commit and records read).
+     `valid_until` is `observed_at` plus the policy's `freshness.max_age_seconds` (default 300, at most 3600):
+     it is the lifetime of the verification itself. `AppVerifier` accepts an `approved` record only if it is
+     `operational`, `current`, observed not in the future and not past `valid_until`; anything else is a
+     `ConfigError`. Nothing may reuse an older record for a new decision.
+   - `historical` (`--historical`): only the supplied records, nothing discovered. Offline-friendly in what it
+     reads, but authenticity still queries GitHub. It can report `historical-approval` (exit 4) and never
+     `approved`: an approval that was authentic once is not a current authorization.
+   For a policy that requires an accepted platform release, the platform acceptance is read the same way (the
+   platform policy's own evidence repository at one commit, deletions audited) without changing
+   `tools/verify_release.py`, the pinned trust anchor. `tools/verify_platform_current.py` is the same current-state
+   discipline for a direct "is this platform release currently accepted?" (`accepted` / `verified-unaccepted` /
+   `failed`, or `historical-acceptance`).
 13. **Live GitHub qualification** (`tools/qualify_live.py`, private fixture repository, `github-actions[bot]` as
    the only identity). GitHub signs API-made commits with its own key and records `web-flow` as committer, so such a
    record is refused by design; the live path therefore reaches `unapproved` for every case, never `approved`. The

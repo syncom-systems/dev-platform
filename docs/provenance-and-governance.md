@@ -39,8 +39,20 @@ An application that wants more may say so in its own policy: a `platform_release
 true`, `archive_sha256` and `source_revision` adds the check `platform-acceptance`, for which the verifier re-runs
 `tools/verify_release.py` over the named archive (`--platform-archive --platform-policy P --platform-policy-sha256 PIN
 --platform-authorization ..`). The platform policy stays a separate trust anchor; the application approval still has to
-come from the application's own approvers. `--discover-authorizations` also judges every record in the evidence
-repository so a revocation absent from a bundle still counts.
+come from the application's own approvers.
+
+## Current versus historical authorization (freshness)
+A bundle is a past: it holds the records that existed when it was written. A decision to deploy, to treat a release as
+eligible or to roll back is about now, so `verify_app_release.py` (default purpose `operational`) and `rollback select`
+always read the evidence repository's records at one commit, judge them with the supplied ones, and audit the history
+for deleted records. A revocation published after the bundle was written ends eligibility with no flag. If the
+state cannot be established (unreachable, truncated, moved while read, a failed call, a deleted record) the result is
+`failed`, never `approved`. The record's `currency` block names the evidence commit and a `valid_until`
+(`freshness.max_age_seconds` in the application policy, default 300 s); reuse nothing older. `--historical` inspects
+supplied records only and reports `historical-approval` (exit 4), which is not an approval. Limits: the answer is as fresh as
+GitHub's API at the moment of the read (no stronger than the transport and GitHub itself); a record that was never
+published to the evidence ref cannot be found; a purge of history (force-push) is not detected by this mechanism; a
+removed record needs an explicit restore before decisions resume.
 
 ## Immutable evidence bundles and retention (ADR 0019)
 `dev-platform evidence bundle --out DIR --release release.json --result r.json --authorization a.json [--advisory ..]`
