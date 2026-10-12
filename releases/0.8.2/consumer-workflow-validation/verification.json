@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "detail": "dev-platform.toml pins version, tree sha256 and profile (self-hosted results are not consumer evidence)",
+      "id": "config-pins-platform",
+      "status": "passed"
+    },
+    {
+      "detail": "dev-platform.result/v1",
+      "id": "result-schema",
+      "status": "passed"
+    },
+    {
+      "detail": "mode pinned",
+      "id": "platform-pinned",
+      "status": "passed"
+    },
+    {
+      "detail": "0.8.2 vs pin 0.8.2",
+      "id": "platform-version",
+      "status": "passed"
+    },
+    {
+      "detail": "0f9780801f9e2b718e4f953739f8df2b085628ee91db1a60926f0c3060e0e5ad vs pin 0f9780801f9e2b718e4f953739f8df2b085628ee91db1a60926f0c3060e0e5ad",
+      "id": "platform-tree-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "0.8.2 0f9780801f9e2b718e4f953739f8df2b085628ee91db1a60926f0c3060e0e5ad",
+      "id": "release-identity",
+      "status": "passed"
+    },
+    {
+      "detail": "rust-bazel-9 vs pin rust-bazel-9",
+      "id": "toolchain-profile",
+      "status": "passed"
+    },
+    {
+      "detail": "every declared tool matched the release",
+      "id": "environment-conformant",
+      "status": "passed"
+    },
+    {
+      "detail": "assurance certifiable; weak: []",
+      "id": "environment-certifiable",
+      "status": "passed"
+    },
+    {
+      "detail": "executed=True stage=full",
+      "id": "executed-full-stage",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "certified",
+      "status": "passed"
+    },
+    {
+      "detail": "no [infra] pin in config but result infra is hosted-only",
+      "id": "infra-not-pinned-hosted-only",
+      "status": "passed"
+    },
+    {
+      "detail": "dev-platform.bazel-rust-proof/v1",
+      "id": "bazel-proof-schema",
+      "status": "passed"
+    },
+    {
+      "detail": "no proof supplied",
+      "id": "bazel-proof-ok",
+      "status": "passed"
+    },
+    {
+      "detail": "declared ['1.97.1'] observed ['1.97.1']",
+      "id": "bazel-rust-version",
+      "status": "passed"
+    },
+    {
+      "detail": "{'invocations': [], 'invoked': False}",
+      "id": "bazel-no-host-tool",
+      "status": "passed"
+    },
+    {
+      "detail": "every Rustc action names a Bazel external-repository rustc",
+      "id": "bazel-toolchain-external",
+      "status": "passed"
+    }
+  ],
+  "claims": "the record is consistent with the consumer's pins; it does not prove the record was not fabricated (attest the files)",
+  "evidence": {
+    "bazel-rust-proof.json": "e95aa5c0a1f65d6e9a839f4fc0dfb95c2395478fb82ea0f0f71459126d0b8441",
+    "dev-platform.toml": "fde0c26089fa536628564978796c84194a2badfc388835c86546f6b6718ddc96",
+    "result.json": "4dbf2ad7d948d3166c4508fc2f6652ac1dd5063169de9d334f9cce049e5891e8"
+  },
+  "not_established": [
+    "that the consumer job executed honestly or was not subverted (it writes the record it is judged by)",
+    "that the record was not fabricated (attest the files)",
+    "current authorization for private infrastructure: the provider and the runner groups decide that per run; the infra block records only which configuration release and digest were pinned and resolved",
+    "that the consumer's own build, test and security gates passed or are unnecessary"
+  ],
+  "schema": "dev-platform.consumer-evidence-verification/v1",
+  "verdict": "consistent"
+}

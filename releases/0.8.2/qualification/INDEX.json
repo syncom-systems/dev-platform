@@ -1,0 +1,44 @@
+{
+  "ci_qualification": [
+    {
+      "file": "python-macos-15.json",
+      "sha256": "4e1bdceecfbfac826ef7a82997b3022ef18406b8bf7e4f637b1c565e09ca1bbb"
+    },
+    {
+      "file": "python-ubuntu-24.04.json",
+      "sha256": "ffb2c150c5a3ccd5c8b1317c17a0b11be8a5755f693826a956e3a1b965a33eef"
+    },
+    {
+      "file": "rust-bazel-9-macos-15.json",
+      "sha256": "bf391837283b395d1e7ef7091a1695d6742424b6fc8c4a8e22a52da9e2d74e48"
+    },
+    {
+      "file": "rust-bazel-9-ubuntu-24.04.json",
+      "sha256": "139bac6c36e2735da4a3d9cf66017be524b55cd144b7ca6a576f42951749900b"
+    },
+    {
+      "file": "rust-bazel-macos-15.json",
+      "sha256": "1d82c71a2145b7ea76237ad9c00642930cc8d4f18c0318c2d1f60204a2ac0336"
+    },
+    {
+      "file": "rust-bazel-ubuntu-24.04.json",
+      "sha256": "df6ba4f81ebf7410cd828108de8caafef9428f405e19b823348decae092600df"
+    },
+    {
+      "file": "rust-cargo-1.99-macos-15.json",
+      "sha256": "6b0902f9e77b68e15bd4bd9dc4a18f4c761125e07e8ba00371ebd64f3f5fbfd1"
+    },
+    {
+      "file": "rust-cargo-1.99-ubuntu-24.04.json",
+      "sha256": "f6dc48f56a89659a4bc995d3b3875c2f5d71bb278c422cedba78e50915a2595c"
+    },
+    {
+      "file": "rust-cargo-macos-15.json",
+      "sha256": "de2de2baf29d89e9d1614b05b732aa749b8bd83747acd6ad5ef8a3e4f16d6745"
+    },
+    {
+      "file": "rust-cargo-ubuntu-24.04.json",
+      "sha256": "0e2fae69ad3c214877e717c2cc67f9cf134a72f85e90a52cee8ee8c5511d82f3"
+    }
+  ]
+}

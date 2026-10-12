@@ -1,0 +1,19 @@
+# appended byte
+FAILED  archive-digest  (actual aa1484f1dec6380d9d33499e8ad6e916e6e98cc205a18beaf45052cfd9ae77f2)
+FAILED  attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:aa1484f1dec6380d9d33499e8ad6e916e6e98cc205a18beaf45052cfd9ae77f2?per_page=30&predicate_type=h
+FAILED  sbom-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:aa1484f1dec6380d9d33499e8ad6e916e6e98cc205a18beaf45052cfd9ae77f2?per_page=30&predicate_t
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  continuity  (record is about a different archive)
+acceptance: failed  archive-digest; attestation-signature; sbom-attestation-signature; sbom-attestation-content; continuity
+# wrong source revision
+FAILED  source-revision  (release.json says f617b37edde2b5e550c813ea4b47c886a761dc62)
+FAILED  attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got f617b37edde2b5e550c813ea4b47c886a761dc62)
+FAILED  sbom-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got f617b37edde2b5e550c813ea4b47c886a761dc62)
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  environment-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got edadc4d089b0b5dae3f995121ce48b40cec0e8aa)
+FAILED  continuity  (predecessor did not run over this source revision)
+FAILED  continuity-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got f617b37edde2b5e550c813ea4b47c886a761dc62)
+acceptance: failed  source-revision; attestation-signature; sbom-attestation-signature; sbom-attestation-content; environment-attestation-signature; continuity; continuity-attestation-signature
+# wrong archive digest pin
+FAILED  archive-digest  (actual 993c03fda1b0958dcc2ebee5484cdf620a7a953cf62df041bcddf7713a84f66f)
+acceptance: failed  archive-digest
