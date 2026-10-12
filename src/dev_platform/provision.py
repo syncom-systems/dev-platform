@@ -12,6 +12,7 @@ Layout: <dev>/tools/<name>/<version>/ (versions coexist; installing one never mo
 from __future__ import annotations
 
 import hashlib
+import os
 import platform
 import shutil
 import sys
@@ -139,3 +140,25 @@ def provision(manifest: dict, profile: str, dev: Path, *, key: str | None = None
         activate(dev / name, vdir)
         done.append(name)
     return done
+
+
+def tool_dirs(dev: Path) -> list[str]:
+    """The directories a provisioned environment puts on PATH, in order."""
+    return [str(dev / "bin")] + [str(p / "bin") for p in sorted(dev.iterdir()) if (p / "bin").is_dir()]
+
+
+def provision_and_verify(manifest: dict, profile: str, dev: Path, root: Path) -> tuple[list[str], dict]:
+    """Realize the pinned profile and verify the provisioned tools against the same manifest, with the
+    provisioned directories first on PATH. Returns (installed, environment record). The record's
+    `identity_digest` is the identity of the realized environment: provisioning the same release twice,
+    anywhere, must give the same digest."""
+    from . import toolchain  # local import: provisioning must not depend on verification at import time
+
+    done = provision(manifest, profile, dev)
+    saved = os.environ.get("PATH", "")
+    os.environ["PATH"] = os.pathsep.join([*tool_dirs(dev), saved])
+    try:
+        rec = toolchain.verify_profile(manifest, profile, root)
+    finally:
+        os.environ["PATH"] = saved
+    return done, rec

@@ -149,6 +149,11 @@ def build_parser() -> argparse.ArgumentParser:
     tp.add_argument("--project", type=Path, default=Path("."))
     tp.add_argument("--profile", required=True)
     tp.add_argument("--dest", type=Path, default=Path(".devenv"))
+    tp.add_argument(
+        "--verify",
+        action="store_true",
+        help="also verify the provisioned tools (exit 1 unless conformant and certifiable)",
+    )
     tb = tsub.add_parser(
         "prove-bazel-rust",
         help="prove Bazel uses the declared Rust toolchain, not a host rustc (runs bazel, never cargo)",
@@ -737,12 +742,21 @@ def cmd_toolchain(args) -> int:
         try:
             if not res.release:
                 raise ConfigError(["no pinned release resolved (override or self-hosted mode has none)"])
-            done = provision.provision(res.release["toolchains"], args.profile, args.dest)
+            if args.verify:
+                done, rec = provision.provision_and_verify(
+                    res.release["toolchains"], args.profile, args.dest, args.project.resolve()
+                )
+            else:
+                done, rec = provision.provision(res.release["toolchains"], args.profile, args.dest), None
         finally:
             res.dispose()
-        print(
-            json.dumps({"profile": args.profile, "dest": str(args.dest), "installed": done}, sort_keys=True)
-        )
+        out = {"profile": args.profile, "dest": str(args.dest), "installed": done}
+        if rec is not None:
+            out["verification"] = {k: rec.get(k) for k in ("conformant", "assurance", "identity_digest")}
+        print(json.dumps(out, sort_keys=True))
+        if rec is not None:
+            ok = bool(rec["conformant"]) and rec.get("assurance") == "certifiable"
+            return EXIT_OK if ok else EXIT_UNSATISFIED
         print(f"then: export PATH={args.dest / 'bin'}:$PATH  and run: dev-platform toolchain verify")
         return EXIT_OK
     if args.tcmd == "prove-bazel-rust":

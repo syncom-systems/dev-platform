@@ -1,4 +1,5 @@
 import importlib.util
+import sys
 import unittest
 
 from tests.helpers import ROOT, tmpdir
@@ -32,6 +33,66 @@ class VersionStore(unittest.TestCase):
         v = self.install(dev, "python", "3.14.7", "new")
         S.activate(dev / "python", v)
         self.assertTrue((dev / "python").is_symlink())
+
+
+class ProvisionAndVerify(unittest.TestCase):
+    """provision --verify: the realized environment is verified against the same manifest, deterministically."""
+
+    SCRIPT = b"#!/bin/sh\necho 'mytool 1.2.3'\n"
+
+    def manifest(self, sha=None):
+        import hashlib
+
+        key = f"{sys.platform}-{__import__('platform').machine()}"
+        digest = sha or hashlib.sha256(self.SCRIPT).hexdigest()
+        return {
+            "profiles": {
+                "p": {
+                    "tools": {
+                        "mytool": {
+                            "version": "1.2.3",
+                            "probe": {"argv": ["mytool", "--version"], "pattern": r"mytool (\S+)"},
+                            "sha256": {key: digest},
+                            "source": {
+                                key: {
+                                    "url": "https://example.invalid/mytool",
+                                    "sha256": digest,
+                                    "type": "binary",
+                                    "as": "mytool",
+                                }
+                            },
+                        }
+                    }
+                }
+            }
+        }
+
+    def run_provision(self, manifest):
+        from unittest import mock
+
+        from dev_platform import provision as P
+
+        def fake_fetch(url, sha256, dest):
+            dest.write_bytes(self.SCRIPT)
+
+        dev = tmpdir(self) / "dev"
+        with mock.patch.object(P, "fetch", fake_fetch):
+            return P.provision_and_verify(manifest, "p", dev, tmpdir(self))
+
+    def test_provisioned_environment_is_verified_and_deterministic(self):
+        done1, rec1 = self.run_provision(self.manifest())
+        _, rec2 = self.run_provision(self.manifest())
+        self.assertEqual(done1, ["mytool"])
+        self.assertTrue(rec1["conformant"])
+        self.assertEqual(rec1["tools"][0]["identity"], "digest-verified")
+        self.assertEqual(rec1["identity_digest"], rec2["identity_digest"])
+
+    def test_wrong_bytes_are_not_conformant(self):
+        import hashlib
+
+        # the manifest pins other bytes than the source delivers: fetch refuses (real fetch) or verify mismatches
+        _, rec = self.run_provision(self.manifest(sha=hashlib.sha256(b"other").hexdigest()))
+        self.assertFalse(rec["conformant"])
 
 
 if __name__ == "__main__":

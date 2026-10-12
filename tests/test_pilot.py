@@ -11,6 +11,11 @@ class Pilot(unittest.TestCase):
         ident = json.loads((ROOT / "releases" / plan["release"]["version"] / "identity.json").read_text())
         self.assertTrue(ident["archive_sha256"] and ident["verifier_pins"])
         for c in plan["consumers"]:
+            if c.get("fixture"):  # a reference consumer that lives in this repository
+                self.assertTrue((ROOT / c["fixture"]).is_dir())
+                self.assertIn(c["id"], wf)
+                self.assertIn(c["profile"], wf)
+                continue
             self.assertRegex(c["commit"], r"^[0-9a-f]{40}$")
             self.assertIn(c["commit"], wf)  # one pinned commit, stated in both places
             self.assertIn(c["repo"], wf)
@@ -19,7 +24,15 @@ class Pilot(unittest.TestCase):
     def test_pilot_is_read_only_and_cannot_accept(self):
         wf = (ROOT / ".github" / "workflows" / "pilot.yml").read_text()
         self.assertIn("contents: read", wf)
-        self.assertNotIn("write", wf.replace("persist-credentials", ""))
+        # The job that executes consumer code has no write permission of any kind. Evidence is attested by a separate
+        # job that holds only the attestation permissions, checks nothing out and runs no code.
+        pilot_job, _, attest_job = wf.partition("  attest-evidence:")
+        self.assertNotIn("write", pilot_job.replace("persist-credentials", ""))
+        self.assertIn("id-token: write", attest_job)
+        self.assertIn("attestations: write", attest_job)
+        self.assertNotIn("contents: write", attest_job)
+        self.assertNotIn("actions/checkout", attest_job)
+        self.assertNotIn("run:", attest_job)
         self.assertNotIn("gh release", wf)
         src = (ROOT / "tools" / "pilot.py").read_text()
         for bad in ("git push", '"push"', "install_release.py --authorization"):

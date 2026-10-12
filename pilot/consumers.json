@@ -96,6 +96,44 @@
         }
       },
       "config_append": "[[host]]\nname = \"tmux\"\nargv = [\"tmux\", \"-V\"]\npattern = \"tmux (\\\\S+)\"\n"
+    },
+    {
+      "id": "reference-bazel",
+      "fixture": "fixtures-real/rust-bazel-9",
+      "profile": "rust-bazel-9",
+      "platforms": [
+        "linux-x86_64",
+        "darwin-arm64"
+      ],
+      "skip_app_release": true,
+      "infra": {
+        "provider": "dev-platform-reference",
+        "config_release": "0.0.1",
+        "profile": "contracts/infra/v1/valid-capabilities.json"
+      },
+      "expect": {
+        "release": {
+          "installed": true,
+          "init_exit": 0,
+          "config_valid": true,
+          "provision_exit": 0
+        },
+        "head": {
+          "installed": true,
+          "init_exit": 0,
+          "config_valid": true,
+          "provision_exit": 0,
+          "provision_deterministic": true,
+          "infra_pinned": true,
+          "infra_status": "resolved",
+          "infra_source": "vendored-file",
+          "check_exit": 0,
+          "admission": "admitted",
+          "certified": true,
+          "bazel_rust_proof": true,
+          "evidence_verdict": "verified"
+        }
+      }
     }
   ],
   "_findings": [

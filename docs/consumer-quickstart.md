@@ -1,5 +1,8 @@
 # Consumer quickstart (what the pilot actually does)
 
+For the consumer-owned pins, the non-disruptive CI run and the verifiable evidence bundle see
+[consumer-integration.md](consumer-integration.md).
+
 These steps are exactly what `tools/pilot.py` runs against a real public consumer
 ([pilot results](../pilot/consumers.json), workflow `pilot`). Nothing is installed outside the store you name.
 

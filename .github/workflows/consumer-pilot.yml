@@ -1,0 +1,70 @@
+# Reusable, non-disruptive consumer run (docs/consumer-integration.md). A consumer calls this IN ADDITION to its own
+# build and security gates: it selects the consumer's pinned platform release, provisions that release's toolchains,
+# executes the consumer's dev-platform checks and publishes verifiable execution evidence. It reads only public
+# data (the platform repository at the pinned revision, the pinned release archive, the consumer's own repository)
+# and never calls an infrastructure provider, so it is safe in untrusted CI. It is not a required check unless the
+# consumer decides so. Third-party actions are pinned by commit SHA.
+name: consumer-pilot
+on:
+  workflow_call:
+    inputs:
+      platform_source_revision:
+        description: "Full commit SHA of the pinned platform release (releases/<version>/identity.json source_revision)"
+        required: true
+        type: string
+      allow_unaccepted:
+        description: "Use a release that is verified but not accepted"
+        required: false
+        type: boolean
+        default: false
+      runs_on:
+        required: false
+        type: string
+        default: ubuntu-24.04
+      attest:
+        description: "Attest the evidence bundle (the caller must grant id-token and attestations write to this workflow)"
+        required: false
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ${{ inputs.runs_on }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: syncom-systems/dev-platform
+          ref: ${{ inputs.platform_source_revision }}
+          path: .dev-platform-src
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: {python-version: "3.14"}
+      - name: Select, provision, execute, verify
+        env:
+          ALLOW_UNACCEPTED: ${{ inputs.allow_unaccepted && '--allow-unaccepted' || '' }}
+        run: |
+          python .dev-platform-src/tools/consumer_run.py --consumer-dir . --work "$RUNNER_TEMP/dp" \
+            --evidence-dir dp-evidence --dev-platform-checkout .dev-platform-src $ALLOW_UNACCEPTED
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```json'; cat dp-evidence/consumer-run.json 2>/dev/null || echo '{"error":"no record"}'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with: {name: dp-evidence, path: dp-evidence, if-no-files-found: ignore}
+  attest:
+    if: inputs.attest && always() && needs.run.result != 'skipped'
+    needs: run
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with: {name: dp-evidence, path: dp-evidence}
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with: {subject-path: "dp-evidence/*.json"}
