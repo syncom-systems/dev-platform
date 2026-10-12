@@ -127,13 +127,13 @@ def trusted_tools(pins: dict, work: Path, repo_url: str, checkout: Path | None) 
         ("trust/policy.json", trust / "policy.json", "trust_policy_sha256"),
         ("tools/install_release.py", trust / "tools" / "install_release.py", "install_release.py_sha256"),
     )
-    for rel, dest, key in wants:
+    for rel, dest, pin_name in wants:
         r = run(["git", "-C", str(checkout), "show", f"{ref}:{rel}"])
         if r.returncode:
             return None, f"cannot read {rel} at {rev}"
         dest.write_text(r.stdout)
-        if sha(dest) != pins["verifier_pins"][key]:
-            return None, f"{rel} at {rev} does not equal the pinned {key}"
+        if sha(dest) != pins["verifier_pins"][pin_name]:
+            return None, f"{rel} at {rev} does not equal the pinned {pin_name}"
     return trust, ""
 
 
