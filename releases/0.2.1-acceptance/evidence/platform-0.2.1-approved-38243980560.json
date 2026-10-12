@@ -1,0 +1,33 @@
+{
+  "schema": "dev-platform.authorization/v1",
+  "id": "platform-0.2.1-approved-38243980560",
+  "subject": {
+    "kind": "platform-release",
+    "digest": "3cc47abb71afcd279383f2c46386f46183f460ff3e91af7656a407030ba42044"
+  },
+  "decision": "approved",
+  "decided_by": {
+    "id": "owner",
+    "role": "owner",
+    "identity_assertion": {
+      "provider": "github-environment-approval",
+      "login": "matssun",
+      "path": "authorizations/platform-0.2.1-approved-38243980560.json"
+    }
+  },
+  "basis": {
+    "kind": "acceptance-packet",
+    "reference": "releases/0.2.1/ACCEPTANCE-PACKET.md"
+  },
+  "decided_at": "2026-10-12T11:39:18Z",
+  "scope": {
+    "confers": [
+      "platform-baseline"
+    ]
+  },
+  "supersedes": [],
+  "retention": {
+    "class": "permanent",
+    "until": null
+  }
+}
