@@ -42,6 +42,8 @@
                         "required": ["name", "expected", "observed", "identity", "status"],
                         "properties": {"identity": {"enum": ["none", "version-only", "digest-verified", "closure-verified", "bazel-declared", "bazel-locked"]},
                                        "status": {"enum": ["ok", "mismatch", "unavailable", "unreconciled"]}}}}}},
+    "infra": {"type": ["object", "null"],
+              "description": "Infrastructure configuration identity: pinned, resolved, authorization policy, effective profile digest (never the profile contents)."},
     "project": {"type": "object", "required": ["name", "assurance", "bazel_only"]},
     "revision": {"type": ["string", "null"]},
     "stage": {"enum": ["edit", "pre-commit", "pre-merge", "full"]},

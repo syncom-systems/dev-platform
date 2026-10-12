@@ -1,6 +1,11 @@
 # Changelog
 
 ## Unreleased
+- Consumer-owned infrastructure configuration pin (ADR 0021, #99, #110): `[infra] provider/config_release/config_digest`
+  in `dev-platform.toml`; the engine refuses any resolved identity that differs from the pin; untrusted events never call a
+  provider and use only a vendored profile whose sha256 equals the pin; trusted events may use an operator-supplied
+  resolver. The result record gains `infra`. `dev-platform infra digest` and `infra check-resolution`; conformance cases in
+  `contracts/infra/v1/resolution-cases.json`. Breaking for 0.x: an infra profile without a pin is `unpinned` (not used).
 
 ## 0.7.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - New authorization provider `github-environment-approval` (ADR 0020): the owner accepts a platform release by approving a run
