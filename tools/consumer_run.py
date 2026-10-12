@@ -15,7 +15,7 @@ Pins are the consumer's own, committed in its repository and reviewed in its own
 Nothing private is read: the trusted installer, verifier and policy come from the public platform repository at the
 pinned revision and must equal the pinned digests. A provider is never called here (untrusted-safe).
 
-Steps: pins consistent -> trusted tools at the pinned revision -> verified install -> `toolchain provision --pinned
+Steps: pins consistent -> pinned tools at the pinned revision -> verified install -> `toolchain provision --pinned
 --verify` (twice, identity must be identical) -> doctor -> `check --stage full --result` -> Bazel Rust toolchain proof
 (rust-bazel profiles) -> evidence bundle -> independent verification against the consumer's pins.
 Exit 0 only when the consumer evidence is `verified`.
@@ -106,11 +106,11 @@ def event_trust(env=os.environ) -> str:
         return "untrusted"
 
 
-def trusted_tools(pins: dict, work: Path, repo_url: str, checkout: Path | None) -> tuple[Path | None, str]:
+def pinned_tools(pins: dict, work: Path, repo_url: str, checkout: Path | None) -> tuple[Path | None, str]:
     """Write verify_release.py, policy.json, install_release.py from the pinned revision; they must equal the pins."""
     rev = pins["source_revision"]
-    trust = work / "trust"
-    (trust / "tools").mkdir(parents=True, exist_ok=True)
+    pinned_dir = work / "pinned"
+    (pinned_dir / "tools").mkdir(parents=True, exist_ok=True)
     ref = "HEAD"
     if checkout is None:
         src = work / "dev-platform-src"
@@ -123,9 +123,13 @@ def trusted_tools(pins: dict, work: Path, repo_url: str, checkout: Path | None) 
     if head != rev:
         return None, "the platform checkout is not at the pinned revision"
     wants = (
-        ("tools/verify_release.py", trust / "tools" / "verify_release.py", "verify_release.py_sha256"),
-        ("trust/policy.json", trust / "policy.json", "trust_policy_sha256"),
-        ("tools/install_release.py", trust / "tools" / "install_release.py", "install_release.py_sha256"),
+        ("tools/verify_release.py", pinned_dir / "tools" / "verify_release.py", "verify_release.py_sha256"),
+        ("trust/policy.json", pinned_dir / "policy.json", "trust_policy_sha256"),
+        (
+            "tools/install_release.py",
+            pinned_dir / "tools" / "install_release.py",
+            "install_release.py_sha256",
+        ),
     )
     for rel, dest, pin_name in wants:
         r = run(["git", "-C", str(checkout), "show", f"{ref}:{rel}"])
@@ -134,7 +138,7 @@ def trusted_tools(pins: dict, work: Path, repo_url: str, checkout: Path | None) 
         dest.write_text(r.stdout)
         if sha(dest) != pins["verifier_pins"][pin_name]:
             return None, f"{rel} at the pinned revision does not equal its pinned digest"
-    return trust, ""
+    return pinned_dir, ""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -164,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         st = rec["steps"]
         shown = {  # status only; free text (problems, output tails) is in consumer-run.json
             "pins_consistent": st.get("pins_consistent"),
-            "trusted_tools": st.get("trusted_tools"),
+            "pinned_tools": st.get("pinned_tools"),
             "installed": st.get("installed"),
             "provision_deterministic": st.get("provision_deterministic"),
             "event_trust": st.get("event_trust"),
@@ -182,15 +186,15 @@ def main(argv: list[str] | None = None) -> int:
         rec["steps"]["problems"] = problems
         return finish(1)
     ver = pins["version"]
-    trust, why = trusted_tools(pins, work, a.dev_platform_repo, a.dev_platform_checkout)
-    rec["steps"]["trusted_tools"] = trust is not None
-    if trust is None:
+    pinned_dir, why = pinned_tools(pins, work, a.dev_platform_repo, a.dev_platform_checkout)
+    rec["steps"]["pinned_tools"] = pinned_dir is not None
+    if pinned_dir is None:
         rec["steps"]["problems"] = [why]
         return finish(1)
     vp = pins["verifier_pins"]
-    inst = [sys.executable, str(trust / "tools" / "install_release.py"), "--version", ver,
+    inst = [sys.executable, str(pinned_dir / "tools" / "install_release.py"), "--version", ver,
             "--store", str(work / "store"), "--verifier-sha256", vp["verify_release.py_sha256"],
-            "--policy", str(trust / "policy.json"), "--policy-sha256", vp["trust_policy_sha256"],
+            "--policy", str(pinned_dir / "policy.json"), "--policy-sha256", vp["trust_policy_sha256"],
             "--archive-sha256", pins["archive_sha256"], "--tree-sha256", pins["tree_digest_pin"],
             "--source-revision", pins["source_revision"]]  # fmt: skip
     if a.allow_unaccepted:

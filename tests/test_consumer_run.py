@@ -85,22 +85,22 @@ class Tools(unittest.TestCase):
 
     def test_tools_equal_to_the_pins_are_accepted(self):
         d, pins = self.repo()
-        trust, why = C.trusted_tools(pins, tmpdir(self), "unused", d)
-        self.assertIsNotNone(trust, why)
-        self.assertEqual((trust / "tools" / "verify_release.py").read_text(), "v\n")
+        tools_dir, why = C.pinned_tools(pins, tmpdir(self), "unused", d)
+        self.assertIsNotNone(tools_dir, why)
+        self.assertEqual((tools_dir / "tools" / "verify_release.py").read_text(), "v\n")
 
     def test_a_tool_that_differs_from_its_pin_is_refused(self):
         d, pins = self.repo()
         pins["verifier_pins"]["trust_policy_sha256"] = "9" * 64
-        trust, why = C.trusted_tools(pins, tmpdir(self), "unused", d)
-        self.assertIsNone(trust)
+        tools_dir, why = C.pinned_tools(pins, tmpdir(self), "unused", d)
+        self.assertIsNone(tools_dir)
         self.assertIn("policy.json", why)
 
     def test_a_checkout_at_another_revision_is_refused(self):
         d, pins = self.repo()
         pins["source_revision"] = "f" * 40
-        trust, why = C.trusted_tools(pins, tmpdir(self), "unused", d)
-        self.assertIsNone(trust)
+        tools_dir, why = C.pinned_tools(pins, tmpdir(self), "unused", d)
+        self.assertIsNone(tools_dir)
         self.assertIn("pinned revision", why)
 
 
