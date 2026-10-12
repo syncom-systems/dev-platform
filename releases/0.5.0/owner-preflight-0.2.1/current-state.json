@@ -1,0 +1,216 @@
+{
+  "currency": {
+    "evidence": {
+      "head_commit": "6d954c2453eeb0b7b81451b2f8165a0938117933",
+      "head_committed_at": "2026-10-12T00:26:43Z",
+      "history_commits": 0,
+      "records": [],
+      "ref": "main",
+      "removed": [],
+      "repo": "syncom-systems/dev-platform"
+    },
+    "max_age_seconds": 300,
+    "observed_at": "2026-10-12T00:38:56.890382+00:00",
+    "purpose": "operational",
+    "status": "current",
+    "valid_until": "2026-10-12T00:43:56.890382+00:00"
+  },
+  "current_decision": {
+    "reasons": [
+      "no authenticated, authorized, in-force approval for this archive digest"
+    ],
+    "state": "verified-unaccepted"
+  },
+  "verification": {
+    "acceptance": {
+      "authorization": null,
+      "authorization_evidence": [],
+      "confers": [],
+      "not_conferred": [
+        "release certification (a property of consumer check results)",
+        "qualification of any profile or platform beyond what the release's own qualification evidence shows",
+        "approval of any consumer migration or any other release"
+      ],
+      "reasons": [
+        "no authenticated, authorized, in-force approval for this archive digest"
+      ],
+      "state": "verified-unaccepted"
+    },
+    "checks": [
+      {
+        "detail": "actual 3cc47abb71afcd279383f2c46386f46183f460ff3e91af7656a407030ba42044",
+        "id": "archive-digest",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "safe-extract",
+        "status": "passed"
+      },
+      {
+        "detail": "archive root 0.2.1, expected 0.2.1",
+        "id": "version-binding",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "release-json",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "release-version",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "source-digest",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "source-version-matches",
+        "status": "passed"
+      },
+      {
+        "detail": "release.json says 750d065e9eab486b7153079b7162013b19cc8aad",
+        "id": "source-revision",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "sbom-digest",
+        "status": "passed"
+      },
+      {
+        "detail": "missing []",
+        "id": "sbom-covers-toolchains",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "sbom-matches-manifest",
+        "status": "passed"
+      },
+      {
+        "detail": "SBOM root component must be this version and source digest",
+        "id": "sbom-describes-artifact",
+        "status": "passed"
+      },
+      {
+        "detail": "trust policy must list at least one signer",
+        "id": "policy-has-signers",
+        "status": "passed"
+      },
+      {
+        "detail": "ref refs/tags/v0.2.1 vs policy ref_patterns",
+        "id": "policy-allows-ref",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "attestation-signature",
+        "status": "passed"
+      },
+      {
+        "detail": "1 attestation(s) satisfy signer policy and expectations",
+        "id": "attestation-matches-policy",
+        "status": "passed"
+      },
+      {
+        "detail": "trust policy must list at least one signer",
+        "id": "policy-has-signers",
+        "status": "passed"
+      },
+      {
+        "detail": "ref refs/tags/v0.2.1 vs policy ref_patterns",
+        "id": "policy-allows-ref",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "sbom-attestation-signature",
+        "status": "passed"
+      },
+      {
+        "detail": "1 attestation(s) satisfy signer policy and expectations",
+        "id": "sbom-attestation-matches-policy",
+        "status": "passed"
+      },
+      {
+        "detail": "the attested SBOM must be exactly the SBOM inside the archive",
+        "id": "sbom-attestation-content",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "environment-evidence",
+        "status": "passed"
+      },
+      {
+        "detail": "trust policy must list at least one signer",
+        "id": "policy-has-signers",
+        "status": "passed"
+      },
+      {
+        "detail": "ref refs/tags/v0.2.1 vs policy ref_patterns",
+        "id": "policy-allows-ref",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "environment-attestation-signature",
+        "status": "passed"
+      },
+      {
+        "detail": "1 attestation(s) satisfy signer policy and expectations",
+        "id": "environment-attestation-matches-policy",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "continuity",
+        "status": "passed"
+      },
+      {
+        "detail": "trust policy must list at least one signer",
+        "id": "policy-has-signers",
+        "status": "passed"
+      },
+      {
+        "detail": "ref refs/tags/v0.2.1 vs policy ref_patterns",
+        "id": "policy-allows-ref",
+        "status": "passed"
+      },
+      {
+        "detail": "",
+        "id": "continuity-attestation-signature",
+        "status": "passed"
+      },
+      {
+        "detail": "1 attestation(s) satisfy signer policy and expectations",
+        "id": "continuity-attestation-matches-policy",
+        "status": "passed"
+      },
+      {
+        "detail": "stable_requires_authorization must not be disabled",
+        "id": "policy-requires-authorization",
+        "status": "passed"
+      }
+    ],
+    "expected": {
+      "archive_sha256": "3cc47abb71afcd279383f2c46386f46183f460ff3e91af7656a407030ba42044",
+      "ref": "refs/tags/v0.2.1",
+      "source_revision": "750d065e9eab486b7153079b7162013b19cc8aad",
+      "version": "0.2.1"
+    },
+    "policy_sha256": "9babfd405903e0bd45390d50ecea13b8661ec9dcf822f1544e468a6fb9c2cbc7",
+    "schema": "dev-platform.verification/v1",
+    "subject": {
+      "archive": "dev-platform-0.2.1.tar.gz",
+      "archive_sha256": "3cc47abb71afcd279383f2c46386f46183f460ff3e91af7656a407030ba42044",
+      "tree_digest": "7cc140322520220bce0292e599c8d9e1c36d0785981af02070175d32fc4165b5",
+      "version": "0.2.1"
+    }
+  }
+}

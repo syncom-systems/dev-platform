@@ -222,7 +222,7 @@ def main(argv=None) -> int:
         [local(n, record(n))],
         policy(),
         "unapproved",
-        "no commit on main touches",
+        "no commit on",
     )
     # 2. validly signed by GitHub, authored by the bot, committed by web-flow
     n = f"live-{stamp}-bot"

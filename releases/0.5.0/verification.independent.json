@@ -1,0 +1,192 @@
+{
+  "acceptance": {
+    "authorization": null,
+    "authorization_evidence": [],
+    "confers": [],
+    "not_conferred": [
+      "release certification (a property of consumer check results)",
+      "qualification of any profile or platform beyond what the release's own qualification evidence shows",
+      "approval of any consumer migration or any other release"
+    ],
+    "reasons": [
+      "no authenticated, authorized, in-force approval for this archive digest"
+    ],
+    "state": "verified-unaccepted"
+  },
+  "checks": [
+    {
+      "detail": "actual 9d6a9bc9e1a2f31f767368e6cc37f8d534824d01e18aedefc35708ab2c4646d3",
+      "id": "archive-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "safe-extract",
+      "status": "passed"
+    },
+    {
+      "detail": "archive root 0.5.0, expected 0.5.0",
+      "id": "version-binding",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "release-json",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "release-version",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "source-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "source-version-matches",
+      "status": "passed"
+    },
+    {
+      "detail": "release.json says 6d954c2453eeb0b7b81451b2f8165a0938117933",
+      "id": "source-revision",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-digest",
+      "status": "passed"
+    },
+    {
+      "detail": "missing []",
+      "id": "sbom-covers-toolchains",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-matches-manifest",
+      "status": "passed"
+    },
+    {
+      "detail": "SBOM root component must be this version and source digest",
+      "id": "sbom-describes-artifact",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.5.0 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "attestation-matches-policy",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.5.0 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "sbom-attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "sbom-attestation-matches-policy",
+      "status": "passed"
+    },
+    {
+      "detail": "the attested SBOM must be exactly the SBOM inside the archive",
+      "id": "sbom-attestation-content",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "environment-evidence",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.5.0 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "environment-attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "environment-attestation-matches-policy",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "continuity",
+      "status": "passed"
+    },
+    {
+      "detail": "trust policy must list at least one signer",
+      "id": "policy-has-signers",
+      "status": "passed"
+    },
+    {
+      "detail": "ref refs/tags/v0.5.0 vs policy ref_patterns",
+      "id": "policy-allows-ref",
+      "status": "passed"
+    },
+    {
+      "detail": "",
+      "id": "continuity-attestation-signature",
+      "status": "passed"
+    },
+    {
+      "detail": "1 attestation(s) satisfy signer policy and expectations",
+      "id": "continuity-attestation-matches-policy",
+      "status": "passed"
+    },
+    {
+      "detail": "stable_requires_authorization must not be disabled",
+      "id": "policy-requires-authorization",
+      "status": "passed"
+    }
+  ],
+  "expected": {
+    "archive_sha256": "9d6a9bc9e1a2f31f767368e6cc37f8d534824d01e18aedefc35708ab2c4646d3",
+    "ref": "refs/tags/v0.5.0",
+    "source_revision": "6d954c2453eeb0b7b81451b2f8165a0938117933",
+    "version": "0.5.0"
+  },
+  "policy_sha256": "c634f47b1bdeeb871a04d9db00fb4f32d073de5b411d9988afcf0cd79387f08a",
+  "schema": "dev-platform.verification/v1",
+  "subject": {
+    "archive": "dev-platform-0.5.0.tar.gz",
+    "archive_sha256": "9d6a9bc9e1a2f31f767368e6cc37f8d534824d01e18aedefc35708ab2c4646d3",
+    "tree_digest": "798ca5f8cd48fc656f5fb44ec901597350856b1e2b08f0d99c513fadd0335478",
+    "version": "0.5.0"
+  }
+}

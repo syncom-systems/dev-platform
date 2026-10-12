@@ -1,0 +1,76 @@
+{
+  "ci_qualification": [
+    {
+      "file": "python-macos-15.json",
+      "sha256": "5c41b6b6c5505d7664cb8caf38d84f75702ec0cd12ba06770baebf0210c66539"
+    },
+    {
+      "file": "python-ubuntu-24.04.json",
+      "sha256": "203ac69f679474b0a8dd8b789829c6bc51f316e8366669733ed82945c6e5f81f"
+    },
+    {
+      "file": "rust-bazel-9-macos-15.json",
+      "sha256": "494f5eed0ff5a23a0629461fe722fb531a3076e1b834a51706e34251612199ff"
+    },
+    {
+      "file": "rust-bazel-9-ubuntu-24.04.json",
+      "sha256": "f77b5ae9caf1ba623de71f8bc392642fd28ca0245e234c6482925fffe480d09f"
+    },
+    {
+      "file": "rust-bazel-macos-15.json",
+      "sha256": "0dbc95f05535acc17bddb1a00bdd32227e7e7f9b520f90a363dd8a7c73ae3e00"
+    },
+    {
+      "file": "rust-bazel-ubuntu-24.04.json",
+      "sha256": "1fd3304950235b244f60088ca6fa6cef5d7ca9968dd4ba5e093f31245cbbba7d"
+    },
+    {
+      "file": "rust-cargo-1.99-macos-15.json",
+      "sha256": "1cbb2fe7cb25866b5092646f3f9a281f358ef2584b12050e7e8e8055e67b7cc0"
+    },
+    {
+      "file": "rust-cargo-1.99-ubuntu-24.04.json",
+      "sha256": "5c83af2fb27a0eb9f1306356b1749c671a3f042fe8fc561d62811a73de806e22"
+    },
+    {
+      "file": "rust-cargo-macos-15.json",
+      "sha256": "af53b9206e196e9afb062d7180a76f53e14d8d393dca1be62ce24b40f6aae3ae"
+    },
+    {
+      "file": "rust-cargo-ubuntu-24.04.json",
+      "sha256": "0a61b9e7851bab6d677bb66514a3ca9d52a0bd202a3ea47d0b892f5ebad99a52"
+    }
+  ],
+  "ci_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38188024282 (artifacts qualification-<profile>-<os>)",
+  "live_fixture_repo": "syncom-systems/dev-platform-qualification-fixture (private; commit ids in live-qualification.json)",
+  "note": "Each file is retained byte-for-byte; sha256 identifies it. Qualification builds a platform release from the checkout (no source-uri/revision stamping), so its tree digest identifies that build, not the released archive; the link is the source revision. 0.4.0's and earlier qualification claims are not widened by these records.",
+  "other_records": [
+    {
+      "file": "live-qualification.json",
+      "sha256": "228131ffac75251b39a9752dd077ec61a8cf38811af6108acc0301f3f80a4d0a"
+    },
+    {
+      "file": "live-qualification.attempt-1.json",
+      "sha256": "4b27231fac08d7f8885abb1e6970d4eddee4e90ccb5a4c800868370e7d8a3218"
+    },
+    {
+      "file": "platform-acceptance-required.txt",
+      "sha256": "3afb2606c005230694fb1e644bb9d154c68212a4614207735adfea28d9eef854"
+    },
+    {
+      "file": "current-state.json",
+      "sha256": "4361e6cb7bf66c02804e3fbce3ff769373a9ee7a1395b8fbd1b5aff5a3c2c97b"
+    },
+    {
+      "file": "owner-preflight-0.2.1/current-state.json",
+      "sha256": "56938e005730a771554c0048db68880a4911cf621468fd2913a191e439beb3f3"
+    },
+    {
+      "file": "rejections.txt",
+      "sha256": "ad9e5cd5a79becb1b47323cfa67f90b64ba4b13b48ca5b7b7b85fe5db87f4d91"
+    }
+  ],
+  "release": "0.5.0",
+  "schema": "dev-platform.qualification-index/v1",
+  "source_revision": "6d954c2453eeb0b7b81451b2f8165a0938117933"
+}
