@@ -1,0 +1,45 @@
+{
+  "ci_qualification": [
+    {
+      "file": "python-macos-15.json",
+      "sha256": "9937c9b659948bb2259d29ff0e511a44f5d69cb616cc01c8cd045234c1994acc"
+    },
+    {
+      "file": "python-ubuntu-24.04.json",
+      "sha256": "0c8a29698960f2dd47567b09c96151de6202dfd94fa10ba6f6d07ff9e8651dd3"
+    },
+    {
+      "file": "rust-bazel-9-macos-15.json",
+      "sha256": "0d33b8a1561994554d2a7fdd49b0e54beb0b7297944be3313249dec060c4f34a"
+    },
+    {
+      "file": "rust-bazel-9-ubuntu-24.04.json",
+      "sha256": "a31ffc1fd520390e2e436a1237508ca57de5807269d19a6513ace90ca8afa626"
+    },
+    {
+      "file": "rust-bazel-macos-15.json",
+      "sha256": "1ebe53d9bcb99cd919ba31c365199b85cd7188646e1938d675b5f2419af3f107"
+    },
+    {
+      "file": "rust-bazel-ubuntu-24.04.json",
+      "sha256": "cb90a761f4f41dbde75de98f09219842a203b780547b20384725244cc5689ef0"
+    },
+    {
+      "file": "rust-cargo-1.99-macos-15.json",
+      "sha256": "3f6230732a17a649c431b043a62e3efa974346dc0ed9e96bae7216254bd9bbe9"
+    },
+    {
+      "file": "rust-cargo-1.99-ubuntu-24.04.json",
+      "sha256": "0c8f94ff6e1600e77b5c02f4c1a06c947d3120a796a626787160666e1a96997c"
+    },
+    {
+      "file": "rust-cargo-macos-15.json",
+      "sha256": "037b3c54ad314e7026f32f181abe854176686b0b972e045cc4b1a2bafcd3e65b"
+    },
+    {
+      "file": "rust-cargo-ubuntu-24.04.json",
+      "sha256": "8b071c0e6053d12a2c6d3e335077952caf6dca6bd3a7460e4e9ed33b5e73ece0"
+    }
+  ],
+  "ci_run": "https://github.com/syncom-systems/dev-platform/actions/runs/38222621252"
+}

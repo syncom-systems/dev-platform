@@ -1,0 +1,37 @@
+{
+  "_comment": "TEMPLATE. NOT a decision and NOT valid; not created by the platform or its agent. The owner copies it to authorizations/<name>.json, replaces every <...> value and commits it with their OWN GitHub-verified signed commit (push or merge commit; never squash/rebase).",
+  "schema": "dev-platform.authorization/v1",
+  "id": "<unique id chosen by the owner>",
+  "subject": {
+    "kind": "platform-release",
+    "digest": "98902922986ebead1d6a00943dcc98cc464ce3cc317faf8c39de7299bd778e1d"
+  },
+  "decision": "<approved|rejected|revoked>",
+  "decided_by": {
+    "id": "<approver id as listed in trust/policy.json>",
+    "role": "owner",
+    "identity_assertion": {
+      "provider": "github-signed-commit",
+      "login": "<owner GitHub login>",
+      "path": "authorizations/<same name>.json"
+    }
+  },
+  "basis": {
+    "kind": "acceptance-packet",
+    "reference": "releases/0.6.0/ACCEPTANCE-PACKET.md"
+  },
+  "decided_at": "<UTC timestamp>",
+  "scope": {
+    "confers": [
+      "platform-baseline"
+    ]
+  },
+  "validity": {
+    "not_after": "<optional UTC timestamp>"
+  },
+  "supersedes": [],
+  "retention": {
+    "class": "permanent",
+    "until": null
+  }
+}
