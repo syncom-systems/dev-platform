@@ -50,6 +50,13 @@ Also confirm the anchors: `shasum -a 256 tools/verify_release.py tools/verify_pl
 and `install_release.py` `473a2c73eb71904ea6ee0e010f2288976126d4560e3efd11c33c11e44f15bb93`. Record the other two as
 your own pins out of band.
 
+## Shortcut for Part B (OWNER ONLY, interactive terminal)
+`python3 tools/owner_accept.py --version 0.2.1` does B1 and B2 below in one run: it checks your signing setup, shows what it
+will write, requires you to type a confirmation phrase, makes the two signed commits, pushes, and prints the policy pin and
+whether GitHub shows both commits as verified. It refuses to run without a terminal, so an agent cannot run it. It needs a
+signing key you registered on GitHub (`user.signingkey`) and a commit email verified on your account; the agent never holds it.
+The manual steps follow for reference.
+
 ## Part B1. OWNER ONLY: establish your approver identity (trust anchor change)
 ```
 mkdir -p releases/0.2.1-acceptance
