@@ -63,7 +63,7 @@ def failed(doc):
 class Verify(unittest.TestCase):
     def test_consistent_evidence_is_verified(self):
         d = verdict(revision="r" * 40, require_bazel_proof=True)
-        self.assertEqual(d["verdict"], "verified", failed(d))
+        self.assertEqual(d["verdict"], "consistent", failed(d))
 
     def mutate(self, path, value, expect, **kw):
         r = copy.deepcopy(RESULT)
@@ -72,7 +72,7 @@ class Verify(unittest.TestCase):
             node = node[k]
         node[path[-1]] = value
         d = verdict(result=r, **kw)
-        self.assertEqual(d["verdict"], "rejected", path)
+        self.assertEqual(d["verdict"], "inconsistent", path)
         self.assertIn(expect, failed(d), path)
 
     def test_every_pin_is_checked(self):
@@ -105,7 +105,7 @@ class Verify(unittest.TestCase):
         r = copy.deepcopy(RESULT)
         r["infra"] = {"status": "hosted-only"}
         d = verdict(result=r, config={"platform": CONFIG["platform"]})
-        self.assertEqual(d["verdict"], "verified", failed(d))
+        self.assertEqual(d["verdict"], "consistent", failed(d))
 
     def test_self_hosted_results_are_not_consumer_evidence(self):
         d = verdict(config={"platform": {"self_hosted": True}})
@@ -124,9 +124,15 @@ class Verify(unittest.TestCase):
             d = verdict(proof=p, require_bazel_proof=True)
             self.assertIn(expect, failed(d), field)
 
+    def test_it_states_what_it_does_not_establish(self):
+        d = verdict()
+        text = " ".join(d["not_established"])
+        for needle in ("subverted", "fabricated", "private infrastructure", "gates"):
+            self.assertIn(needle, text)
+
     def test_required_proof_missing(self):
         d = verdict(proof=None, require_bazel_proof=True)
-        self.assertEqual(d["verdict"], "rejected")
+        self.assertEqual(d["verdict"], "inconsistent")
 
     def test_cli_reads_the_consumers_own_toml(self):
         d = tmpdir(self)
@@ -148,7 +154,7 @@ class Verify(unittest.TestCase):
         ]
         self.assertEqual(V.main(argv), 0)
         out = json.loads((d / "v.json").read_text())
-        self.assertEqual(out["verdict"], "verified")
+        self.assertEqual(out["verdict"], "consistent")
         self.assertEqual(len(out["evidence"]["r.json"]), 64)
 
 

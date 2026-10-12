@@ -125,9 +125,9 @@
           "admission": "admitted",
           "certified": true,
           "bazel_rust_proof": true,
-          "evidence_verdict": "verified",
+          "evidence_verdict": "consistent",
           "consumer_run_exit": 0,
-          "consumer_run_verdict": "verified"
+          "consumer_run_verdict": "consistent"
         },
         "head": {
           "installed": true,
@@ -142,7 +142,7 @@
           "admission": "admitted",
           "certified": true,
           "bazel_rust_proof": true,
-          "evidence_verdict": "verified"
+          "evidence_verdict": "consistent"
         }
       },
       "consumer_run": true

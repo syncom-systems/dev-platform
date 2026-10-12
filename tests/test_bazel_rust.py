@@ -76,6 +76,18 @@ class Proof(unittest.TestCase):
         self.assertEqual(len(p["rustc"][0]["sha256"]), 64)
         self.assertFalse(p["host_decoy"]["invoked"])
 
+    def test_several_targets_are_built_and_examined_together(self):
+        fake = Fake(self.ob)
+        p = bazel_rust.prove(
+            self.root, target=["//a:t", "//b:t"], run=fake, base_env={"PATH": "/usr/bin:/bin"}
+        )
+        self.assertTrue(p["ok"], p["problems"])
+        self.assertEqual(p["target"], ["//a:t", "//b:t"])
+        build = next(a for a in fake.calls if a[1] == "build")
+        self.assertEqual(build[-2:], ["//a:t", "//b:t"])
+        aq = next(a for a in fake.calls if a[1] == "aquery")
+        self.assertIn("deps(set(//a:t //b:t))", " ".join(aq))
+
     def test_never_runs_cargo(self):
         _, fake = self.prove()
         for argv in fake.calls:

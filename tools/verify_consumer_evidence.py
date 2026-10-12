@@ -9,7 +9,8 @@ certifiable toolchain environment, the pinned infrastructure configuration, and 
 Rust toolchain at the declared version? It cannot establish that the record was not fabricated: pair it with a
 signature/attestation over the files (docs/consumer-integration.md).
 
-Exit status: 0 verified, 1 rejected, 2 usage/unreadable input.
+Exit status: 0 consistent, 1 inconsistent, 2 usage/unreadable input. "Consistent" means the record agrees with
+the consumer's pins; it is not a finding that the execution was trustworthy (see NOT_ESTABLISHED).
 """
 
 from __future__ import annotations
@@ -22,6 +23,13 @@ import tomllib
 from pathlib import Path
 
 SCHEMA = "dev-platform.consumer-evidence-verification/v1"
+NOT_ESTABLISHED = [
+    "that the consumer job executed honestly or was not subverted (it writes the record it is judged by)",
+    "that the record was not fabricated (attest the files)",
+    "current authorization for private infrastructure: the provider and the runner groups decide that per run; the "
+    "infra block records only which configuration release and digest were pinned and resolved",
+    "that the consumer's own build, test and security gates passed or are unnecessary",
+]
 RESULT_SCHEMA = "dev-platform.result/v1"
 PROOF_SCHEMA = "dev-platform.bazel-rust-proof/v1"
 
@@ -147,7 +155,8 @@ def verify(
         )
     return {
         "schema": SCHEMA,
-        "verdict": "verified" if c.ok else "rejected",
+        "verdict": "consistent" if c.ok else "inconsistent",
+        "not_established": NOT_ESTABLISHED,
         "checks": c.items,
         "claims": "the record is consistent with the consumer's pins; it does not prove the record was not fabricated "
         "(attest the files)",
@@ -197,10 +206,12 @@ def main(argv: list[str] | None = None) -> int:
             f"{ck['status'].upper():7} {ck['id']}"
             + (f"  ({ck['detail']})" if ck["status"] == "failed" else "")
         )
-    print(f"consumer evidence: {doc['verdict']}")
+    print(
+        f"consumer evidence: {doc['verdict']} with the consumer's pins (consistency only; see not_established)"
+    )
     if a.out:
         a.out.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
-    return 0 if doc["verdict"] == "verified" else 1
+    return 0 if doc["verdict"] == "consistent" else 1
 
 
 if __name__ == "__main__":
