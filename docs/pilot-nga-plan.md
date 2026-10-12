@@ -43,6 +43,8 @@ acceptance.** nga is private; this plan is derived from reading its public-to-th
    production migration and is outside anything the platform releases or milestones authorize.
 
 ## Runbook for phase 2 (owner decision; nothing here modifies nga)
+The concrete, minimal plan is `docs/nga-pilot-adoption-plan.md`.
+
 `docs/consumer-integration.md` is the runbook: the Bazel-only profile `rust-bazel-9`, the consumer-owned pins, the reusable
 workflow `consumer-pilot.yml` run as an additional non-required job from nga's own CI on a throwaway branch (so no private
 checkout from this public repository is needed), the Bazel Rust toolchain proof (Bazel only, no Cargo), and the
