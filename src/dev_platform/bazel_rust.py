@@ -75,17 +75,18 @@ def _decoys(dirpath: Path, log: Path) -> None:
 def prove(
     root: Path,
     *,
-    target: str = "//...",
+    target: str | list[str] = "//...",
     bazel: str = "bazel",
     run: Run = default_run,
     base_env: dict[str, str] | None = None,
 ) -> dict:
     root = Path(root)
+    targets = [target] if isinstance(target, str) else list(target)
     env0 = dict(base_env if base_env is not None else os.environ)
     versions = declared_versions(root)
     proof: dict = {
         "schema": SCHEMA,
-        "target": target,
+        "target": targets,
         "declared_versions": versions,
         "observed": None,
         "rustc": None,
@@ -110,7 +111,7 @@ def prove(
             f"--action_env=PATH={decoy_dir}:/usr/bin:/bin",
             f"--action_env=DP_PROOF_NONCE={uuid.uuid4().hex}",
         ]
-        code, _, err = run([bazel, "build", *flags, target], env, root)
+        code, _, err = run([bazel, "build", *flags, *targets], env, root)
         proof["build"] = {"exit": code}
         if code != 0:
             problems.append(
@@ -121,11 +122,21 @@ def prove(
         if invoked:
             problems.append("a host Rust tool was executed (decoy invoked)")
         code, out, err = run(
-            [bazel, "aquery", *flags, f'mnemonic("Rustc", deps({target}))', "--output=jsonproto"], env, root
+            [
+                bazel,
+                "aquery",
+                *flags,
+                f'mnemonic("Rustc", deps(set({" ".join(targets)})))',
+                "--output=jsonproto",
+            ],
+            env,
+            root,
         )
         paths = rustc_paths(out) if code == 0 else set()
         if code != 0 or not paths:
-            problems.append(f"no Rustc action found for {target} (aquery exit {code}): {err.strip()[-200:]}")
+            problems.append(
+                f"no Rustc action found for {' '.join(targets)} (aquery exit {code}): {err.strip()[-200:]}"
+            )
             return proof
         code, er, err = run([bazel, "info", "execution_root"], env, root)
         exec_root = Path(er.strip()) if code == 0 and er.strip() else None

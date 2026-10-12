@@ -159,7 +159,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="prove Bazel uses the declared Rust toolchain, not a host rustc (runs bazel, never cargo)",
     )
     tb.add_argument("--project", type=Path, default=Path("."))
-    tb.add_argument("--target", default="//...", help="Bazel target pattern whose Rustc actions are examined")
+    tb.add_argument(
+        "--target",
+        action="append",
+        help="Bazel target pattern whose Rustc actions are examined (repeatable; default //...)",
+    )
     tb.add_argument("--out", type=Path, help="write the proof record here")
     pv = sub.add_parser("provenance", help="assemble an application-release record from a certified result")
     psub = pv.add_subparsers(dest="pcmd", required=True)
@@ -762,7 +766,7 @@ def cmd_toolchain(args) -> int:
     if args.tcmd == "prove-bazel-rust":
         from . import bazel_rust
 
-        proof = bazel_rust.prove(args.project, target=args.target)
+        proof = bazel_rust.prove(args.project, target=args.target or "//...")
         text = json.dumps(proof, indent=2, sort_keys=True)
         if args.out:
             args.out.write_text(text + "\n")

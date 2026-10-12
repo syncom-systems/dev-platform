@@ -18,7 +18,7 @@ pinned revision and must equal the pinned digests. A provider is never called he
 Steps: pins consistent -> pinned tools at the pinned revision -> verified install -> `toolchain provision --pinned
 --verify` (twice, identity must be identical) -> doctor -> `check --stage full --result` -> Bazel Rust toolchain proof
 (rust-bazel profiles) -> evidence bundle -> independent verification against the consumer's pins.
-Exit 0 only when the consumer evidence is `verified`.
+Exit 0 only when the consumer evidence is `consistent` with the consumer's pins (not a finding of trustworthy execution).
 """
 
 from __future__ import annotations
@@ -80,6 +80,16 @@ def read_pins(consumer: Path) -> tuple[dict, dict, list[str]]:
     if pins.get("tree_digest_pin") != plat.get("sha256"):
         problems.append(f"{PINS_FILE} tree_digest_pin != dev-platform.toml platform.sha256")
     return pins, cfg, problems
+
+
+def bazel_targets(cfg: dict) -> list[str]:
+    """The consumer's own Bazel check targets, in order, without duplicates."""
+    seen: list[str] = []
+    for c in cfg.get("check", []):
+        for t in c.get("targets", []) if c.get("adapter") == "bazel" else []:
+            if t not in seen:
+                seen.append(t)
+    return seen
 
 
 def event_trust(env=os.environ) -> str:
@@ -250,7 +260,9 @@ def main(argv: list[str] | None = None) -> int:
     proof = None
     if cfg["platform"]["profile"].startswith("rust-bazel"):
         proof = ev / "bazel-rust-proof.json"
-        run([*dp, "toolchain", "prove-bazel-rust", "--project", str(cd), "--out", str(proof)], env=env)
+        # exactly the consumer's own Bazel check targets, never the whole workspace
+        targ = [x for t in bazel_targets(cfg) for x in ("--target", t)]
+        run([*dp, "toolchain", "prove-bazel-rust", "--project", str(cd), *targ, "--out", str(proof)], env=env)
         rec["steps"]["bazel_rust_proof"] = proof.is_file() and json.loads(proof.read_text()).get("ok") is True
     (ev / "dev-platform.toml").write_text((cd / "dev-platform.toml").read_text())
     (ev / PINS_FILE).write_text((cd / PINS_FILE).read_text())
@@ -261,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
     run(vargs)
     v = json.loads((ev / "verification.json").read_text()) if (ev / "verification.json").is_file() else {}
     rec["steps"]["evidence_verdict"] = v.get("verdict", "no-record")
-    return finish(0 if v.get("verdict") == "verified" and r.returncode == 0 else 1)
+    return finish(0 if v.get("verdict") == "consistent" and r.returncode == 0 else 1)
 
 
 if __name__ == "__main__":

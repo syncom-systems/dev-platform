@@ -104,6 +104,17 @@ class Tools(unittest.TestCase):
         self.assertIn("pinned revision", why)
 
 
+class Targets(unittest.TestCase):
+    def test_the_proof_examines_only_the_consumers_own_bazel_targets(self):
+        cfg = {"check": [
+            {"adapter": "bazel", "targets": ["//a:t", "//b:t"]},
+            {"adapter": "exec", "targets": ["//ignored:x"]},
+            {"adapter": "bazel", "targets": ["//a:t", "//c:t"]},
+        ]}  # fmt: skip
+        self.assertEqual(C.bazel_targets(cfg), ["//a:t", "//b:t", "//c:t"])
+        self.assertEqual(C.bazel_targets({}), [])
+
+
 class Trust(unittest.TestCase):
     def test_outside_ci_is_untrusted(self):
         self.assertEqual(C.event_trust({}), "untrusted")

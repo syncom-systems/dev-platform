@@ -27,7 +27,7 @@ refuses a different release, a different configuration digest, or a provider tha
    declared version; decoy host `rustc`/`cargo` are never executed; Cargo is never run);
 7. writes the evidence bundle and judges it with `tools/verify_consumer_evidence.py` against the consumer's own pins.
 
-Exit status is 0 only when the evidence verdict is `verified`. The reusable workflow `.github/workflows/consumer-pilot.yml`
+Exit status is 0 only when the evidence verdict is `consistent` (0.8.0 printed `verified`; the word was changed because it overstated: consistency with pins is not trustworthy execution). The reusable workflow `.github/workflows/consumer-pilot.yml`
 wraps this for GitHub Actions; call it as an additional job (not a required check unless you decide so):
 ```yaml
 jobs:
@@ -49,6 +49,19 @@ gh attestation verify result.json --repo <consumer repo> --signer-workflow <cons
 The verifier checks that the record used exactly the pinned release (mode, version, tree digest), a conformant and
 certifiable toolchain environment, the pinned infrastructure configuration (resolved identity equals the pin), and the
 Bazel Rust proof. The attestation shows which workflow run produced the files.
+
+## What the infrastructure block establishes, and what it does not
+`result.infra` records the exact configuration release and digest the consumer pinned (`pinned`), what the source resolved
+(`resolved`, `source`), the provider's claimed authorization policy identity if any, and the effective profile digest; never
+profile contents. It does not establish that private infrastructure was or is authorized for this run: that stays the provider's
+decision (per run, for trusted events only) and the runner-group/environment settings on GitHub. In untrusted CI the evidence
+shows `source: vendored-file` and no authorization policy, which confers no private access. `verification.json` carries
+`not_established` listing exactly this, so a reader cannot take the verdict for more than it is.
+
+## Relationship to the consumer's own gates
+The run is an additional job: it must not replace, wrap, reorder or relax a consumer's existing build, test, security or
+release gates, and it is not a required check unless the owner of that repository makes it one. A `consistent` verdict never
+substitutes for a passing gate, and a failing platform job never excuses one.
 
 ## Limits (read these)
 - The verdict is consistency with the consumer's pins. It does not prove the consumer job was not subverted: the job that

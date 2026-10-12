@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.8.1 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
+- Fix: `consumer_run.py` ran the Bazel Rust toolchain proof over `//...`; it now examines exactly the consumer's own Bazel check targets
+  (`toolchain prove-bazel-rust --target` is repeatable; the build and the Rustc aquery use the same set). A consumer with a large
+  workspace (for example one with bare-metal and QEMU targets) would otherwise have been rebuilt in full.
+- Consumer evidence verdict renamed `consistent` / `inconsistent` (was `verified` / `rejected`): consistency with the consumer's pins
+  is not trustworthy execution. `verification.json` gains `not_established` (job honesty, fabrication, current private-infrastructure
+  authorization, the consumer's own gates). The pilot expectations follow.
+- `contracts/infra/v1/reference-resolver.py` (a conformance aid showing the resolver wire format) with tests; the reusable workflow
+  gets job timeouts (60/10 minutes); docs: verifier anchor lineage (791713d0 -> a2d53075 reconciled across 0.2.1-0.8.0), consumer
+  integration limits.
+
 ## 0.8.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - `dev-platform pr-check --facts` (#114, #100): per-file triggers/PR reachability and per-job `runs_on` label sets (or unresolved + reason),
   environment, reusable-workflow `uses` and source line, from the same reader that decides admission; opt-in, never changes the decision.
