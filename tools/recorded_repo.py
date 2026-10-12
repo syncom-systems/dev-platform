@@ -23,6 +23,7 @@ class Repo:
         self.fail = None  # callable(endpoint) -> bool: that call fails like an outage
         self.hooks: list = []  # callables(endpoint) run before each call (e.g. publish a commit mid-read)
         self.calls: list[str] = []
+        self._seq = 0  # commit ids never repeat, even after history is rewritten
 
     # ---- building history
     def commit(self, changes, *, verified=True, author="", committer="", date=None, sha=None) -> str:
@@ -36,9 +37,10 @@ class Repo:
             else:
                 files.append({"filename": path, "status": "modified" if path in tree else "added"})
                 tree[path] = data
+        self._seq += 1
         n = len(self.commits) + 1
         c = {
-            "sha": sha or f"{n:040x}",
+            "sha": sha or f"{self._seq:040x}",
             "verified": verified,
             "author": author,
             "committer": committer,
@@ -57,6 +59,12 @@ class Repo:
 
     def delete(self, path, *, author="", committer="", verified=True) -> str:
         return self.commit({path: None}, verified=verified, author=author, committer=committer)
+
+    def rewind(self, count: int) -> None:
+        """Force-push: drop the last `count` commits from the branch (the next commit gets a fresh id)."""
+        for c in self.commits[len(self.commits) - count :]:
+            self.trees.pop(c["sha"], None)
+        del self.commits[len(self.commits) - count :]
 
     def wipe(self) -> None:
         self.commits.clear()
@@ -79,6 +87,7 @@ class Repo:
             tree = {p: base64.b64decode(b) for p, b in doc["trees"][c["sha"]].items()}
             r.commits.append({**c, "tree": tree})
             r.trees[c["sha"]] = tree
+        r._seq = len(r.commits)
         return r
 
     # ---- the API
@@ -121,10 +130,26 @@ class Repo:
                                for f in c["files"])]  # fmt: skip
                 hits = hits[(page - 1) * per : page * per]
                 return 0, json.dumps([self._public(c) for c in hits]), ""
+            m = re.search(r"/compare/([0-9a-f]{40})\.\.\.([0-9a-f]{40}|main)", ep)
+            if m:
+                shas = [c["sha"] for c in self.commits]
+                base, head = m.group(1), self._upto(m.group(2))[-1]["sha"]
+                if base not in shas:
+                    return 0, json.dumps({"status": "diverged"}), ""
+                status = (
+                    "identical"
+                    if base == head
+                    else "ahead"
+                    if shas.index(base) < shas.index(head)
+                    else "behind"
+                )
+                return 0, json.dumps({"status": status}), ""
             m = re.search(r"/commits/([0-9a-f]{40}|main)$", ep)
             if m:
-                c = self._upto(m.group(1))[-1]
-                return 0, json.dumps({**self._public(c), "files": c["files"]}), ""
+                i = len(self._upto(m.group(1))) - 1
+                c = self.commits[i]
+                parents = [{"sha": self.commits[i - 1]["sha"]}] if i else []
+                return 0, json.dumps({**self._public(c), "files": c["files"], "parents": parents}), ""
             m = re.search(r"/contents/([^?]+)\?ref=([0-9a-f]{40}|main)$", ep)
             if m:
                 path, tree = m.group(1), self._upto(m.group(2))[-1]["tree"]

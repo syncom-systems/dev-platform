@@ -3,6 +3,7 @@
 import contextlib
 import io
 import unittest
+from pathlib import Path
 
 from dev_platform import appverify, cli, provenance, records
 from dev_platform.errors import ConfigError
@@ -136,6 +137,30 @@ class Runner(unittest.TestCase):
         args.update(kw)
         return appverify.AppVerifier(**args)
 
+    def test_audit_state_is_passed_to_every_candidate_verification(self):
+        v = self.mk(audit_state=Path("/audit"))
+        i = v.argv_base.index("--audit-state")
+        self.assertEqual(v.argv_base[i + 1], "/audit")
+        self.assertNotIn("--audit-state", self.mk().argv_base)
+
+    def test_rejections_say_whether_nobody_authorizes_or_it_could_not_be_established(self):
+        class Rec:
+            def __init__(self, state, auth):
+                self.d = {
+                    "approval": {"state": state, "authorization_state": auth, "reasons": ["r"],
+                                 "authorization_evidence": []},
+                    "checks": [], "coverage": {}, "currency": {},
+                }  # fmt: skip
+
+            def __call__(self, rel):
+                return self.d
+
+        rel = {"application": {"name": "app", "version": "1.0.0"}}
+        for state, auth in (("unapproved", "unauthorized"), ("indeterminate", "indeterminate")):
+            out = provenance.select_rollback("app", "2.0.0", [rel], {}, [], authenticate=Rec(state, auth))
+            self.assertEqual(out["eligible"], [])
+            self.assertEqual(out["rejected"][0]["authorization_state"], auth)
+
     def test_pins_are_enforced(self):
         with self.assertRaises(ConfigError):
             self.mk(verifier_sha256="0" * 64)
@@ -188,7 +213,7 @@ class Runner(unittest.TestCase):
             pol = c.w("policy.json", c.policy)
             rec = self.mk(policy=pol, results=c.results)(rel)
             # current-state decision with an evidence repository that cannot be read here: fails closed
-            self.assertEqual(rec["approval"]["state"], "failed")
+            self.assertEqual(rec["approval"]["state"], "indeterminate")
             self.assertIn(
                 "authorization-currency", {x["id"] for x in rec["checks"] if x["status"] == "failed"}
             )

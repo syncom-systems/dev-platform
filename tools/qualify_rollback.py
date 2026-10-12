@@ -115,7 +115,7 @@ def run(
         for lb in labels:
             d, pin = bundles[lb]
             argv += ["--bundle", f"{d}={pin}"]
-        argv += [*(pins if pinned else []), *extra]
+        argv += [*(pins if pinned else []), "--audit-state", str(work / "audit-state"), *extra]
         r = cli(*argv)
         try:
             out = json.loads(r.stdout) if r.stdout.strip() else None
@@ -133,6 +133,11 @@ def run(
 
     def eligible(out):
         return [e["version"] for e in (out or {}).get("eligible", [])]
+
+    def state_of(out, v):
+        return next(
+            (r.get("authorization_state") for r in (out or {}).get("rejected", []) if r["version"] == v), None
+        )
 
     shutil.copy(result_path, res_path)
     adv = lambda name, comp, vers: write(  # noqa: E731
@@ -239,8 +244,10 @@ def run(
     code, fresh, _ = select(["1.8.0"])
     record(
         "a revocation published independently, absent from the pinned bundle, refuses the release",
-        eligible(fresh) == [] and reasons(fresh, "1.8.0") is not None,
-        reasons(fresh, "1.8.0"),
+        eligible(fresh) == []
+        and reasons(fresh, "1.8.0") is not None
+        and state_of(fresh, "1.8.0") == "unauthorized",
+        [reasons(fresh, "1.8.0"), state_of(fresh, "1.8.0")],
     )
     bundle("1.9.0", [sign("1.9.0", "ok-190")])
     senv["QUAL_GH_OUTAGE"] = "1"
@@ -250,8 +257,10 @@ def run(
         del senv["QUAL_GH_OUTAGE"]
     record(
         "evidence repository unreachable: nothing is eligible (current state unverifiable, fail closed)",
-        eligible(out) == [] and any("authorization-currency" in x for x in reasons(out, "1.9.0") or []),
-        reasons(out, "1.9.0"),
+        eligible(out) == []
+        and any("authorization-currency" in x for x in reasons(out, "1.9.0") or [])
+        and state_of(out, "1.9.0") == "indeterminate",
+        [reasons(out, "1.9.0"), state_of(out, "1.9.0")],
     )
     rev_of("1.9.0", "rev-190")
     double.delete("authorizations/rev-190.json", author="intruder", committer="intruder")
@@ -259,7 +268,8 @@ def run(
     record(
         "a revocation deleted from the evidence history is not silently absent: release refused",
         eligible(out) == []
-        and any("deleted from the evidence history" in x for x in reasons(out, "1.9.0") or []),
-        reasons(out, "1.9.0"),
+        and any("deleted from the evidence history" in x for x in reasons(out, "1.9.0") or [])
+        and state_of(out, "1.9.0") == "indeterminate",
+        [reasons(out, "1.9.0"), state_of(out, "1.9.0")],
     )
     return {"cases": cases, "all_ok": all(c["ok"] for c in cases)}

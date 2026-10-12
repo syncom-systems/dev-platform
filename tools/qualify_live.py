@@ -257,7 +257,7 @@ def main(argv=None) -> int:
         "unreadable evidence repository fails closed",
         [bot_file],
         policy(repo="syncom-systems/does-not-exist-qualification"),
-        "failed",
+        "indeterminate",
         "authorization-currency",
     )
     # 5. discovery against the live repository: every record in it is judged, none can approve
@@ -303,7 +303,7 @@ def main(argv=None) -> int:
         "a record deleted from the live evidence history makes the current state unverifiable",
         [],
         deleted_pol,
-        "failed",
+        "indeterminate",
         "authorization-currency",
     )
     cases.append({"case": "discovery listed live records", "ok": len(out["approval"]["authorization_evidence"]) >= 2, "count": len(out["approval"]["authorization_evidence"])})  # fmt: skip

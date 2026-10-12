@@ -248,7 +248,7 @@ class CurrentState(Case):
         ok = self.good_auth()
         self.gh.fail = lambda ep: True
         doc = self.run_v([ok])
-        self.assertEqual(self.state(doc), "failed")
+        self.assertEqual(self.state(doc), "indeterminate")
         self.assertIn("authorization-currency", self.failed(doc))
         self.assertEqual(doc["currency"]["status"], "unverifiable")
         self.assertIsNone(doc["currency"]["valid_until"])
@@ -256,18 +256,18 @@ class CurrentState(Case):
     def test_listing_outage_fails_closed(self):
         ok = self.good_auth()
         self.gh.fail = lambda ep: "/contents/authorizations?ref=" in ep
-        self.assertEqual(self.state(self.run_v([ok])), "failed")
+        self.assertEqual(self.state(self.run_v([ok])), "indeterminate")
 
     def test_history_outage_fails_closed(self):
         ok = self.good_auth()
         self.gh.fail = lambda ep: "&per_page=100&page=" in ep
-        self.assertEqual(self.state(self.run_v([ok])), "failed")
+        self.assertEqual(self.state(self.run_v([ok])), "indeterminate")
 
     def test_unreadable_record_fails_closed(self):
         ok = self.good_auth()
         self.revoke()
         self.gh.fail = lambda ep: "/contents/authorizations/rev.json" in ep
-        self.assertEqual(self.state(self.run_v([ok])), "failed")
+        self.assertEqual(self.state(self.run_v([ok])), "indeterminate")
 
     def test_a_revocation_that_cannot_be_authenticated_does_not_leave_the_approval_standing(self):
         ok = self.good_auth()
@@ -275,27 +275,27 @@ class CurrentState(Case):
         # the commit history of the revocation is unreachable: it looks "not authentic", but it is unknown
         self.gh.fail = lambda ep: "&path=authorizations/rev.json" in ep
         doc = self.run_v([ok])
-        self.assertEqual(self.state(doc), "failed")
+        self.assertEqual(self.state(doc), "indeterminate")
         self.assertIn("authorization-currency", self.failed(doc))
 
     def test_unresolvable_ref_fails_closed(self):
         ok = self.good_auth()
         self.policy["authorization"]["evidence_ref"] = "no-such-branch"
-        self.assertEqual(self.state(self.run_v([ok])), "failed")
+        self.assertEqual(self.state(self.run_v([ok])), "indeterminate")
 
     def test_revocation_deleted_from_the_evidence_history_is_not_silently_absent(self):
         ok = self.good_auth()
         self.revoke()
         self.gh.delete("authorizations/rev.json", author="intruder", committer="intruder")
         doc = self.run_v([ok])
-        self.assertEqual(self.state(doc), "failed")
+        self.assertEqual(self.state(doc), "indeterminate")
         self.assertIn("deleted from the evidence history", " ".join(c["detail"] for c in doc["checks"]))
         self.assertEqual(doc["currency"]["status"], "unverifiable")
 
     def test_deleted_approval_is_also_flagged(self):
         self.good_auth()
         self.gh.delete("authorizations/appr-1.json", author=APPROVER, committer=APPROVER)
-        self.assertEqual(self.state(self.run_v([])), "failed")
+        self.assertEqual(self.state(self.run_v([])), "indeterminate")
 
     def test_revocation_by_someone_who_may_not_revoke_does_not_revoke(self):
         ok = self.good_auth()
@@ -331,14 +331,14 @@ class CurrentState(Case):
 
         self.gh.hooks.append(keep_publishing)
         doc = self.run_v([ok])
-        self.assertEqual(self.state(doc), "failed")
+        self.assertEqual(self.state(doc), "indeterminate")
         self.assertIn("moved while it was being read", " ".join(c["detail"] for c in doc["checks"]))
 
     def test_history_too_long_to_audit_fails_closed(self):
         ok = self.good_auth()
         for i in range(500):
             self.gh.commit({"authorizations/notes.txt": str(i).encode()}, author="bot", committer="bot")
-        self.assertEqual(self.state(self.run_v([ok])), "failed")
+        self.assertEqual(self.state(self.run_v([ok])), "indeterminate")
 
     def test_empty_authorizations_directory_is_a_complete_answer_not_an_outage(self):
         doc = self.run_v([])
@@ -364,6 +364,216 @@ class CurrentState(Case):
         self.revoke()
         self.signed(approval(self.rel, name="again", decided_at="2026-10-11T12:00:00Z"))
         self.assertEqual(self.state(self.run_v([ok])), "approved")
+
+
+class HistoryAudit(Case):
+    """Scalable, append-only audit of the evidence history; unauthorized and indeterminate stay distinct."""
+
+    REVOKED = CurrentState.REVOKED
+
+    def setUp(self):
+        super().setUp()
+        self.audit = self.d / "audit"
+        self._limits = (A.MAX_NEW_AUDIT, A.MAX_HISTORY_PAGES)
+        self.addCleanup(lambda: setattr(A, "MAX_NEW_AUDIT", self._limits[0]))
+        self.addCleanup(lambda: setattr(A, "MAX_HISTORY_PAGES", self._limits[1]))
+
+    def run_a(self, auths=(), **kw):
+        return self.run_v(auths, audit_dir=self.audit, **kw)
+
+    def revoke(self):
+        return self.signed(approval(self.rel, name="rev", **self.REVOKED))
+
+    def codes(self, doc):
+        return [r["code"] for r in doc["currency"]["reasons"]]
+
+    def detail_calls(self):
+        import re as _re
+
+        return [c for c in self.gh.calls if _re.search(r"/commits/[0-9a-f]{40}$", c)]
+
+    def test_unauthorized_and_indeterminate_are_different_states_with_different_evidence(self):
+        ok = self.good_auth()
+        self.revoke()
+        unauth = self.run_v([ok])
+        self.assertEqual(self.state(unauth), "unapproved")
+        self.assertEqual(unauth["approval"]["authorization_state"], "unauthorized")
+        self.assertEqual(unauth["currency"]["status"], "current")
+        self.assertEqual(unauth["currency"]["reasons"], [])
+        self.assertTrue(unauth["approval"]["authorization_evidence"])  # who/what was judged
+        self.gh.fail = lambda ep: True
+        ind = self.run_v([ok])
+        self.assertEqual(self.state(ind), "indeterminate")
+        self.assertEqual(ind["approval"]["authorization_state"], "indeterminate")
+        self.assertEqual(ind["currency"]["status"], "unverifiable")
+        self.assertEqual(self.codes(ind), ["api-failure"])
+        self.assertEqual(ind["approval"]["authorization_evidence"], [])  # nothing was established
+        self.assertIn("could not be established", ind["approval"]["reasons"][0])
+        self.gh.fail = None
+        self.gh.wipe()
+        ok = self.good_auth()
+        hist = self.run_v([ok], purpose="historical")
+        self.assertEqual(hist["approval"]["authorization_state"], "historical")
+        for d in (unauth, ind, hist):
+            self.assertNotEqual(self.state(d), "approved")
+
+    def test_an_invalid_release_is_failed_not_indeterminate(self):
+        self.gh.fail = lambda ep: True
+        doc = self.run_v([], source_revision="b" * 40)
+        self.assertEqual(self.state(doc), "failed")  # a real defect is never hidden behind an outage
+        self.assertEqual(doc["approval"]["authorization_state"], "not-established")
+
+    def test_reason_codes_are_stable(self):
+        ok = self.good_auth()
+        self.revoke()
+        self.gh.delete("authorizations/rev.json", author="intruder", committer="intruder")
+        self.assertEqual(self.codes(self.run_v([ok])), ["record-removed"])
+        fired = []
+
+        def keep(ep):
+            if "/contents/authorizations?ref=" in ep:
+                fired.append(1)
+                self.gh.commit({f"n/{len(fired)}": b"x"}, author="bot", committer="bot")
+
+        self.gh.hooks.append(keep)
+        self.assertEqual(self.codes(self.run_v([ok])), ["ref-moved"])
+
+    def test_history_beyond_the_listing_bound_cannot_be_audited(self):
+        ok = self.good_auth()
+        A.MAX_HISTORY_PAGES = 1
+        for i in range(100):
+            self.gh.commit({"authorizations/n.txt": str(i).encode()}, author="bot", committer="bot")
+        doc = self.run_v([ok])
+        self.assertEqual(self.state(doc), "indeterminate")
+        self.assertEqual(self.codes(doc), ["history-too-long"])
+
+    def test_audit_progress_is_kept_so_a_long_history_is_audited_in_chunks(self):
+        ok = self.good_auth()
+        A.MAX_NEW_AUDIT = 5
+        for i in range(12):
+            self.gh.commit({"authorizations/n.txt": str(i).encode()}, author="bot", committer="bot")
+        first = self.run_a([ok])
+        self.assertEqual(self.codes(first), ["audit-incomplete"])
+        self.assertEqual(self.state(first), "indeterminate")
+        self.assertEqual(self.codes(self.run_a([ok])), ["audit-incomplete"])
+        third = self.run_a([ok])
+        self.assertEqual(self.state(third), "approved", third["currency"])
+        self.assertEqual(third["currency"]["evidence"]["audit"]["newly_audited"], 3)
+        # without a state directory the same history can never be completed in one run
+        self.assertEqual(self.codes(self.run_v([ok])), ["audit-incomplete"])
+
+    def test_a_warm_audit_reads_no_commit_detail_and_decides_exactly_the_same(self):
+        ok = self.good_auth()
+        self.revoke()
+        cold = self.run_a([ok])
+        self.assertGreater(cold["currency"]["evidence"]["audit"]["newly_audited"], 0)
+        self.gh.calls.clear()
+        warm = self.run_a([ok])
+        self.assertEqual(self.detail_calls(), [])
+        self.assertEqual(warm["currency"]["evidence"]["audit"]["newly_audited"], 0)
+        plain = self.run_v([ok])
+        for d in (cold, warm, plain):
+            self.assertEqual(self.state(d), "unapproved")
+            self.assertEqual(d["currency"]["evidence"]["removed"], [])
+
+    def test_a_cache_cannot_hide_a_revocation_published_or_deleted_after_it_was_written(self):
+        ok = self.good_auth()
+        self.assertEqual(self.state(self.run_a([ok])), "approved")  # state written, approval current
+        self.revoke()  # independent, after the cache exists
+        self.assertEqual(self.state(self.run_a([ok])), "unapproved")
+        self.gh.delete("authorizations/rev.json", author="intruder", committer="intruder")
+        doc = self.run_a([ok])
+        self.assertEqual(self.state(doc), "indeterminate")  # deletion is still seen: new commit is audited
+        self.assertEqual(self.codes(doc), ["record-removed"])
+
+    def test_a_rewritten_history_is_noticed_by_a_consumer_that_audited_it_before(self):
+        ok = self.good_auth()
+        self.revoke()
+        self.assertEqual(self.state(self.run_a([ok])), "unapproved")
+        self.gh.rewind(1)  # force-push: the revocation commit vanishes from the branch
+        self.gh.commit({"notes/x": b"y"}, author="bot", committer="bot")
+        doc = self.run_a([ok])
+        self.assertEqual(self.state(doc), "indeterminate")
+        self.assertEqual(self.codes(doc), ["history-rewritten"])
+        # without prior knowledge the purge is invisible: stated limitation, not a guarantee
+        self.assertEqual(self.state(self.run_v([ok])), "approved")
+
+    def test_a_damaged_or_foreign_audit_state_is_refused_not_trusted_or_dropped(self):
+        ok = self.good_auth()
+        self.run_a([ok])
+        f = next(self.audit.glob("*.audit.json"))
+        good = f.read_text()
+        for bad in ("not json", good.replace('"files": []', '"files": [["removed", "authorizations/x.json", null]]'),
+                    good.replace('"repo": "', '"repo": "other/')):  # fmt: skip
+            if bad == good:
+                continue
+            f.write_text(bad)
+            doc = self.run_a([ok])
+            self.assertEqual(self.state(doc), "indeterminate")
+            self.assertEqual(self.codes(doc), ["audit-state-invalid"])
+        f.unlink()
+        self.assertEqual(self.state(self.run_a([ok])), "approved")  # removing it only costs time
+
+    def test_restoring_a_record_the_approver_deleted_recovers(self):
+        ok = self.good_auth()
+        rv = self.revoke()
+        self.gh.delete("authorizations/rev.json", author=APPROVER, committer=APPROVER)
+        self.assertEqual(self.state(self.run_a([ok])), "indeterminate")
+        self.signed(json.loads(rv.read_text()), name="rev")  # re-added by the approver, signed
+        doc = self.run_a([ok])
+        self.assertEqual(self.state(doc), "unapproved")
+        self.assertEqual(doc["currency"]["evidence"]["removed"], [])
+
+    def test_a_path_touched_by_a_non_approver_is_poisoned_and_restoring_it_does_not_authenticate(self):
+        ok = self.good_auth()
+        rv = self.revoke()
+        self.gh.delete("authorizations/rev.json", author="intruder", committer="intruder")
+        self.signed(json.loads(rv.read_text()), name="rev")
+        doc = self.run_a([ok])
+        self.assertEqual(self.state(doc), "approved")  # the restored revocation is not authentic at that path
+        self.assertTrue(any("not release-manager" in x for v in doc["approval"]["authorization_evidence"]
+                            for x in v["problems"]))  # fmt: skip
+
+    def test_acknowledged_removal_recovers_but_the_removed_revocation_still_revokes(self):
+        ok = self.good_auth()
+        self.revoke()
+        gone = self.gh.delete("authorizations/rev.json", author="intruder", committer="intruder")
+        self.assertEqual(self.state(self.run_a([ok])), "indeterminate")
+        wrong = {"path": "authorizations/rev.json", "commit": "f" * 40}
+        self.policy["authorization"]["acknowledged_removals"] = [wrong]
+        self.assertEqual(self.state(self.run_a([ok])), "indeterminate")  # must name the exact removing commit
+        self.policy["authorization"]["acknowledged_removals"] = [{**wrong, "commit": gone}]
+        doc = self.run_a([ok])
+        self.assertEqual(self.state(doc), "unapproved")  # deleting a revocation never un-revokes
+        self.assertEqual(doc["currency"]["status"], "current")
+        ack = doc["currency"]["evidence"]["acknowledged_removals"]
+        self.assertEqual([(a["path"], a["removed_in"]) for a in ack], [("authorizations/rev.json", gone)])
+        names = {v["file"]: v["status"] for v in doc["approval"]["authorization_evidence"]}
+        self.assertEqual(list(names.values()).count("authentic"), 2)
+        self.assertTrue(any("restored_from" in v for v in doc["approval"]["authorization_evidence"]))
+
+    def test_acknowledgements_are_validated_by_the_policy_check(self):
+        for bad in ("x", [{"path": "authorizations/x.json"}], [{"path": "../x.json", "commit": "a" * 40}],
+                    [{"path": "authorizations/x.json", "commit": "main"}]):  # fmt: skip
+            self.policy["authorization"]["acknowledged_removals"] = bad
+            self.assertTrue(any("acknowledged_removals" in x for x in A.policy_problems(self.policy)), bad)
+        self.policy["authorization"]["acknowledged_removals"] = [
+            {"path": "authorizations/x.json", "commit": "a" * 40, "reason": "restored from backup"}
+        ]
+        self.assertFalse(any("acknowledged_removals" in x for x in A.policy_problems(self.policy)))
+
+    def test_an_acknowledgement_does_not_authenticate_what_was_never_authentic(self):
+        ok = self.good_auth()
+        forged = approval(self.rel, name="rev", **self.REVOKED)
+        self.signed(forged, verified=False)  # an unsigned "revocation" that was deleted
+        gone = self.gh.delete("authorizations/rev.json", author="intruder", committer="intruder")
+        self.policy["authorization"]["acknowledged_removals"] = [
+            {"path": "authorizations/rev.json", "commit": gone}
+        ]
+        doc = self.run_a([ok])
+        self.assertEqual(self.state(doc), "approved")  # judged where it last existed: not authentic, ignored
+        self.assertTrue(any(v.get("restored_from") and v["status"] == "ignored"
+                            for v in doc["approval"]["authorization_evidence"]))  # fmt: skip
 
 
 class NoApproval(Case):
@@ -879,7 +1089,7 @@ class RequiredPlatformAcceptance(Case):
         pdoc, checks, _ = self.current_platform([f], fail=lambda ep: True)
         self.assertFalse(checks[0][1])
         doc = self.run_v([self.good_auth()], platform_acceptance=pdoc, extra_checks=checks)
-        self.assertEqual(self.state(doc), "failed")
+        self.assertEqual(self.state(doc), "indeterminate")
         self.assertIn("platform-authorization-currency", self.failed(doc))
 
     def test_platform_record_deleted_from_history_fails_closed(self):

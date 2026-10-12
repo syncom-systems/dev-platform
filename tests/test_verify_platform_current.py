@@ -83,13 +83,49 @@ class Current(unittest.TestCase):
     def test_unreachable_evidence_repository_fails_closed(self):
         self.record()
         self.repo.fail = lambda ep: True
-        self.assertEqual(self.state(), "failed")
+        self.assertEqual(self.state(), "indeterminate")
 
     def test_deleted_record_fails_closed(self):
         self.record()
         self.record("rev", decision="revoked", decided_at="2026-10-11T10:00:00Z")
         self.repo.delete("authorizations/rev.json", author="intruder", committer="intruder")
-        self.assertEqual(self.state(), "failed")
+        self.assertEqual(self.state(), "indeterminate")
+
+    def test_reasons_carry_stable_codes_and_unaccepted_differs_from_indeterminate(self):
+        self.record()
+        self.assertEqual(self.state(), "accepted")
+        self.repo.fail = lambda ep: True
+        doc = self.run_c()
+        self.assertEqual([r["code"] for r in doc["currency"]["reasons"]], ["api-failure"])
+        self.repo.fail = None
+        self.record("rev", decision="revoked", decided_at="2026-10-11T10:00:00Z")
+        un = self.run_c()
+        self.assertEqual(un["current_decision"]["state"], "verified-unaccepted")  # state read, not accepted
+        self.assertEqual(un["currency"]["reasons"], [])
+
+    def test_audit_state_is_cost_only_and_a_rewritten_history_is_noticed(self):
+        from tests.helpers import tmpdir
+
+        ad = tmpdir(self) / "audit"
+        self.record()
+        self.record("rev", decision="revoked", decided_at="2026-10-11T10:00:00Z")
+        self.assertEqual(self.state(audit_dir=ad), "verified-unaccepted")
+        self.assertEqual(self.state(audit_dir=ad), self.state())
+        self.repo.rewind(1)
+        self.repo.commit({"x": b"y"}, author="bot", committer="bot")
+        doc = self.run_c(audit_dir=ad)
+        self.assertEqual(doc["current_decision"]["state"], "indeterminate")
+        self.assertEqual([r["code"] for r in doc["currency"]["reasons"]], ["history-rewritten"])
+
+    def test_a_platform_removal_cannot_be_acknowledged_away(self):
+        self.record()
+        self.record("rev", decision="revoked", decided_at="2026-10-11T10:00:00Z")
+        gone = self.repo.delete("authorizations/rev.json", author=TA.OWNER, committer=TA.OWNER)
+        ack = json.loads(json.dumps(TA.POLICY))
+        ack["authorization"]["acknowledged_removals"] = [{"path": "authorizations/rev.json", "commit": gone}]
+        doc = C.current_acceptance(V, A, self.arc, self.exp, ack, gh=self.gh, now=NOW)
+        self.assertEqual(doc["current_decision"]["state"], "indeterminate")  # restore the record instead
+        self.assertEqual([r["code"] for r in doc["currency"]["reasons"]], ["record-removed"])
 
     def test_pins_are_enforced(self):
         with self.assertRaises(SystemExit):

@@ -147,7 +147,7 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
         return d
 
     def verify(auths, *, release=rel, pol=policy, gh=None, rev_pin=rev, lock_files=locks, artifact=art,
-               results=None, advisories=(), purpose="operational"):  # fmt: skip
+               results=None, advisories=(), purpose="operational", audit_dir=None):  # fmt: skip
         paths = []
         for i, a in enumerate(auths):
             p = work / f"auth-{i}.json"
@@ -162,7 +162,7 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
             rp, pol, V, mode="release", source_revision=rev_pin, locks=lock_files, lock_root=consumer,
             artifacts={art_name: artifact}, results=[result_path] if results is None else results,
             advisories=list(advisories), authorizations=paths, gh=gh or default_gh, now=NOW,
-            purpose=purpose)  # fmt: skip
+            purpose=purpose, audit_dir=audit_dir)  # fmt: skip
         return out["approval"]["state"]
 
     cases, default_gh = [], None
@@ -225,7 +225,7 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
         gh.fail = lambda ep: True
         return verify(good(), gh=gh)
 
-    case("evidence repository unreachable (current state unverifiable)", "failed", outage)
+    case("evidence repository unreachable (current state unverifiable)", "indeterminate", outage)
 
     def deleted_revocation():
         gh = RecordedGitHub()
@@ -239,7 +239,48 @@ def run(consumer: Path, result_path: Path, env: dict, work: Path) -> dict:
         gh.delete("authorizations/r7.json", author="intruder", committer="intruder")
         return verify([], gh=gh)
 
-    case("revocation deleted from the evidence history", "failed", deleted_revocation)
+    case("revocation deleted from the evidence history", "indeterminate", deleted_revocation)
+
+    def deleted_and_acknowledged():
+        gh = RecordedGitHub()
+        verify(
+            [
+                {"doc": approval("a8")},
+                {"doc": approval("r8", decision="revoked", decided_at="2026-10-11T10:00:00Z")},
+            ],
+            gh=gh,
+        )
+        gone = gh.delete("authorizations/r8.json", author="intruder", committer="intruder")
+        ack = {**policy, "authorization": {**policy["authorization"],
+               "acknowledged_removals": [{"path": "authorizations/r8.json", "commit": gone}]}}  # fmt: skip
+        return verify([], gh=gh, pol=ack)
+
+    case(
+        "deleted revocation acknowledged in the pinned policy still revokes",
+        "unapproved",
+        deleted_and_acknowledged,
+    )
+
+    def audited_then_rewritten():
+        gh = RecordedGitHub()
+        ad = work / "audit-rewrite"
+        verify([{"doc": approval("a9")}, {"doc": approval("r9", decision="revoked", decided_at="2026-10-11T10:00:00Z")}],
+               gh=gh, audit_dir=ad)  # fmt: skip
+        gh.rewind(1)  # force-push: the revocation commit disappears from the branch
+        gh.commit({"notes.txt": b"x"}, author="bot", committer="bot")
+        return verify([], gh=gh, audit_dir=ad)
+
+    case("history rewritten after it was audited", "indeterminate", audited_then_rewritten)
+
+    def warm_equals_cold():
+        gh = RecordedGitHub()
+        ad = work / "audit-warm"
+        verify([{"doc": approval("a10")}, {"doc": approval("r10", decision="revoked", decided_at="2026-10-11T10:00:00Z")}],
+               gh=gh, audit_dir=ad)  # fmt: skip
+        warm, cold = verify([], gh=gh, audit_dir=ad), verify([], gh=gh)
+        return warm if warm == cold else f"warm {warm} != cold {cold}"
+
+    case("a warm audit state decides exactly as a cold run", "unapproved", warm_equals_cold)
     case("source revision pin differs", "failed", lambda: verify(good(), rev_pin="0" * 40))
     stale = copy.deepcopy(result)
     stale["revision"] = "f" * 40
