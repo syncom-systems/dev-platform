@@ -63,6 +63,12 @@ release; `tools/verify_release.py --continuity` fails verification unless the re
 predecessor, was produced over N's source revision and archive, shows N-1 itself verified (it may be
 verified-unaccepted) and a passing full stage, and carries a valid attestation.
 
+A policy belongs to the release it was written for. Because it pins release N's predecessor, `main`'s `trust/policy.json`
+verifies only the newest candidate; verifying any earlier release (for acceptance or audit) uses the policy at that
+release's source revision (`git show <revision>:trust/policy.json`, digest in its packet), with the approver entry
+added as a separate pinned file. Using `main`'s policy for an older release fails the `continuity` check by design
+(observed for v0.2.1); it is not a defect of that release.
+
 Continuity is *evidence, never authority*: it cannot make N accepted (only an authenticated authorization can),
 and N-1 being accepted does not either. The operator's pins stay the root of trust. The first release's
 acceptance is an owner action recorded as an authorization (ADR 0016).
