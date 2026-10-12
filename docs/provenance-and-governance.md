@@ -54,6 +54,19 @@ GitHub's API at the moment of the read (no stronger than the transport and GitHu
 published to the evidence ref cannot be found; a purge of history (force-push) is not detected by this mechanism; a
 removed record needs an explicit restore before decisions resume.
 
+Three results, never merged: `approved` (state read, authorized), `unapproved` (state read, nobody authorizes this
+release: never approved or revoked; exit 3) and `indeterminate` (state could not be read or audited; exit 5, with coded
+`currency.reasons`). The last two both forbid operational use; they differ in what the operator must do. History
+scale: the audit lists commits touching `authorizations/` (up to 10 000) and reads the changes of each commit once;
+`--audit-state DIR` keeps those immutable per-commit facts between runs and candidates, so a run reads only new commits
+(budget 500 per run, progress kept, `audit-incomplete` until caught up). It is a cache of facts, never of a decision:
+records are read and judged in full at the current head each time, and the earlier audited head must still be an
+ancestor of the evidence ref (`history-rewritten` otherwise). A deleted record keeps the state `indeterminate` until it
+is restored by an approver or the operator's pinned application policy acknowledges that exact removal
+(`authorization.acknowledged_removals`), in which case the record is read from before its deletion and still counts.
+Residual limits: a record added and deleted wholly inside a merged side branch is invisible to a path-filtered history;
+keep the evidence ref linear. A force-push is noticed only by a consumer holding an earlier audit state.
+
 ## Immutable evidence bundles and retention (ADR 0019)
 `dev-platform evidence bundle --out DIR --release release.json --result r.json --authorization a.json [--advisory ..]`
 writes a write-once directory (files read-only) with a `manifest.json` listing every file by sha256 and prints the

@@ -67,8 +67,8 @@ class Pilot(unittest.TestCase):
         self.assertEqual(out["app_release"], "assembled", out)
         # current-state decision: `unapproved` when the evidence repository is readable, `failed` when it is not
         # (no network here); never `approved`, also when a forged approval is offered
-        self.assertIn(out["app_release_state"], ("unapproved", "failed"))
-        self.assertIn(out["app_release_forged_state"], ("unapproved", "failed"))
+        self.assertIn(out["app_release_state"], ("unapproved", "failed", "indeterminate"))
+        self.assertIn(out["app_release_forged_state"], ("unapproved", "failed", "indeterminate"))
         res.write_text(json.dumps(result(rev=rev, certification={"certified": False, "blockers": ["x"]})))
         self.assertEqual(P.app_release_step(c, cd, d, res, env, "0.1.0", "1" * 64)["app_release"], "refused")
 

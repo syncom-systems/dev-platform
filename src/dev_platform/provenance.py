@@ -187,7 +187,15 @@ def select_rollback(
                 )
             else:
                 failed = [f"{c['id']}: {c['detail']}" for c in rec["checks"] if c["status"] == "failed"]
-                rejected.append({**entry, "reasons": (failed or ap["reasons"]) + _auth_reasons(ap)})
+                rejected.append(
+                    {
+                        **entry,
+                        # unauthorized (state read, nobody authorizes it) and indeterminate (state
+                        # could not be established) both forbid use; they are reported apart
+                        "authorization_state": ap.get("authorization_state", "not-established"),
+                        "reasons": (failed or ap["reasons"]) + _auth_reasons(ap),
+                    }
+                )
             continue
         probs = link_problems(rel, results, authorizations, list(advisories), plat)
         if probs:

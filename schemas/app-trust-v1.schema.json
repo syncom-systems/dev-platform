@@ -92,6 +92,31 @@
               }
             }
           }
+        },
+        "acknowledged_removals": {
+          "type": "array",
+          "description": "Operator-pinned recovery for an authorization record that was deleted from the evidence history. Each entry names the record path and the exact commit that removed it. The record is NOT dropped: it is read from the commit before its removal and judged there, so acknowledging the deletion of a revocation never un-revokes anything. Entries are part of the pinned policy (operator authority); an unlisted removal makes the current state indeterminate.",
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "commit"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^authorizations/[A-Za-z0-9._-]+\\.json$"
+              },
+              "commit": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{40}$"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
         }
       }
     },

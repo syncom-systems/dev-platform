@@ -86,6 +86,38 @@ nothing re-derived the links (source, dependencies, platform release, toolchain 
    `tools/verify_release.py`, the pinned trust anchor. `tools/verify_platform_current.py` is the same current-state
    discipline for a direct "is this platform release currently accepted?" (`accepted` / `verified-unaccepted` /
    `failed`, or `historical-acceptance`).
+    **Refinement (0.6.0): three outcomes, one history mechanism.** The unestablished case is its own state.
+   - `approved` / `unapproved` (exit 0 / 3): the state WAS read; `unapproved` means nobody currently authorizes this
+     release (never approved, revoked, superseded, expired, not an approver). `approval.authorization_state` is
+     `authorized` or `unauthorized`; the judged records are in `authorization_evidence`.
+   - `indeterminate` (exit 5): the release checks out but the current state could NOT be established.
+     `authorization_state` is `indeterminate`, `currency.status` is `unverifiable`, `currency.reasons` holds stable
+     codes (`api-failure`, `ref-unresolved`, `ref-moved`, `history-too-long`, `audit-incomplete`, `history-rewritten`,
+     `audit-state-invalid`, `record-removed`, `record-unreadable`, `listing-failed`) and no authorization evidence is
+     claimed. `failed` stays for a release that is itself invalid (binding, evidence, policy); an outage never hides
+     such a defect and a defect never reads as an outage. `historical-approval` (exit 4) remains inspection only.
+     Both 3 and 5 forbid operational use; they differ in diagnostics and in what to do (3: obtain an authorization;
+     5: restore the ability to read, or the deleted record). `rollback select` reports the same distinction per
+     rejected candidate (`authorization_state`).
+   - History audit. The audit lists every commit touching `authorizations/` (up to 10 000, 100 per request) and
+     reads the file changes of each (a commit is immutable, so those facts never change). `--audit-state DIR` keeps
+     them between runs and between rollback candidates, so a run reads only commits it has not seen; a run that is
+     over its per-run budget (500 new commits) saves progress and reports `audit-incomplete`, so a long history is
+     audited in chunks and never skipped. The state is a cache of commit facts only: it holds no decision and no
+     record content; every record is still read at the current head and judged in full each time, so a revocation
+     published (or deleted) after the state was written is seen. With or without the state the outcome is identical
+     (a test and a qualification case assert it); the state adds one check: the commit audited last time must still be
+     an ancestor of the evidence ref, otherwise `history-rewritten` (a purge of history is noticed by a consumer that
+     audited before; one that did not has no way to know). A damaged or foreign state file is refused
+     (`audit-state-invalid`), neither trusted nor silently ignored; deleting it costs only time.
+   - Recovery from a deleted record. The state stays `indeterminate` (`record-removed`) until (a) the record is restored
+     by an approver (a revert; a path that a non-approver ever touched can no longer authenticate, so restoring there
+     does not help), or (b) the application policy, which is operator-pinned, lists the removal in
+     `authorization.acknowledged_removals` as `{path, commit}` naming the exact commit that removed it. An
+     acknowledged record is NOT dropped: it is read from the commit before its removal and judged where it last
+     existed, so acknowledging the deletion of a revocation never un-revokes anything and acknowledging a deleted
+     approval does not silently withdraw it (withdrawal is a new signed revocation). Acknowledgement is application
+     policy only; the platform path (single pinned ref, unchanged anchor) accepts restoration only.
 13. **Live GitHub qualification** (`tools/qualify_live.py`, private fixture repository, `github-actions[bot]` as
    the only identity). GitHub signs API-made commits with its own key and records `web-flow` as committer, so such a
    record is refused by design; the live path therefore reaches `unapproved` for every case, never `approved`. The

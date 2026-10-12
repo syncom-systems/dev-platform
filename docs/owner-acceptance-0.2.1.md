@@ -7,6 +7,16 @@ The immutable v0.2.1 release and `releases/0.2.1/` are not modified by any step;
 
 Absence of the record blocks nothing else: development, other candidates and application releases proceed independently.
 
+| Part | Who | What it can do |
+|---|---|---|
+| **A. Preflight** | owner or agent | read-only: re-derive the anchors and the verification; confers nothing |
+| **B. Establish identity and sign** | **the owner only** | the only steps that create authority: your approver entry (trust anchor) and your signed authorization record |
+| **C. Verify and retain** | owner or agent | reads what the owner pushed, with the owner's pins; writes evidence, never an authorization |
+
+The agent runs A and, once the owner has done B, C. It never runs B, never holds the owner's key or account, and reports
+machine-verifiable acceptance only when C's verifier says `accepted` from the owner-signed record. A positive
+platform-acceptance qualification is run only after that, from real owner-created evidence; none is fabricated before.
+
 ## Read this first: which policy file
 A release is verified against the trust policy that belongs to it. `trust/policy.json` on `main` pins the *latest*
 candidate's predecessor, so it **fails the continuity check for v0.2.1** (observed: "predecessor version differs from the
@@ -19,7 +29,7 @@ authenticated as you; a clean checkout of `main` you trust; `git config commit.g
 Push the signed commits **directly to `main`** (no branch protection blocks it). If you prefer a PR, merge it with a
 **merge commit**; a squash or rebase merge makes GitHub the committer and the record is ignored.
 
-## 0. Preflight (read-only; confers nothing)
+## Part A. Preflight (read-only; confers nothing; owner or agent)
 ```
 S=750d065e9eab486b7153079b7162013b19cc8aad
 mkdir -p ~/dp-verify-0.2.1                                     # outside the repo; untrusted downloads
@@ -40,7 +50,7 @@ Also confirm the anchors: `shasum -a 256 tools/verify_release.py tools/verify_pl
 and `install_release.py` `473a2c73eb71904ea6ee0e010f2288976126d4560e3efd11c33c11e44f15bb93`. Record the other two as
 your own pins out of band.
 
-## 1. Establish your approver identity (trust anchor change; yours alone)
+## Part B1. OWNER ONLY: establish your approver identity (trust anchor change)
 ```
 mkdir -p releases/0.2.1-acceptance
 cp ~/dp-verify-0.2.1/policy-0.2.1.json releases/0.2.1-acceptance/trust-policy.json
@@ -60,7 +70,7 @@ shasum -a 256 releases/0.2.1-acceptance/trust-policy.json                       
 ```
 Record that digest out of band (password manager, paper): it is the one thing the verification trusts you for.
 
-## 2. Sign and commit the authorization record
+## Part B2. OWNER ONLY: sign and commit the authorization record
 ```
 mkdir -p authorizations
 cp releases/0.2.1/authorization.template.json authorizations/platform-0.2.1.json
@@ -78,7 +88,7 @@ git log --format='%H %G? %an <-> %cn' -- authorizations/platform-0.2.1.json    #
 The record is write-once: do not edit it after signing (a modified record is ignored). Changing your mind is a new
 signed record (`decision: revoked`, or a superseding one), never an edit and never a deletion.
 
-## 3. Verify, as a current decision
+## Part C1. Verify, as a current decision (owner or agent, after B)
 First the pinned anchor, exactly as in step 0 plus the record and your policy:
 ```
 python3 -I tools/verify_release.py ~/dp-verify-0.2.1/dev-platform-0.2.1.tar.gz --version 0.2.1 \
@@ -105,12 +115,15 @@ python3 -I tools/verify_platform_current.py ~/dp-verify-0.2.1/dev-platform-0.2.1
   --policy releases/0.2.1-acceptance/trust-policy.json --policy-sha256 <your policy pin> \
   --out ~/dp-verify-0.2.1/current.owner.json
 ```
-Expected: `current acceptance: accepted` (exit 0) and a `currency` block naming the evidence commit. Run it again whenever
+Expected: `current acceptance: accepted` (exit 0) and a `currency` block naming the evidence commit.
+Add `--audit-state <dir inside your checkout or scratch space>` to reuse already-audited history between runs (cost only).
+Exit codes: 0 accepted, 3 verified-unaccepted (the state was read; nobody currently accepts it), 5 indeterminate (the state
+could not be read or audited; `currency.reasons` has coded causes), 4 historical-acceptance, 1 failed, 2 usage. Run it again whenever
 you need to know: a later revocation changes the answer to `verified-unaccepted` with no flag to remember. `--historical`
 exists for inspecting old evidence offline of any later change; it can only say `historical-acceptance`, which is not
 a current acceptance.
 
-## 4. Retain the evidence
+## Part C2. Retain the evidence (owner or agent; a PR is fine, it touches nothing under `authorizations/`)
 ```
 mkdir releases/0.2.1-acceptance/evidence
 cp ~/dp-verify-0.2.1/verification.owner.json ~/dp-verify-0.2.1/current.owner.json releases/0.2.1-acceptance/evidence/
@@ -128,7 +141,12 @@ fails, retain the output as-is and do not edit the record after signing; superse
 | `AUTH ...: committer of commit ... is not <you>` | the commit was squash/rebase-merged or made through the web UI; GitHub is the committer. Recommit locally, signed, and push |
 | `AUTH ...: not a validly signed commit` | signing key not registered or `commit.gpgsign` off |
 | `AUTH ...: <you> is authenticated but is not an approver` | the policy you passed is not the one with your approver entry |
-| `current acceptance: failed` with `authorization state` | GitHub unreachable, the ref moved while reading (re-run), or a record was deleted from `authorizations/` history (restore it with a revert; never delete records) |
+| `current acceptance: indeterminate` (exit 5), code `api-failure` / `ref-unresolved` / `listing-failed` | GitHub unreachable or the ref unresolvable: retry; this is not a verdict about the release |
+| `indeterminate`, code `ref-moved` | something was pushed while reading: re-run |
+| `indeterminate`, code `record-removed` | a record was deleted from `authorizations/` history. Restore it with a revert **by the approver** (never delete records). A path that anyone else ever touched stays unauthenticatable; publish a fresh record under a new name instead. The platform path has no acknowledgement mechanism |
+| `indeterminate`, code `history-rewritten` | the evidence ref no longer contains a commit this machine audited earlier (force-push). Investigate before anything else; remove the audit state only once you understand why |
+| `indeterminate`, code `history-too-long` / `audit-incomplete` | more than 10 000 commits touch `authorizations/`, or the per-run budget was exceeded: re-run with `--audit-state` until it completes |
+| `verified-unaccepted` (exit 3) after the record was pushed | the state was read and the record is not authentic or not authorized: read the `AUTH` lines |
 
 ## Other candidates
 The same rule holds for every candidate: verify with the trust policy of that release's source revision (the packet lists

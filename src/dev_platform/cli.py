@@ -152,6 +152,11 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--release", type=Path, action="append", default=[], help="app-release records")
     rs.add_argument("--result", type=Path, action="append", default=[], help="result records (evidence)")
     rs.add_argument("--authorization", type=Path, action="append", default=[])
+    rs.add_argument(
+        "--audit-state",
+        type=Path,
+        help="directory keeping already-audited evidence-history facts between candidates and runs",
+    )
     rs.add_argument("--advisory", type=Path, action="append", default=[])
     rs.add_argument("--store", type=Path, default=None, help="platform release store (for advisories)")
     rs.add_argument("--evidence-store", type=Path, help="content-addressed evidence store (results)")
@@ -840,6 +845,7 @@ def cmd_rollback(args) -> int:
             advisories=args.advisory,
             platform_sbom=args.platform_sbom,
             platform_args=_platform_args(args),
+            audit_state=args.audit_state,
         )
     out = provenance.select_rollback(
         args.application,

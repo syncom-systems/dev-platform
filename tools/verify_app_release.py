@@ -21,11 +21,15 @@ Questions, each answered separately and failing closed:
 Two purposes, never mixed up. The default, `operational`, is a CURRENT decision (deploy, release eligibility,
 rollback): the authorization state is read from the evidence repository at one commit (every record, a revocation
 nobody supplied included), the history is audited for deleted records, and anything that cannot be established
-(unreachable, truncated, moved while reading, a failed call) makes the decision `failed`. `--historical` inspects only
+(unreachable, truncated, rewritten, moved while reading, a failed call, a deleted record) makes the decision
+`indeterminate`, a state of its own, distinct from `unapproved`. `--historical` inspects only
 the supplied records, looks for nothing newer, and can never yield `approved`.
 
 Exit status: 0 when state is `approved`; 1 when `failed`; 3 when `unapproved`; 4 when `historical-approval`
-(authentic once, not a current authorization); 2 on bad usage.
+(authentic once, not a current authorization); 5 when `indeterminate` (the release checks out but the current
+authorization state could not be established: unreachable, truncated, rewritten, deleted record, failed call; see
+`currency.reasons`, each with a stable code); 2 on bad usage. `unapproved` (3) means the state WAS read and nobody
+authorizes this release (never approved, or revoked); both 3 and 5 forbid operational use, for different reasons.
 """
 
 from __future__ import annotations
@@ -164,6 +168,20 @@ def policy_problems(policy: object) -> list[str]:
         p.append("policy.authorization.providers: non-empty list required")
     if not isinstance(auth.get("approvers"), list):
         p.append("policy.authorization.approvers: list required")
+    ack = auth.get("acknowledged_removals")
+    if ack is not None:
+        if not isinstance(ack, list):
+            p.append("policy.authorization.acknowledged_removals: list required")
+        else:
+            for i, e in enumerate(ack):
+                if not (
+                    isinstance(e, dict)
+                    and re.match(r"^authorizations/[A-Za-z0-9._-]+\.json$", str(e.get("path")))
+                    and _REV.match(str(e.get("commit")))
+                ):
+                    p.append(
+                        f"policy.authorization.acknowledged_removals[{i}]: path and 40-hex commit required"
+                    )
     fr = policy.get("freshness")
     if fr is not None:
         age = fr.get("max_age_seconds") if isinstance(fr, dict) else None
@@ -369,13 +387,96 @@ def _not_found(e: Exception) -> bool:
     return "404" in str(e) or "not found" in str(e).lower()
 
 
-def snapshot(V, gh, auth_policy: dict, into: Path) -> dict:
+class Unverifiable(ValueError):
+    """The current authorization state cannot be established. `code` says why (distinct from "not authorized")."""
+
+    def __init__(self, code: str, detail: str) -> None:
+        super().__init__(detail)
+        self.code = code
+        self.detail = detail
+
+
+MAX_HISTORY_PAGES = (
+    100  # 100 commits per page: up to 10 000 commits touching authorizations/ are listed per run
+)
+MAX_NEW_AUDIT = 500  # commit details fetched per run; the rest is audited on the next runs (progress is kept)
+AUDIT_SCHEMA = "dev-platform.evidence-audit/v1"
+
+
+def _audit_file(state_dir: Path, repo: str) -> Path:
+    return Path(state_dir) / (re.sub(r"[^A-Za-z0-9._-]", "_", repo) + ".audit.json")
+
+
+def load_audit(state_dir: Path | None, repo: str) -> dict:
+    """The per-commit facts audited earlier (a cache of immutable objects, never of a decision).
+
+    Absent means nothing is known yet. Present but damaged, for another repository, or failing its own digest is
+    refused: a state file that was edited must be noticed, not trusted and not silently dropped.
+    """
+    empty = {"head_commit": None, "commits": {}}
+    if state_dir is None:
+        return empty
+    f = _audit_file(state_dir, repo)
+    if not f.exists():
+        return empty
+    try:
+        doc = json.loads(f.read_text())
+        body = {k: v for k, v in doc.items() if k != "digest"}
+        ok = (
+            doc.get("schema") == AUDIT_SCHEMA
+            and doc.get("repo") == repo
+            and doc.get("digest") == canonical_digest(body)
+            and isinstance(doc.get("commits"), dict)
+            and all(_COMMIT.match(k) and isinstance(v, dict) for k, v in doc["commits"].items())
+            and (doc.get("head_commit") is None or _COMMIT.match(str(doc["head_commit"])))
+        )
+    except (OSError, ValueError, AttributeError):
+        ok = False
+    if not ok:
+        raise Unverifiable("audit-state-invalid", f"audit state {f.name} is damaged or not for {repo}")
+    return {"head_commit": doc["head_commit"], "commits": doc["commits"]}
+
+
+def save_audit(state_dir: Path | None, repo: str, state: dict) -> None:
+    if state_dir is None:
+        return
+    import os
+
+    Path(state_dir).mkdir(parents=True, exist_ok=True)
+    body = {
+        "schema": AUDIT_SCHEMA,
+        "repo": repo,
+        "head_commit": state["head_commit"],
+        "commits": state["commits"],
+    }
+    doc = {**body, "digest": canonical_digest(body)}
+    f = _audit_file(state_dir, repo)
+    tmp = f.with_suffix(".tmp")
+    tmp.write_text(json.dumps(doc, sort_keys=True))
+    os.replace(tmp, f)
+
+
+def _commit_facts(detail: dict) -> dict:
+    files = []
+    for f in detail.get("files") or []:
+        name = str(f.get("filename"))
+        prev = str(f["previous_filename"]) if f.get("previous_filename") else None
+        if name.startswith("authorizations/") or (prev or "").startswith("authorizations/"):
+            files.append([str(f.get("status")), name, prev])
+    return {"parent": (detail.get("parents") or [{}])[0].get("sha"), "files": files}
+
+
+def snapshot(
+    V, gh, auth_policy: dict, into: Path, audit_dir: Path | None = None, acknowledgements: bool = True
+) -> dict:
     """One consistent view of the authorization evidence: every record at ONE commit of the evidence ref.
 
     Resolves the ref to a commit id first and reads only at that id, so the listing and every record are the same
     state of the repository. Also audits the history of `authorizations/`: a record that was committed and later
-    deleted (for example a revocation) is not silently absent, it makes the state unverifiable. Raises ValueError
-    for anything that cannot be established; the caller turns that into a failed check.
+    deleted (for example a revocation) is not silently absent. With `audit_dir` the facts of commits already
+    audited are reused (commits are immutable, so that is safe and changes cost, never the outcome); the earlier
+    head must still be an ancestor of the current one, so a rewritten history is noticed too. Raises Unverifiable
+    for anything that cannot be established.
     """
     import base64
 
@@ -384,44 +485,71 @@ def snapshot(V, gh, auth_policy: dict, into: Path) -> dict:
         head = V._api(gh, f"repos/{repo}/commits/{ref}")
         sha = head.get("sha") if isinstance(head, dict) else None
         if not (isinstance(sha, str) and _COMMIT.match(sha)):
-            raise ValueError("the evidence ref does not resolve to a commit")
+            raise Unverifiable("ref-unresolved", "the evidence ref does not resolve to a commit")
         committed = ((head.get("commit") or {}).get("committer") or {}).get("date")
-        ever: set[str] = set()
-        commits: list[dict] = []
-        for page in range(1, 6):
+        state = load_audit(audit_dir, repo)
+        if state["head_commit"] and state["head_commit"] != sha:
+            try:
+                cmp = V._api(gh, f"repos/{repo}/compare/{state['head_commit']}...{sha}?per_page=1")
+            except (RuntimeError, ValueError) as e:
+                if not _not_found(e):
+                    raise
+                cmp = {"status": "unknown to GitHub"}  # the audited commit is gone: that is the answer
+                if isinstance(gh, Observed):
+                    gh.failures.pop()
+            if not (isinstance(cmp, dict) and cmp.get("status") in ("ahead", "identical")):
+                raise Unverifiable(
+                    "history-rewritten",
+                    f"the commit audited earlier ({state['head_commit'][:12]}) is not an ancestor of the "
+                    f"evidence ref any more (status {cmp.get('status') if isinstance(cmp, dict) else '?'})",
+                )
+        listed: list[str] = []
+        for page in range(1, MAX_HISTORY_PAGES + 1):
             chunk = V._api(gh, f"repos/{repo}/commits?sha={sha}&path=authorizations&per_page=100&page={page}")
             if not isinstance(chunk, list):
-                raise ValueError("history of authorizations is not a list")
-            commits += chunk
+                raise Unverifiable("api-failure", "history of authorizations is not a list")
+            listed += [str(c["sha"]) for c in chunk]
             if len(chunk) < 100:
                 break
         else:
-            raise ValueError("history of authorizations is too long to audit")
-        for c in commits:
-            detail = V._api(gh, f"repos/{repo}/commits/{c['sha']}")
-            for f in detail.get("files") or []:
-                name = str(f.get("filename"))
-                if not name.startswith("authorizations/"):
-                    continue
-                if f.get("status") == "removed":
-                    ever.add(
-                        name
-                    )  # present before, so it must be absent now only by deletion: compared below
-                elif f.get("status") == "renamed" and f.get("previous_filename"):
-                    ever.add(str(f["previous_filename"]))
-                    ever.add(name)
-                else:
-                    ever.add(name)
+            raise Unverifiable(
+                "history-too-long",
+                f"history of authorizations exceeds {MAX_HISTORY_PAGES * 100} commits (cannot be audited)",
+            )
+        known = state["commits"]
+        todo = [c for c in listed if c not in known]
+        fetched = 0
+        for c in todo[:MAX_NEW_AUDIT]:
+            known[c] = _commit_facts(V._api(gh, f"repos/{repo}/commits/{c}"))
+            fetched += 1
+        if len(todo) > MAX_NEW_AUDIT:
+            save_audit(audit_dir, repo, {"head_commit": state["head_commit"], "commits": known})
+            hint = "" if audit_dir else " (use --audit-state to keep progress between runs)"
+            raise Unverifiable(
+                "audit-incomplete",
+                f"{len(todo) - MAX_NEW_AUDIT} of {len(todo)} commits remain to be audited; re-run{hint}",
+            )
+        ever: set[str] = set()
+        removed_in: dict[str, str] = {}
+        for c in listed:
+            for status, name, prev in known[c]["files"]:
+                if prev:
+                    ever.add(prev)
+                    if status == "renamed":
+                        removed_in[prev] = c
+                if status == "removed":
+                    removed_in[name] = c
+                ever.add(name)
         try:
             listing = V._api(gh, f"repos/{repo}/contents/authorizations?ref={sha}")
         except (RuntimeError, ValueError) as e:
-            if not (_not_found(e) and not commits):
-                raise ValueError(f"cannot list authorizations: {e}") from None
+            if not (_not_found(e) and not listed):
+                raise Unverifiable("listing-failed", f"cannot list authorizations: {e}") from None
             listing = []  # no directory and no history: there is genuinely nothing to find
             if isinstance(gh, Observed):
                 gh.failures.pop()  # that refusal was the answer, not an outage
         if not isinstance(listing, list):
-            raise ValueError("authorizations is not a directory")
+            raise Unverifiable("listing-failed", "authorizations is not a directory")
         present: set[str] = set()
         out = []
         for item in listing:
@@ -432,14 +560,43 @@ def snapshot(V, gh, auth_policy: dict, into: Path) -> dict:
                 blob = V._api(gh, f"repos/{repo}/contents/{path}?ref={sha}")
                 data = base64.b64decode(blob["content"])
             except (RuntimeError, ValueError, KeyError) as e:
-                raise ValueError(f"cannot read {path}: {e}") from None
+                raise Unverifiable("record-unreadable", f"cannot read {path}: {e}") from None
             f = into / name
             f.write_bytes(data)
             out.append(f)
             present.add(path)
+        removed = sorted(p for p in ever - present if V.AUTH_PATH_RE.match(p))
+        acknowledged = {
+            (e.get("path"), e.get("commit"))
+            for e in (auth_policy.get("acknowledged_removals") or [] if acknowledgements else [])
+            if isinstance(e, dict)
+        }
+        restored: list[dict] = []
+        unacknowledged: list[str] = []
+        for path in removed:
+            at = removed_in.get(path)
+            if (path, at) not in acknowledged or not at:
+                unacknowledged.append(path)
+                continue
+            # Acknowledged by the operator's pinned policy: the record is NOT dropped. It is read from the commit
+            # before its removal and judged there, so deleting a revocation can never un-revoke anything.
+            parent = known[at]["parent"]
+            try:
+                blob = V._api(gh, f"repos/{repo}/contents/{path}?ref={parent}")
+                data = base64.b64decode(blob["content"])
+            except (RuntimeError, ValueError, KeyError, TypeError) as e:
+                raise Unverifiable(
+                    "record-unreadable", f"cannot read removed {path} at its last commit: {e}"
+                ) from None
+            f = into / f"removed-{at[:12]}-{Path(path).name}"
+            f.write_bytes(data)
+            restored.append({"path": path, "removed_in": at, "read_at": parent, "file": f})
+        if todo or state["head_commit"] != sha:
+            save_audit(audit_dir, repo, {"head_commit": sha, "commits": known})
+    except Unverifiable:
+        raise
     except (RuntimeError, ValueError, KeyError, AttributeError, TypeError) as e:
-        raise ValueError(str(e)) from None
-    removed = sorted(p for p in ever - present if V.AUTH_PATH_RE.match(p))
+        raise Unverifiable("api-failure", str(e)) from None
     return {
         "repo": repo,
         "ref": ref,
@@ -447,25 +604,39 @@ def snapshot(V, gh, auth_policy: dict, into: Path) -> dict:
         "head_committed_at": committed,
         "records": sorted(Path(x).name for x in out),
         "files": out,
-        "history_commits": len(commits),
-        "removed": removed,
+        "restored": restored,
+        "history_commits": len(listed),
+        "removed": unacknowledged,
+        "acknowledged_removals": [{k: v for k, v in r.items() if k != "file"} for r in restored],
+        "audit": {"state": bool(audit_dir), "newly_audited": fetched, "reused": len(listed) - fetched},
     }
 
 
 def current_authorizations(
-    V, gh: Observed, auth_policy: dict, into: Path, label: str
-) -> tuple[dict, dict, list[str]]:
-    """(snapshot, policy pinned to the snapshot commit, problems)."""
+    V, gh: Observed, auth_policy: dict, into: Path, label: str, audit_dir: Path | None = None,
+    acknowledgements: bool = True,
+) -> tuple[dict, dict, list[dict]]:  # fmt: skip
+    """(snapshot, policy pinned to the snapshot commit, reasons as [{code, detail}]).
+
+    `acknowledgements=False` ignores `acknowledged_removals`: the platform verifier judges every record against ONE
+    pinned evidence ref, so a record read from an earlier commit could not be authenticated there and would be
+    dropped, which is exactly what an acknowledgement must never do. Platform removals are recovered by restoring the
+    record (a revert by the approver) only.
+    """
     try:
-        snap = snapshot(V, gh, auth_policy, into)
-    except ValueError as e:
-        return {}, auth_policy, [f"{label}: {e}"]
-    problems = []
+        snap = snapshot(V, gh, auth_policy, into, audit_dir, acknowledgements)
+    except Unverifiable as e:
+        return {}, auth_policy, [{"code": e.code, "detail": f"{label}: {e.detail}"}]
+    reasons = []
     if snap["removed"]:
-        problems.append(
-            f"{label}: authorization records were deleted from the evidence history: {snap['removed']}"
+        reasons.append(
+            {
+                "code": "record-removed",
+                "detail": f"{label}: authorization records were deleted from the evidence history "
+                f"(restore them, or acknowledge the removal in the pinned policy): {snap['removed']}",
+            }
         )
-    return snap, {**auth_policy, "evidence_ref": snap["head_commit"]}, problems
+    return snap, {**auth_policy, "evidence_ref": snap["head_commit"]}, reasons
 
 
 def still_current(V, gh, auth_policy: dict, head_commit: str) -> bool:
@@ -548,6 +719,10 @@ def load_bundle(directory: Path, pin: str) -> tuple[list[str], dict]:
     return problems, files
 
 
+def _reason_text(reasons: list[dict]) -> str:
+    return "; ".join(f"[{r['code']}] {r['detail']}" for r in reasons)
+
+
 def platform_verification(V, entry: dict, archive_sha: str, a, plat_policy: dict, gh, now=None):
     """Re-run the platform verifier for a policy that requires an accepted Dev Platform release.
 
@@ -560,6 +735,7 @@ def platform_verification(V, entry: dict, archive_sha: str, a, plat_policy: dict
 
     historical = bool(getattr(a, "historical", False))
     gh = Observed(gh)
+    audit_dir = getattr(a, "audit_state", None)
     auths = list(a.platform_authorization)
     extra: list[tuple[str, bool, str]] = []
     currency = None
@@ -572,10 +748,12 @@ def platform_verification(V, entry: dict, archive_sha: str, a, plat_policy: dict
                 plat_policy.get("authorization") or {},
                 Path(scratch.name),
                 "platform authorization state",
+                audit_dir,
+                acknowledgements=False,
             )
-            auths += list(snap.get("files", []))
+            auths += list(snap.get("files", [])) + [r["file"] for r in snap.get("restored", [])]
             plat_policy = {**plat_policy, "authorization": pinned}
-            currency = {k: v for k, v in snap.items() if k != "files"}
+            currency = {k: v for k, v in snap.items() if k not in ("files", "restored")}
         doc = V.verify(
             a.platform_archive,
             {"version": entry["version"], "source_revision": entry["source_revision"],
@@ -590,9 +768,15 @@ def platform_verification(V, entry: dict, archive_sha: str, a, plat_policy: dict
             **({"now": now} if now else {}),
         )  # fmt: skip
         if not historical:
-            if gh.failures:
-                problems = [*problems, f"{len(gh.failures)} GitHub call(s) failed, e.g. {gh.failures[0]}"]
-            extra.append(("platform-authorization-currency", not problems, "; ".join(problems)))
+            if gh.failures and not any(r["code"] == "api-failure" for r in problems):
+                problems = [
+                    *problems,
+                    {
+                        "code": "api-failure",
+                        "detail": f"{len(gh.failures)} GitHub call(s) failed, e.g. {gh.failures[0]}",
+                    },
+                ]
+            extra.append(("platform-authorization-currency", not problems, _reason_text(problems)))
     finally:
         scratch.cleanup()
     return doc, extra, currency
@@ -617,6 +801,7 @@ def verify(
     authorizations: list[Path] = (),
     platform_acceptance: dict | None = None,
     purpose: str = "operational",
+    audit_dir: Path | None = None,
     gh=None,
     extra_checks: list[tuple[str, bool, str]] = (),
     now: datetime | None = None,
@@ -790,13 +975,13 @@ def verify(
 
         auth_policy = policy["authorization"]
         max_age = int((policy.get("freshness") or {}).get("max_age_seconds", DEFAULT_MAX_AGE))
-        problems: list[str] = []
+        problems: list[dict] = []
         snap: dict = {}
         for _attempt in range(3):
             gh.failures.clear()
             with tempfile.TemporaryDirectory(prefix="current-auth-") as td:
                 snap, pinned_auth, problems = current_authorizations(
-                    V, gh, auth_policy, Path(td), "authorization state"
+                    V, gh, auth_policy, Path(td), "authorization state", audit_dir
                 )
                 if not snap:
                     verdicts = []
@@ -808,14 +993,26 @@ def verify(
                     assess(p, release_sha, rel["application"]["name"], pinned_policy, V, gh, now)
                     for p in judged
                 ]
+                for r in snap["restored"]:  # acknowledged removals: judged where they last existed
+                    at = {**policy, "authorization": {**auth_policy, "evidence_ref": r["read_at"]}}
+                    v = assess(r["file"], release_sha, rel["application"]["name"], at, V, gh, now)
+                    v["restored_from"] = {"path": r["path"], "removed_in": r["removed_in"]}
+                    verdicts.append(v)
             if still_current(V, gh, auth_policy, snap["head_commit"]):
                 break
-            problems = ["the evidence ref moved while it was being read (fail closed; re-run)"]
-        if gh.failures:
-            problems.append(f"{len(gh.failures)} GitHub call(s) failed, e.g. {gh.failures[0]}")
-        rec.add("authorization-currency", not problems, "; ".join(problems))
+            problems = [
+                {"code": "ref-moved", "detail": "the evidence ref moved while it was being read (re-run)"}
+            ]
+        if gh.failures and not any(r["code"] == "api-failure" for r in problems):
+            problems.append(
+                {
+                    "code": "api-failure",
+                    "detail": f"{len(gh.failures)} GitHub call(s) failed, e.g. {gh.failures[0]}",
+                }
+            )
+        rec.add("authorization-currency", not problems, _reason_text(problems))
         ok = not problems
-        public = {k: v for k, v in snap.items() if k != "files"}
+        public = {k: v for k, v in snap.items() if k not in ("files", "restored")}
         currency = {
             "purpose": purpose,
             "status": "current" if ok else "unverifiable",
@@ -823,6 +1020,7 @@ def verify(
             "max_age_seconds": max_age,
             "valid_until": (now + timedelta(seconds=max_age)).isoformat() if ok else None,
             "evidence": public,
+            "reasons": problems,
         }
         if ok:
             coverage["verified"].append(
@@ -852,10 +1050,27 @@ def verify(
     return out
 
 
+CURRENCY_CHECKS = ("authorization-currency", "platform-authorization-currency")
+
+
 def _finish(rec, subject, coverage, verdicts, auth, mode, purpose="operational") -> dict:
-    if not rec.all_passed:
+    failed_ids = [c["id"] for c in rec.checks if c["status"] == "failed"]
+    # `indeterminate`: the artifact checks out, but the CURRENT authorization state could not be established. It is
+    # not `unapproved` (state was read and nobody authorizes this) and not `failed` (the release is invalid).
+    # A platform acceptance that is not accepted only because its own state could not be read is the same cause.
+    cause = {c for c in failed_ids if c in CURRENCY_CHECKS}
+    if "platform-authorization-currency" in cause:
+        cause.add("platform-acceptance")
+    if failed_ids and set(failed_ids) <= cause:
+        state = "indeterminate"
+        reasons = [
+            f"current authorization could not be established: {c['detail']}"
+            for c in rec.checks
+            if c["status"] == "failed" and c["id"] in CURRENCY_CHECKS
+        ]
+    elif not rec.all_passed:
         state = "failed"
-        reasons = [c["id"] for c in rec.checks if c["status"] == "failed"]
+        reasons = failed_ids
     elif auth is None:
         state = "unapproved"
         reasons = ["no authenticated, authorized, in-force approval bound to this exact release record"]
@@ -876,6 +1091,13 @@ def _finish(rec, subject, coverage, verdicts, auth, mode, purpose="operational")
         "coverage": coverage,
         "approval": {
             "state": state,
+            "authorization_state": {
+                "approved": "authorized",
+                "unapproved": "unauthorized",
+                "indeterminate": "indeterminate",
+                "historical-approval": "historical",
+                "failed": "not-established",
+            }[state],
             "reasons": reasons,
             "authorization": auth["id"] if auth else None,
             "approver": auth["approver"] if auth else None,
@@ -915,6 +1137,12 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="inspection only: judge just the supplied records, look for nothing newer. Never yields `approved` "
         "(a possible approval is reported as `historical-approval`, exit 4). The default is a current decision.",
+    )
+    ap.add_argument(
+        "--audit-state",
+        type=Path,
+        help="directory that keeps the per-commit facts of the evidence history audited so far, so a run audits only "
+        "what is new. Changes cost, never the decision; a damaged file is refused.",
     )
     ap.add_argument("--platform-archive", type=Path, help="Dev Platform archive the policy requires accepted")
     ap.add_argument(
@@ -994,6 +1222,7 @@ def main(argv: list[str] | None = None) -> int:
         authorizations=a.authorization,
         platform_acceptance=platform_doc,
         purpose="historical" if a.historical else "operational",
+        audit_dir=a.audit_state,
         extra_checks=extra,
     )
     if plat_currency is not None:
@@ -1011,7 +1240,9 @@ def main(argv: list[str] | None = None) -> int:
             + (f"  ({'; '.join(v['problems'])})" if v["problems"] else "")
         )
     print(f"approval: {doc['approval']['state']}  {'; '.join(doc['approval']['reasons'])}")
-    return {"approved": 0, "failed": 1, "unapproved": 3, "historical-approval": 4}[doc["approval"]["state"]]
+    return {"approved": 0, "failed": 1, "unapproved": 3, "historical-approval": 4, "indeterminate": 5}[
+        doc["approval"]["state"]
+    ]
 
 
 if __name__ == "__main__":

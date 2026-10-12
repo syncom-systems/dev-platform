@@ -6,14 +6,14 @@ For a current decision that is not enough: an acceptance revoked after the suppl
 still read `accepted`. This wrapper loads the pinned platform verifier and the pinned application verifier (for the
 shared snapshot code, so there is one freshness mechanism, not two), reads every record in the policy's evidence
 repository at ONE commit, audits the history for deleted records, hands all of it to the platform verifier, and
-refuses (`failed`) when the current state cannot be established.
+refuses (`indeterminate`) when the current state cannot be established.
 
   default       current decision: `current_decision.state` is `accepted` only if the platform verifier says accepted
-                over the current state; `verified-unaccepted` when it is not; `failed` when it cannot be established
+                over the current state; `verified-unaccepted` when it is not; `indeterminate` when it cannot be established (reasons carry stable codes)
   --historical  supplied records only; an acceptance is reported as `historical-acceptance`, never `accepted`
 
 The platform verifier's own record is included unchanged under `verification`. Exit: 0 accepted, 1 failed,
-3 verified-unaccepted, 4 historical-acceptance, 2 usage.
+3 verified-unaccepted, 4 historical-acceptance, 5 indeterminate, 2 usage.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def _load(path: Path, pin: str, what: str):
 
 
 def current_acceptance(V, A, archive: Path, exp: dict, policy: dict, *, historical=False, supplied=(), gh=None,
-                       now: datetime | None = None, **verify_kw) -> dict:  # fmt: skip
+                       now: datetime | None = None, audit_dir: Path | None = None, **verify_kw) -> dict:  # fmt: skip
     now = now or datetime.now(UTC)
     gh = A.Observed(gh or V.default_gh)
     auths = list(supplied)
@@ -47,32 +47,46 @@ def current_acceptance(V, A, archive: Path, exp: dict, policy: dict, *, historic
         "purpose": "historical" if historical else "operational",
         "observed_at": now.isoformat(),
     }
-    problems: list[str] = []
+    problems: list[dict] = []
     with tempfile.TemporaryDirectory(prefix="current-platform-") as td:
         pol = policy
         if not historical:
             snap, pinned, problems = A.current_authorizations(
-                V, gh, policy.get("authorization") or {}, Path(td), "authorization state"
+                V,
+                gh,
+                policy.get("authorization") or {},
+                Path(td),
+                "authorization state",
+                audit_dir,
+                acknowledgements=False,
             )
-            auths += list(snap.get("files", []))
+            auths += list(snap.get("files", [])) + [r["file"] for r in snap.get("restored", [])]
             pol = {**policy, "authorization": pinned}
             if snap and not A.still_current(V, gh, policy["authorization"], snap["head_commit"]):
-                problems.append("the evidence ref moved while it was being read (fail closed; re-run)")
-            if gh.failures:
-                problems.append(f"{len(gh.failures)} GitHub call(s) failed, e.g. {gh.failures[0]}")
+                problems.append(
+                    {"code": "ref-moved", "detail": "the evidence ref moved while it was being read (re-run)"}
+                )
+            if gh.failures and not any(r["code"] == "api-failure" for r in problems):
+                problems.append(
+                    {
+                        "code": "api-failure",
+                        "detail": f"{len(gh.failures)} GitHub call(s) failed, e.g. {gh.failures[0]}",
+                    }
+                )
             ok = not problems
             currency |= {
                 "status": "current" if ok else "unverifiable",
                 "max_age_seconds": A.DEFAULT_MAX_AGE,
                 "valid_until": (now + timedelta(seconds=A.DEFAULT_MAX_AGE)).isoformat() if ok else None,
-                "evidence": {k: v for k, v in snap.items() if k != "files"},
+                "evidence": {k: v for k, v in snap.items() if k not in ("files", "restored")},
+                "reasons": problems,
             }
         else:
             currency["status"] = "historical"
         doc = V.verify(archive, exp, pol, gh=gh, authorizations=auths, now=now, **verify_kw)
     acc = doc["acceptance"]["state"]
     if problems:
-        state, why = "failed", problems
+        state, why = "indeterminate", [f"[{r['code']}] {r['detail']}" for r in problems]
     elif acc != "accepted":
         state, why = acc, doc["acceptance"]["reasons"]
     elif historical:
@@ -106,6 +120,9 @@ def main(argv=None) -> int:
     ap.add_argument("--bundle", type=Path)
     ap.add_argument("--sbom-bundle", type=Path)
     ap.add_argument("--historical", action="store_true")
+    ap.add_argument(
+        "--audit-state", type=Path, help="directory keeping already-audited commit facts (cost only)"
+    )
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     V = _load(a.verify_release, a.verify_release_sha256, "platform verifier")
@@ -118,6 +135,7 @@ def main(argv=None) -> int:
     doc = current_acceptance(
         V, A, a.archive, exp, json.loads(a.policy.read_text()), historical=a.historical, supplied=a.authorization,
         environment=a.environment, continuity=a.continuity, bundle=a.bundle, sbom_bundle=a.sbom_bundle,
+        audit_dir=a.audit_state,
     )  # fmt: skip
     text = json.dumps(doc, indent=2, sort_keys=True) + "\n"
     if a.out:
@@ -129,9 +147,13 @@ def main(argv=None) -> int:
         )
     cd = doc["current_decision"]
     print(f"current acceptance: {cd['state']}  {'; '.join(cd['reasons'])}")
-    return {"accepted": 0, "failed": 1, "verified-unaccepted": 3, "historical-acceptance": 4}.get(
-        cd["state"], 1
-    )
+    return {
+        "accepted": 0,
+        "failed": 1,
+        "verified-unaccepted": 3,
+        "historical-acceptance": 4,
+        "indeterminate": 5,
+    }.get(cd["state"], 1)
 
 
 if __name__ == "__main__":

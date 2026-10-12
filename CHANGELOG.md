@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.6.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
+- A current authorization state that cannot be established is its own result, `indeterminate` (exit 5), no longer folded
+  into `failed` (breaking for 0.x consumers that matched `failed`): `approval.authorization_state`
+  (`authorized`|`unauthorized`|`indeterminate`|`historical`|`not-established`), coded `currency.reasons`, and the same
+  per-candidate `authorization_state` in `rollback select` rejections. `unapproved` keeps meaning the state was read
+  and nobody authorizes the release; a defective release stays `failed`.
+- Scalable evidence-history audit: up to 10 000 commits are listed (was 500 audited one by one);
+  `--audit-state DIR` (verifier, `verify_platform_current.py`, `rollback select`) reuses per-commit facts between runs
+  and candidates, saves progress when a run exceeds its budget (`audit-incomplete`), and notices a rewritten history
+  (`history-rewritten`). The state caches immutable commit facts only; outcomes with and without it are identical.
+- Recovery from deleted records: restore by an approver, or list the removal in the pinned application policy
+  (`authorization.acknowledged_removals`); an acknowledged record is read from before its deletion and still counts.
+- `docs/owner-acceptance-0.2.1.md` split into agent-executable and owner-only parts.
+
 ## 0.5.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Authorization freshness is mandatory (ADR 0019 item 12; breaking for 0.x). `tools/verify_app_release.py` defaults to
   the `operational` purpose: every record in the policy's evidence repository is read at one commit and judged, the
