@@ -4,8 +4,12 @@ consumer's checks and produce verifiable execution evidence, from public pins on
 
 Run it from the consumer's CI, in addition to (never instead of) the consumer's own build and security gates:
 
-  python3 tools/consumer_run.py --consumer-dir . --work "$RUNNER_TEMP/dp" --evidence-dir dp-evidence \\
+  python3 tools/consumer_run.py --consumer-dir consumer --work "$RUNNER_TEMP/dp" --evidence-dir evidence \\
       [--dev-platform-checkout <dir at the pinned revision>] [--allow-unaccepted]
+
+The work directory, the evidence directory and the platform checkout must be OUTSIDE the consumer directory (they are
+refused otherwise: they would dirty the tree being judged). GH_TOKEN/GITHUB_TOKEN, if set, is used by the installer's
+`gh attestation verify` only and is removed from the environment of every other process, including the consumer's builds.
 
 Pins are the consumer's own, committed in its repository and reviewed in its own pull requests:
   dev-platform.toml                 platform version + tree sha256 + profile; the `[infra]` configuration pin
@@ -40,8 +44,22 @@ _SHA = re.compile(r"^[0-9a-f]{64}$")
 _REV = re.compile(r"^[0-9a-f]{40}$")
 
 
+# Credentials the installer needs for `gh attestation verify`; no other process in the run (provisioning, the consumer's
+# own builds and tests, the Bazel proof) may see them.
+TOKEN_VARS = ("GH_TOKEN", "GITHUB_TOKEN")
+
+
 def run(argv, **kw):
     return subprocess.run(argv, capture_output=True, text=True, check=False, **kw)
+
+
+def take_credentials(environ: dict) -> dict[str, str]:
+    """Remove the GitHub token variables from `environ` and return them, for the installer alone."""
+    return {k: environ.pop(k) for k in TOKEN_VARS if k in environ}
+
+
+def inside(path: Path, parent: Path) -> bool:
+    return path == parent or parent in path.parents
 
 
 def sha(p: Path) -> str:
@@ -169,6 +187,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     a = ap.parse_args(argv)
     cd, work, ev = a.consumer_dir.resolve(), a.work.resolve(), a.evidence_dir.resolve()
+    credentials = take_credentials(os.environ)
+    outputs = {"--work": work, "--evidence-dir": ev}
+    if a.dev_platform_checkout:
+        outputs["--dev-platform-checkout"] = a.dev_platform_checkout.resolve()
+    misplaced = [f"{k} {v}" for k, v in outputs.items() if inside(v, cd)]
     work.mkdir(parents=True, exist_ok=True)
     ev.mkdir(parents=True, exist_ok=True)
     rec: dict = {"schema": "dev-platform.consumer-run/v1", "steps": {}}
@@ -190,6 +213,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"details: {ev / 'consumer-run.json'}")
         return code
 
+    if misplaced:  # nothing this run writes or reads may live in the tree it judges: it would dirty that tree
+        rec["steps"]["problems"] = [
+            "inside the consumer working tree (use sibling directories outside it): " + "; ".join(misplaced)
+        ]
+        return finish(1)
     pins, cfg, problems = read_pins(cd)
     rec["steps"]["pins_consistent"] = not problems
     if problems:
@@ -209,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
             "--source-revision", pins["source_revision"]]  # fmt: skip
     if a.allow_unaccepted:
         inst.append("--allow-unaccepted")
-    r = run(inst)
+    r = run(inst, env={**os.environ, **credentials})  # the only process that receives the token
     rec["steps"]["installed"] = r.returncode == 0
     if r.returncode:
         rec["steps"]["problems"] = [(r.stdout + r.stderr).strip()[-400:]]
