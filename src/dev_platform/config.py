@@ -21,6 +21,7 @@ ADAPTERS = ("python", "bazel", "cargo", "exec")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _ID_RE = re.compile(r"^[a-z][a-z0-9_.-]*$")
+_INFRA_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 @dataclass(frozen=True)
@@ -29,6 +30,13 @@ class PlatformPin:
     sha256: str | None
     self_hosted: bool
     profile: str | None = None
+
+
+@dataclass(frozen=True)
+class InfraPin:
+    provider: str
+    config_release: str
+    config_digest: str  # "sha256:<64 hex>"
 
 
 @dataclass(frozen=True)
@@ -79,6 +87,28 @@ class Config:
     runners: dict[str, RunnerSpec] = field(default_factory=dict)
     checks: tuple[Check, ...] = ()
     host_tools: tuple[HostTool, ...] = ()
+    infra: InfraPin | None = None
+
+
+def parse_pin(table: dict, errs: list[str]) -> InfraPin | None:
+    """Validate the `[infra]` table. Absent table: hosted-only, as before."""
+    if not table:
+        return None
+    for k in table:
+        if k not in {"provider", "config_release", "config_digest"}:
+            errs.append(f"infra.{k}: unknown key")
+    provider, rel, dig = table.get("provider"), table.get("config_release"), table.get("config_digest")
+    ok = True
+    if not (isinstance(provider, str) and re.match(r"^[a-z][a-z0-9_.-]*$", provider)):
+        errs.append("infra.provider: required lowercase name")
+        ok = False
+    if not (isinstance(rel, str) and _VERSION_RE.match(rel)):
+        errs.append("infra.config_release: required exact version like 1.2.3 (no ranges, no latest)")
+        ok = False
+    if not (isinstance(dig, str) and _INFRA_DIGEST_RE.match(dig)):
+        errs.append("infra.config_digest: required 'sha256:' + 64 lowercase hex characters")
+        ok = False
+    return InfraPin(str(provider), str(rel), str(dig)) if ok else None
 
 
 def _table(d: dict, key: str, allowed: set[str], where: str, errs: list[str]) -> dict:
@@ -112,7 +142,7 @@ def _enum(cls, v: Any, where: str, errs: list[str], default=None):
 def parse(data: dict) -> Config:
     errs: list[str] = []
     for k in data:
-        if k not in {"schema_version", "platform", "project", "impact", "runner", "check", "host"}:
+        if k not in {"schema_version", "platform", "project", "impact", "runner", "check", "host", "infra"}:
             errs.append(f"{k}: unknown top-level key")
     if data.get("schema_version") != SCHEMA_VERSION:
         errs.append(f"schema_version: must be {SCHEMA_VERSION}, got {data.get('schema_version')!r}")
@@ -130,6 +160,10 @@ def parse(data: dict) -> Config:
             errs.append("platform.version: required exact version like 1.2.3 (ranges are not allowed)")
         if not (isinstance(sha, str) and _SHA_RE.match(sha)):
             errs.append("platform.sha256: required, 64 lowercase hex characters")
+
+    infra_pin = parse_pin(data.get("infra", {}) if isinstance(data.get("infra", {}), dict) else {}, errs)
+    if not isinstance(data.get("infra", {}), dict):
+        errs.append("infra: must be a table")
 
     pr = _table(data, "project", {"name", "bazel_only", "assurance", "languages"}, "project", errs)
     name = pr.get("name")
@@ -315,6 +349,7 @@ def parse(data: dict) -> Config:
         runners=runners,
         checks=tuple(checks),
         host_tools=tuple(host),
+        infra=infra_pin,
     )
 
 

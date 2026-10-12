@@ -1,0 +1,458 @@
+{
+  "description": "Resolution conformance for the consumer-pinned infrastructure configuration (ADR 0021, issue #99). Each case is a provider result judged against the pin exactly as the engine does; a provider's CI can run the same through `dev-platform infra check-resolution`.",
+  "cases": [
+    {
+      "name": "resolved exactly as pinned",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "resolved"
+      }
+    },
+    {
+      "name": "current authorization policy narrows the older pin (narrower profile, same pinned release)",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "9",
+          "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        },
+        "effective_profile_digest": "sha256:d4e4e2aa43e7b261c132920a7e11cd3d313a45b9e0eded2078bdd05b324b6cb2"
+      },
+      "profile": "valid-empty.json",
+      "expect": {
+        "status": "resolved"
+      }
+    },
+    {
+      "name": "public default selected by the provider",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "public-default",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": null,
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "profile": null,
+      "expect": {
+        "status": "hosted-only"
+      }
+    },
+    {
+      "name": "denied: repository not authorized",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "denied",
+        "reasons": [
+          "repository is not authorized for this configuration"
+        ],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": null,
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "profile": null,
+      "expect": {
+        "status": "unavailable",
+        "reason": "denied"
+      }
+    },
+    {
+      "name": "stale: provider resolves an older release",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.3.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "is not the pinned"
+      }
+    },
+    {
+      "name": "newer: provider silently supplies a newer release",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.5.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "is not the pinned"
+      }
+    },
+    {
+      "name": "digest mismatch at the pinned version",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "is not the pinned"
+      }
+    },
+    {
+      "name": "resolved but no profile supplied",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": null,
+      "expect": {
+        "status": "unavailable",
+        "reason": "no profile"
+      }
+    },
+    {
+      "name": "effective profile digest does not match the profile",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "effective_profile_digest"
+      }
+    },
+    {
+      "name": "profile violates the contract",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:087074ddaf0a21392812a58f8d4c1aaf91d5e7af30b43bad1a4af41c94581607"
+      },
+      "profile": "invalid-duplicate-id.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "profile:"
+      }
+    },
+    {
+      "name": "request not echoed",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "echo"
+      }
+    },
+    {
+      "name": "unsupported contract",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b",
+        "contract": "dev-platform.infra/v2"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "unsupported contract"
+      }
+    },
+    {
+      "name": "wrong result schema",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "something/else",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "schema"
+      }
+    },
+    {
+      "name": "unknown decision",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "maybe",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      },
+      "profile": null,
+      "expect": {
+        "status": "unavailable",
+        "reason": "unknown decision"
+      }
+    },
+    {
+      "name": "result is not an object",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": [],
+      "profile": null,
+      "expect": {
+        "status": "unavailable",
+        "reason": "not a JSON object"
+      }
+    }
+  ]
+}

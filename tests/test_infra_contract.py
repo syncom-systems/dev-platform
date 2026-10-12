@@ -27,7 +27,7 @@ class InfraContract(unittest.TestCase):
 
     def test_every_kit_file_is_covered(self):
         listed = {c["file"] for c in CASES["profiles"]}
-        on_disk = {p.name for p in KIT.glob("*.json")} - {"cases.json"}
+        on_disk = {p.name for p in KIT.glob("*.json")} - {"cases.json", "resolution-cases.json"}
         self.assertEqual(listed, on_disk)
 
     def test_routing_fails_closed(self):

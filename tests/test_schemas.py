@@ -42,7 +42,8 @@ class SchemaContractTest(unittest.TestCase):
     def test_config_schema_keys_match_parser(self):
         s = schema("config-v1.schema.json")
         self.assertEqual(
-            set(s["properties"]), {"schema_version", "platform", "project", "impact", "runner", "check"}
+            set(s["properties"]),
+            {"schema_version", "platform", "project", "impact", "runner", "check", "infra"},
         )
         self.assertEqual(
             set(s["properties"]["check"]["items"]["properties"]),

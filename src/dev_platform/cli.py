@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -25,7 +26,10 @@ from dev_platform import (
     release,
     toolchain,
 )
-from dev_platform.config import CONFIG_FILENAME, SCHEMA_VERSION, load
+from dev_platform import (
+    infra as infra_mod,
+)
+from dev_platform.config import CONFIG_FILENAME, SCHEMA_VERSION, load, parse_pin
 from dev_platform.detect import detect, is_bazel_workspace
 from dev_platform.digest import tree_digest
 from dev_platform.errors import (
@@ -53,7 +57,16 @@ def _plan_args(p: argparse.ArgumentParser) -> None:
     g.add_argument("--base", metavar="REF", help="diff against merge-base with REF")
     g.add_argument("--staged", action="store_true", help="use the staged change")
     p.add_argument("--previous", type=Path, help="previous result record to carry evidence from")
-    p.add_argument("--infra-profile", type=Path, help="dev-platform.infra/v1 runner profile")
+    p.add_argument(
+        "--infra-profile",
+        type=Path,
+        help="dev-platform.infra/v1 runner profile (with an [infra] pin: vendored, sha256 equals the pin)",
+    )
+    p.add_argument(
+        "--infra-resolver",
+        help="operator-supplied provider command (trusted events only; env DEV_PLATFORM_INFRA_RESOLVER)",
+    )
+    p.add_argument("--repository", help="owner/name sent to the resolver (default: $GITHUB_REPOSITORY)")
     p.add_argument("--event-trust", choices=["trusted", "untrusted"], default="untrusted")
     p.add_argument("--protected", action="store_true", help="treat as a protected run")
 
@@ -69,7 +82,10 @@ def build_parser() -> argparse.ArgumentParser:
     ip.add_argument("--profile", required=True, help="toolchain profile of the pinned release")
     ip.add_argument("--force", action="store_true")
     sub.add_parser("detect", parents=[c], help="report discovered facts")
-    sub.add_parser("doctor", parents=[c], help="diagnose configuration, pin and environment")
+    dc = sub.add_parser("doctor", parents=[c], help="diagnose configuration, pin and environment")
+    dc.add_argument(
+        "--infra-profile", type=Path, help="vendored infra profile to check against the [infra] pin"
+    )
     ex = sub.add_parser("explain", parents=[c], help="show which checks are owed and why")
     _plan_args(ex)
     ck = sub.add_parser("check", parents=[c], help="run owed checks and record evidence")
@@ -240,6 +256,20 @@ def build_parser() -> argparse.ArgumentParser:
     icc.add_argument(
         "--repo-visibility", choices=["public", "private"], help="warn on persistent runners if public"
     )
+    idg = isub.add_parser(
+        "digest", help="print the sha256: identity of a vendored profile (the consumer's pin)"
+    )
+    idg.add_argument("profile", type=Path)
+    icr = isub.add_parser(
+        "check-resolution",
+        help="provider CI: judge a resolver result against a consumer pin exactly as the engine does",
+    )
+    icr.add_argument("--config-release", required=True)
+    icr.add_argument("--config-digest", required=True)
+    icr.add_argument("--provider", default="provider")
+    icr.add_argument("--result", type=Path, required=True)
+    icr.add_argument("--profile", type=Path)
+    icr.add_argument("--event-trust", choices=["trusted", "untrusted"], default="trusted")
     ie = isub.add_parser("event-trust", help="normative event trust for a CI context")
     ie.add_argument("--event", required=True)
     ie.add_argument("--head-repo")
@@ -482,6 +512,15 @@ def cmd_doctor(args) -> int:
                 code = code or (EXIT_UNSATISFIED if not env_rec["conformant"] else EXIT_OK)
             if res.mode == "override":
                 add("warn", "override active: results are not certifiable")
+            if cfg.infra:
+                pin = cfg.infra
+                add("ok", f"infra pinned: {pin.provider} {pin.config_release} {pin.config_digest}")
+                if args.__dict__.get("infra_profile"):
+                    r = infra_mod.from_vendored_file(cfg.infra, args.infra_profile)
+                    add(
+                        "ok" if r.status == infra_mod.RESOLVED else "error",
+                        f"infra profile: {r.status} {'; '.join(r.reasons)}",
+                    )
         except DevPlatformError as e:
             add("error", str(e))
             code = e.exit_code
@@ -506,6 +545,16 @@ def _plan(args, execute: bool) -> tuple[dict, int]:
     cfg = load(args.project)
     res = _resolve_and_delegate(cfg, args)
     previous = json.loads(args.previous.read_text()) if args.previous else None
+    infra_scratch = Path(tempfile.mkdtemp(prefix="dp-infra-"))
+    infra_res = infra_mod.resolve(
+        cfg.infra,
+        event_trust=args.event_trust,
+        repo=args.repository or os.environ.get("GITHUB_REPOSITORY"),
+        profile_file=args.infra_profile,
+        resolver_argv=shlex.split(args.infra_resolver or os.environ.get("DEV_PLATFORM_INFRA_RESOLVER", ""))
+        or None,
+        scratch=infra_scratch,
+    )
     execution, executor, scratch = None, engine.subprocess_executor, None
     if getattr(args, "isolate_env", False):
         profile = (
@@ -527,7 +576,7 @@ def _plan(args, execute: bool) -> tuple[dict, int]:
         _changed(args, args.project),
         execute=execute,
         previous=previous,
-        infra_profile=args.infra_profile,
+        infra=infra_res,
         event_trust=args.event_trust,
         revision=engine.git_revision(args.project),
         dirty=engine.git_dirty(args.project),
@@ -538,6 +587,7 @@ def _plan(args, execute: bool) -> tuple[dict, int]:
     )
     if scratch:
         shutil.rmtree(scratch, ignore_errors=True)
+    shutil.rmtree(infra_scratch, ignore_errors=True)
     return doc, doc["exit"]
 
 
@@ -962,6 +1012,26 @@ def cmd_infra(args) -> int:
         )
         print(json.dumps({"event": args.event, "event_trust": t}, sort_keys=True))
         return EXIT_OK
+    if args.icmd == "digest":
+        print(infra_mod.file_digest(args.profile))
+        return EXIT_OK
+    if args.icmd == "check-resolution":
+        errs: list[str] = []
+        pin = parse_pin(
+            {
+                "provider": args.provider,
+                "config_release": args.config_release,
+                "config_digest": args.config_digest,
+            },
+            errs,
+        )
+        if pin is None:
+            raise ConfigError(errs)
+        request = infra_mod.request_for(pin, repo=None, event_trust=args.event_trust)
+        data = args.profile.read_bytes() if args.profile else None
+        r = infra_mod.evaluate(pin, request, _j(args.result), data)
+        print(json.dumps(r.evidence(), indent=2, sort_keys=True))
+        return EXIT_OK if r.status in (infra_mod.RESOLVED, infra_mod.HOSTED_ONLY) else EXIT_UNSATISFIED
     doc = _j(args.profile)
     problems = runners.validate_profile(doc)
     out: dict = {"profile": str(args.profile), "valid": not problems, "problems": problems, "warnings": []}

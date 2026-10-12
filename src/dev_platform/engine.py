@@ -12,6 +12,7 @@ from dev_platform import __version__, isolation
 from dev_platform.adapters import PYTHON, Command, command_for
 from dev_platform.config import Config
 from dev_platform.impact import select
+from dev_platform.infra import UNAVAILABLE, InfraResolution
 from dev_platform.model import ADMISSION_STAGES, EvidenceState, Outcome, Stage, advance
 from dev_platform.resolve import Resolution
 from dev_platform.runners import Route, load_profile, route
@@ -101,6 +102,7 @@ def build(
     executor: Executor = subprocess_executor,
     previous: dict | None = None,
     infra_profile: Path | None = None,
+    infra: InfraResolution | None = None,
     event_trust: str = "untrusted",
     revision: str | None = None,
     dirty: bool = False,
@@ -109,7 +111,10 @@ def build(
     execution: dict | None = None,
 ) -> dict:
     prev_state = {c["id"]: EvidenceState(c["state"]) for c in (previous or {}).get("checks", [])}
-    offered = load_profile(infra_profile)
+    if infra is not None:
+        offered = load_profile(infra.profile_path if infra.profile is not None else None)
+    else:
+        offered = load_profile(infra_profile)
     selection = {s.check.id: s for s in select(cfg, stage, changed)}
 
     checks, regressions = [], []
@@ -171,6 +176,9 @@ def build(
     # A non-conformant environment makes every admission claim false (no silent substitution).
     if env_rec["conformant"] is False and stage in ADMISSION_STAGES and execute:
         unsatisfied.append("environment")
+    # A declared infra pin that cannot be honoured blocks admission (ADR 0006); never silently hosted.
+    if infra is not None and infra.status == UNAVAILABLE and stage in ADMISSION_STAGES and execute:
+        unsatisfied.append("infra")
     admission = None
     if stage in ADMISSION_STAGES:
         admission = "admitted" if execute and not unsatisfied else "blocked"
@@ -189,6 +197,8 @@ def build(
             "tool identity too weak for certification (below closure level; unsupported platform?): "
             + ", ".join(env_rec.get("weak_tools", []))
         )
+    if infra is not None and infra.blocks:
+        blockers.append("infrastructure configuration: " + "; ".join(infra.reasons or [infra.status]))
     if dirty:
         blockers.append("working tree has uncommitted changes")
     if not execute:
@@ -208,6 +218,7 @@ def build(
         "revision": revision,
         "stage": stage.value,
         "environment": {"release": _release_identity(resolution), **env_rec},
+        "infra": infra.evidence() if infra is not None else None,
         "change_set": {"known": changed is not None, "paths": list(changed) if changed else []},
         "executed": execute,
         "execution": execution or isolation.INHERITED,

@@ -34,6 +34,24 @@ not have a `read-write` shared cache (profile validation). When nothing fits, th
 runner and the first reason it did not fit (trust, os, arch, isolation, credentials, capability, cache): there is
 no silent downgrade.
 
+## Consumer-owned pin of the configuration release (ADR 0021)
+The consumer declares which configuration release it expects; the platform never takes a path on faith.
+```toml
+[infra]
+provider = "acme-infra"
+config_release = "1.4.0"            # exact; no ranges, no "latest"
+config_digest = "sha256:<64 hex>"   # identity: `dev-platform infra digest profile.json` for a vendored profile
+```
+- **Untrusted CI (no private access):** commit the profile in the consumer repository and pass `--infra-profile`; it is used
+  only if its sha256 equals `config_digest`. No provider is ever invoked for an untrusted event.
+- **Trusted CI:** the operator may supply `--infra-resolver "<command>"`. It receives a
+  `dev-platform.infra-resolve-request/v1` on stdin and returns a `dev-platform.infra-resolve-result/v1` on stdout with the
+  profile written to `profile_out`. The resolved version and digest must equal the pin; otherwise `unavailable`.
+- **Provider CI:** `dev-platform infra check-resolution --config-release V --config-digest D --result result.json
+  --profile profile.json` judges a result exactly as the engine does; `contracts/infra/v1/resolution-cases.json` holds the
+  cases (stale, newer, mismatch, denied, unsupported contract, missing profile, narrowed by a newer policy).
+- The result record's `infra` block carries pinned, resolved, authorization policy and effective profile digest.
+
 ## Consumer side
 A consumer passes the profile with `dev-platform check --infra-profile profile.json --event-trust <trusted|untrusted>`;
 routing then offers private runners only to trusted events and credentials only to trusted events, and refuses
