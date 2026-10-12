@@ -169,6 +169,27 @@ def json_digest(doc) -> str:
     return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def consumer_run_step(cd: Path, work: Path, ident: dict) -> dict:
+    """The consumer's own entry point, end to end from public pins: the release identity is written to the consumer
+    checkout as its pins file, then tools/consumer_run.py selects, installs (verified), provisions twice, checks,
+    proves and verifies. Run with the CI event trust, so a pull request exercises the untrusted path."""
+    pins = {
+        k: ident[k]
+        for k in ("version", "source_revision", "archive_sha256", "tree_digest_pin", "verifier_pins")
+    }
+    (cd / "dev-platform.release-pins.json").write_text(json.dumps(pins, indent=2) + "\n")
+    run(["git", "-C", str(cd), "add", "-A"])
+    run(["git", "-C", str(cd), "-c", "user.name=pilot", "-c", "user.email=pilot@invalid", "commit", "-q",
+         "-m", "pilot: release pins (local only)"])  # fmt: skip
+    ev = work / "consumer-run-evidence"
+    r = run([sys.executable, str(ROOT / "tools" / "consumer_run.py"), "--consumer-dir", str(cd),
+             "--work", str(work / "consumer-run"), "--evidence-dir", str(ev), "--allow-unaccepted"])  # fmt: skip
+    rec_file = ev / "consumer-run.json"
+    steps = json.loads(rec_file.read_text())["steps"] if rec_file.is_file() else {}
+    return {"consumer_run_exit": r.returncode, "consumer_run_verdict": steps.get("evidence_verdict"),
+            "consumer_run_event_trust": steps.get("event_trust")}  # fmt: skip
+
+
 def write_evidence(out: Path, cd: Path, result: Path, proof: Path | None, rec: dict) -> str:
     """Bundle the consumer's execution evidence and judge it with the independent verifier against the
     consumer's own pins (dev-platform.toml in the throwaway checkout)."""
@@ -341,6 +362,8 @@ def main(argv=None) -> int:
             rec["steps"]["bazel_rust_proof"] = bool(pf.get("ok"))
         if feats and a.evidence_dir:
             rec["steps"]["evidence_verdict"] = write_evidence(a.evidence_dir, cd, result, proof_file, rec)
+        if feats and a.mode == "release" and c.get("consumer_run"):
+            rec["steps"].update(consumer_run_step(cd, work, ident))
         if not cert.get("certified"):
             findings.append(
                 {"step": "certification", "detail": "not certified", "blockers": cert.get("blockers")}
