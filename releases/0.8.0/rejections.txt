@@ -1,0 +1,25 @@
+# appended byte (tampered archive, honest digest pin)
+FAILED  archive-digest  (actual 01d6a720a6af74c17445c53885637eee3119c0bf34e65f14e3a51dbfc44635ac)
+FAILED  attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:01d6a720a6af74c17445c53885637eee3119c0bf34e65f14e3a51dbfc44635a
+FAILED  sbom-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:01d6a720a6af74c17445c53885637eee3119c0bf34e65f14e3a51dbfc4
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  continuity  (record is about a different archive)
+acceptance: failed  archive-digest; attestation-signature; sbom-attestation-signature; sbom-attestation-content; continuity
+# wrong source revision
+FAILED  source-revision  (release.json says 2ccfe9c11eb83eae2e111ce6188f8b13faf7a4fc)
+FAILED  attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 2ccfe9c11eb83eae2e111ce6188f8b13faf7a4fc)
+FAILED  sbom-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 2ccfe9c11eb83eae2e111ce6188f8b13faf7a4fc)
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  environment-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got edadc4d089b0b5dae3f995121ce48b40cec0e8aa)
+FAILED  continuity  (predecessor did not run over this source revision)
+FAILED  continuity-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 2ccfe9c11eb83eae2e111ce6188f8b13faf7a4fc)
+acceptance: failed  source-revision; attestation-signature; sbom-attestation-signature; sbom-attestation-content; environment-attestation-signature; continuity; continuity-attestation-signature
+# wrong archive digest pin
+FAILED  archive-digest  (actual 282b6af495b78fad5295c00ac6d92bee5ecb40d6689ee934c96e1a21684cf374)
+acceptance: failed  archive-digest
+# consumer pins file altered (consumer_run refuses before installing anything)
+{
+  "bazel_rust_proof": null,
+  "check_exit": null,
+  "event_trust": null,
+['dev-platform.release-pins.json tree_digest_pin != dev-platform.toml platform.sha256']
