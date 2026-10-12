@@ -5,6 +5,14 @@
   installation: Rustc action paths via external repositories, version equals the `MODULE.bazel` declaration, decoy host
   `rustc`/`cargo` never executed in a forced re-execution. Runs Bazel and the Bazel-provided `rustc --version` only (no
   Cargo). Part of the rust-bazel qualification on linux and darwin.
+- Deterministic provisioning (#112): `toolchain provision --pinned --verify` realizes the pinned release's profile and verifies it
+  against the same manifest in one step (exit 1 unless conformant and certifiable); the identity digest is identical for repeated
+  clean provisioning (qualified in the pilot).
+- Consumer evidence (#113): `tools/verify_consumer_evidence.py` (independent) checks a result record against the consumer's own
+  pins (platform version/tree digest/profile, infra pin, Bazel Rust proof); `tools/consumer_run.py` and the reusable workflow
+  `.github/workflows/consumer-pilot.yml` select the pinned release from public data only, provision, execute and verify; the
+  pilot gains the public Bazel reference consumer (`fixtures-real/rust-bazel-9`) and attests the evidence bundle.
+  `docs/consumer-integration.md` is the runbook (NGA phase 2 stays the owner's decision).
 - Consumer-owned infrastructure configuration pin (ADR 0021, #99, #110): `[infra] provider/config_release/config_digest`
   in `dev-platform.toml`; the engine refuses any resolved identity that differs from the pin; untrusted events never call a
   provider and use only a vendored profile whose sha256 equals the pin; trusted events may use an operator-supplied

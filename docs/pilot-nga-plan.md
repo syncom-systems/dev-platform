@@ -42,6 +42,13 @@ acceptance.** nga is private; this plan is derived from reading its public-to-th
 4. **Adoption decision. Owner.** Whether to add `dev-platform.toml` and the reusable workflow to nga. This is a
    production migration and is outside anything the platform releases or milestones authorize.
 
+## Runbook for phase 2 (owner decision; nothing here modifies nga)
+`docs/consumer-integration.md` is the runbook: the Bazel-only profile `rust-bazel-9`, the consumer-owned pins, the reusable
+workflow `consumer-pilot.yml` run as an additional non-required job from nga's own CI on a throwaway branch (so no private
+checkout from this public repository is needed), the Bazel Rust toolchain proof (Bazel only, no Cargo), and the
+independently verifiable evidence bundle. The public reference consumer for the same flow is `fixtures-real/rust-bazel-9`
+(`pilot/consumers.json` `reference-bazel`). The infra pin starts as absent (hosted only) until the owner adopts one.
+
 ## Exit criteria for v0.2.0's part of this issue
 Phase 1 complete (qualified profile, adapter drift tests, declared-requirement design) and this plan reviewed.
 Phases 2 to 4 belong to the owner's schedule; the milestone does not depend on them.
