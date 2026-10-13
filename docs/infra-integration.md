@@ -50,6 +50,17 @@ declared `environment`, reusable-workflow `uses` and a best-effort source `line`
 decides admission, so a provider needs no private workflow scanner; shapes the reader cannot interpret stay `unresolved` and
 `incomplete`. Facts never change the admission decision.
 
+Two further per-job fields (issue #128, since 0.8.3):
+- `non_public_label_sets`: the resolved `runs_on` label sets the supplied profile does not admit, by the same rule
+  `check_workflow` applies to PR-reachable workflows (hosted labels, or a subset of a `trust: public` runner). `[]` means every
+  resolved set is admitted; `null` means the job is unresolved and nothing is concluded. `null` must never be read as admitted.
+  The protected-environment exemption is not applied here: compare `environment` against the profile's
+  `admission.protected_environments` yourself.
+- `runs_on_group` / `runs_on_labels`: for `runs-on: {group: ..., labels: ...}`, the values exactly as written (raw strings,
+  never evaluated; an expression is returned verbatim). Such a job stays `unresolved` (`runs_on` and `non_public_label_sets` are
+  `null`) and `incomplete`, because the profile has no runner-group concept to judge it by. A provider that can resolve the group
+  against its own authorization evidence decides pass/fail itself; an unresolved group must not be treated as admitted.
+
 ## Consumer-owned pin of the configuration release (ADR 0021)
 The consumer declares which configuration release it expects; the platform never takes a path on faith.
 ```toml
