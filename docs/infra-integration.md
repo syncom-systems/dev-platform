@@ -50,7 +50,7 @@ declared `environment`, reusable-workflow `uses` and a best-effort source `line`
 decides admission, so a provider needs no private workflow scanner; shapes the reader cannot interpret stay `unresolved` and
 `incomplete`. Facts never change the admission decision.
 
-Two further per-job fields (issue #128, since 0.8.3):
+Two further per-job fields (issue #128, on main; first released in the release after 0.8.2):
 - `non_public_label_sets`: the resolved `runs_on` label sets the supplied profile does not admit, by the same rule
   `check_workflow` applies to PR-reachable workflows (hosted labels, or a subset of a `trust: public` runner). `[]` means every
   resolved set is admitted; `null` means the job is unresolved and nothing is concluded. `null` must never be read as admitted.
