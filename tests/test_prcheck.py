@@ -215,6 +215,37 @@ jobs:
         self.assertEqual(jobs["call"]["uses"], "org/repo/.github/workflows/x.yml@main")
         self.assertIsNotNone(jobs["call"]["unresolved"])
 
+    def test_non_public_label_sets_use_the_admission_rule(self):
+        wf = (
+            "on: push\njobs:\n  a:\n    runs-on: org-public\n  b:\n    runs-on: [self-hosted, org-trusted]\n"
+            "  c:\n    runs-on: ubuntu-24.04\n"
+        )
+        for prof, a, b in (
+            (None, [["org-public"]], [["self-hosted", "org-trusted"]]),
+            (PROFILE, [], [["self-hosted", "org-trusted"]]),
+        ):
+            jobs = {j["name"]: j for j in prcheck.check({"w.yml": wf}, prof, facts=True)["facts"][0]["jobs"]}
+            self.assertEqual((jobs["a"]["non_public_label_sets"], jobs["b"]["non_public_label_sets"]), (a, b))
+            self.assertEqual(jobs["c"]["non_public_label_sets"], [])
+
+    def test_runs_on_group_is_structured_and_never_admitted(self):
+        wf = (
+            "on: pull_request\njobs:\n  g:\n    runs-on:\n      group: private-pool\n"
+            "      labels: [linux, x64]\n  h:\n    runs-on:\n      group: ${{ inputs.g }}\n"
+        )
+        out = prcheck.check({"w.yml": wf}, None, facts=True)
+        jobs = {j["name"]: j for j in out["facts"][0]["jobs"]}
+        self.assertEqual(
+            (jobs["g"]["runs_on_group"], jobs["g"]["runs_on_labels"]), ("private-pool", ["linux", "x64"])
+        )
+        self.assertEqual(jobs["h"]["runs_on_group"], "${{ inputs.g }}")
+        for j in jobs.values():
+            self.assertIsNone(j["runs_on"])
+            self.assertIsNone(j["non_public_label_sets"])  # unknown, not admitted
+            self.assertIn("group/labels", j["unresolved"])
+        self.assertEqual(out["admission"], "unavailable")
+        self.assertEqual(len(out["incomplete"]), 2)
+
     def test_unparseable_workflow_yields_unresolved_facts_and_stays_incomplete(self):
         out = prcheck.check({"z.yml": "on: pull_request\njobs: &a\n  x: 1\n"}, None, facts=True)
         self.assertEqual(out["admission"], "unavailable")

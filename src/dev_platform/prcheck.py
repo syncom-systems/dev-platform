@@ -247,14 +247,31 @@ def _job_line(text: str, name: str) -> int | None:
     return None
 
 
-def job_facts(doc: dict, text: str) -> list[dict]:
-    """Per job: resolved runner label sets (or `unresolved` + reason), environment, source line."""
+def _group_facts(ro: dict) -> tuple[str | None, list[str] | None]:
+    """Structured `runs-on: {group, labels}` value as written (raw strings, never evaluated)."""
+    group = ro.get("group")
+    labels = ro.get("labels")
+    if isinstance(labels, str):
+        labels = [labels]
+    if not (isinstance(labels, list) and all(isinstance(x, str) for x in labels)):
+        labels = None
+    return (group if isinstance(group, str) else None), labels
+
+
+def job_facts(doc: dict, text: str, public_sets: list[set[str]] | None = None) -> list[dict]:
+    """Per job: resolved runner label sets (or `unresolved` + reason), environment, source line.
+
+    `non_public_label_sets` is the resolved sets the profile does not admit (the rule `check_workflow`
+    applies); `[]` means every resolved set is admitted, `None` means the job could not be resolved (never
+    read it as admitted). A `runs-on` group/labels mapping is exposed as `runs_on_group`/`runs_on_labels`
+    and stays unresolved."""
     jobs = doc.get("jobs")
     if not isinstance(jobs, dict):
         return []
     facts = []
     for name, job in jobs.items():
         f: dict = {"name": str(name), "line": _job_line(text, str(name)), "runs_on": None,
+                   "runs_on_group": None, "runs_on_labels": None, "non_public_label_sets": None,
                    "unresolved": None, "environment": None, "uses": None}  # fmt: skip
         if not isinstance(job, dict):
             f["unresolved"] = "job is not a mapping"
@@ -266,8 +283,13 @@ def job_facts(doc: dict, text: str) -> list[dict]:
             if "uses" in job and "runs-on" not in job:
                 f["unresolved"] = "reusable workflow call has no runs-on"
             else:
+                if isinstance(job.get("runs-on"), dict):
+                    f["runs_on_group"], f["runs_on_labels"] = _group_facts(job["runs-on"])
                 try:
                     f["runs_on"] = _resolve_runs_on(job)
+                    f["non_public_label_sets"] = [
+                        ls for ls in f["runs_on"] if not _runs_on_allowed(ls, public_sets or [])
+                    ]
                 except Unsupported as e:
                     f["unresolved"] = str(e)
         facts.append(f)
@@ -294,9 +316,10 @@ def check_workflow(
                           "unresolved": str(e)})  # fmt: skip
         return out
     reachable = [t for t in trig if t in PR_REACHABLE]
+    public_sets = _allowed_label_sets(profile_runners)
     if facts is not None:
         facts.append({"file": path, "triggers": trig, "pr_reachable_triggers": reachable,
-                      "jobs": job_facts(doc, text), "unresolved": None})  # fmt: skip
+                      "jobs": job_facts(doc, text, public_sets), "unresolved": None})  # fmt: skip
     for t in trig:
         if t in admission["forbidden_triggers"]:
             out["policy_violations"].append({"file": path, "rule": "forbidden-trigger", "detail": t})
@@ -328,7 +351,6 @@ def check_workflow(
             )
     if not reachable:
         return out  # not reachable from pull-request events: runner rules do not apply
-    public_sets = _allowed_label_sets(profile_runners)
     jobs = doc.get("jobs")
     if not isinstance(jobs, dict):
         inc("jobs is not a mapping")
