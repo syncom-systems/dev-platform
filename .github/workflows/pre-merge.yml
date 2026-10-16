@@ -1,8 +1,9 @@
-name: ci
+# Pre-merge: every pull request. Public repository, so these jobs run on GitHub-hosted runners.
+# post-merge.yml runs the same jobs on main after a merge.
+name: pre-merge
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_call:
 permissions:
   contents: read
 jobs:

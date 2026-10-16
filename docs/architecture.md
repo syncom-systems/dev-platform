@@ -73,7 +73,7 @@ run may consume it with `--previous` to carry evidence ([model](verification-mod
 | 2.5 verification semantics | ADR 0006 | `model.py`, `impact.py`, `engine.py` | `test_model`, `test_impact`, `test_engine` |
 | 2.6 runners | ADR 0005 | `runners.py` | `test_runners`, `test_engine` |
 | 2.7 agent independence | ADR 0007 | CLI + JSON only | e2e runs with no agent |
-| 4.H self-application | - | `dev-platform.toml`, `ci.yml` | CI runs `dev-platform check --stage full` (self mode: verified, never certified) |
+| 4.H self-application | - | `dev-platform.toml`, `pre-merge.yml` | CI runs `dev-platform check --stage full` (self mode: verified, never certified) |
 | Rev.2 #1 unified releases | ADR 0010 | `release.py`, `toolchain.py` | `test_release`, `test_toolchain`, e2e profile tests |
 | Rev.2 #2 supply chain | ADR 0011 | SBOM, `records.releases_affected` | `test_records`, e2e `affected` |
 | Rev.2 #3/#4 provenance, governance | ADR 0012/0013 | `records.py`, schemas | `test_records` |
