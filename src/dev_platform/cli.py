@@ -274,7 +274,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also print the parsed per-file triggers and per-job runner facts",
     )
-    ic = sub.add_parser("infra", help="provider-side tools for dev-platform.infra/v1 (validate, event trust)")
+    ic = sub.add_parser(
+        "infra",
+        help="optional infrastructure configuration: profiles, releases, resolution, authorization "
+        "(nothing is activated)",
+    )
     isub = ic.add_subparsers(dest="icmd", required=True)
     icc = isub.add_parser(
         "check", help="validate a profile; optionally check workflows and repository visibility"
@@ -285,9 +289,35 @@ def build_parser() -> argparse.ArgumentParser:
         "--repo-visibility", choices=["public", "private"], help="warn on persistent runners if public"
     )
     idg = isub.add_parser(
-        "digest", help="print the sha256: identity of a vendored profile (the consumer's pin)"
+        "digest",
+        help="print the sha256: identity a consumer pins: of a profile file, or the release-tree digest of a "
+        "configuration release directory",
     )
-    idg.add_argument("profile", type=Path)
+    idg.add_argument("profile", type=Path, help="a profile file, or a release directory releases/<version>")
+    irl = isub.add_parser("release", help="immutable configuration releases of a configuration repository")
+    irls = irl.add_subparsers(dest="ircmd", required=True)
+    irv = irls.add_parser(
+        "verify", help="every indexed release matches its digest; no unindexed release; the index only grew"
+    )
+    irv.add_argument("--root", type=Path, default=Path("."), help="configuration repository (default: .)")
+    irv.add_argument("--base-index", type=Path, help="releases/index.v1.json of the protected branch")
+    irs = isub.add_parser(
+        "resolve",
+        help="generic provider: dev-platform.infra-resolve-request/v1 on stdin, result on stdout, the "
+        "effective profile to the request's profile_out (trusted callers only; a denial still exits 0)",
+    )
+    irs.add_argument("--root", type=Path, required=True, help="configuration repository or store")
+    irs.add_argument("--request", type=Path, help="read the request from this file instead of stdin")
+    irs.add_argument(
+        "--policy", type=Path, help="current authorization policy (default: <root>/authorization)"
+    )
+    irs.add_argument(
+        "--evidence-out", type=Path, help="write the audit record (denial codes, narrowing) here"
+    )
+    iau = isub.add_parser("authorization", help="current authorization policy (narrows, never grants)")
+    iaus = iau.add_subparsers(dest="iacmd", required=True)
+    iac = iaus.add_parser("check", help="validate a policy and print its identity")
+    iac.add_argument("policy", type=Path)
     icr = isub.add_parser(
         "check-resolution",
         help="provider CI: judge a resolver result against a consumer pin exactly as the engine does",
@@ -1112,8 +1142,46 @@ def cmd_infra(args) -> int:
         print(json.dumps({"event": args.event, "event_trust": t}, sort_keys=True))
         return EXIT_OK
     if args.icmd == "digest":
-        print(infra_mod.file_digest(args.profile))
+        if args.profile.is_dir():
+            from dev_platform import infra_release
+
+            print(infra_release.wire(infra_release.digest_of(infra_release.read_tree(args.profile))))
+        else:
+            print(infra_mod.file_digest(args.profile))
         return EXIT_OK
+    if args.icmd == "release":
+        from dev_platform import infra_release
+
+        base = infra_release.load_index(args.base_index) if args.base_index else None
+        errs = infra_release.verify(args.root, base)
+        print(
+            json.dumps({"root": str(args.root), "ok": not errs, "problems": errs}, indent=2, sort_keys=True)
+        )
+        return EXIT_UNSATISFIED if errs else EXIT_OK
+    if args.icmd == "resolve":
+        from dev_platform import infra_provider
+
+        try:
+            req = json.loads(args.request.read_text() if args.request else sys.stdin.read())
+        except (OSError, ValueError):
+            req = None
+        res = infra_provider.resolve(args.root, req, args.policy)
+        if res["profile_bytes"] is not None:
+            infra_provider.write_private(req["profile_out"], res["profile_bytes"])
+        if args.evidence_out:
+            args.evidence_out.write_text(json.dumps(res["evidence"], indent=2, sort_keys=True) + "\n")
+        print(json.dumps(res["result"], indent=2, sort_keys=True))
+        return EXIT_OK  # a denial is a result; the engine treats any non-zero exit as unavailable
+    if args.icmd == "authorization":
+        from dev_platform import infra_authz
+
+        doc = _j(args.policy)
+        problems = infra_authz.problems(doc)
+        out = {"policy": str(args.policy), "valid": not problems, "problems": problems}
+        if not problems:
+            out["identity"] = infra_authz.identity(doc)
+        print(json.dumps(out, indent=2, sort_keys=True))
+        return EXIT_UNSATISFIED if problems else EXIT_OK
     if args.icmd == "check-resolution":
         errs: list[str] = []
         pin = parse_pin(

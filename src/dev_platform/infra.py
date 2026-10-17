@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -53,19 +54,23 @@ class InfraResolution:
         """A declared pin that could not be honoured blocks admission (ADR 0006); hosted-only does not."""
         return self.status in (UNAVAILABLE, UNPINNED)
 
+    def pin_evidence(self) -> dict | None:
+        if self.pin is None:
+            return None
+        out = {
+            "provider": self.pin.provider,
+            "config_release": self.pin.config_release,
+            "config_digest": self.pin.config_digest,
+        }
+        if self.pin.config_digest_kind is not None:  # only when declared: older records are unchanged
+            out["config_digest_kind"] = self.pin.config_digest_kind
+        return out
+
     def evidence(self) -> dict:
         return {
             "status": self.status,
             "source": self.source,
-            "pinned": (
-                {
-                    "provider": self.pin.provider,
-                    "config_release": self.pin.config_release,
-                    "config_digest": self.pin.config_digest,
-                }
-                if self.pin
-                else None
-            ),
+            "pinned": self.pin_evidence(),
             "resolved": self.resolved,
             "authorization_policy": self.authorization_policy,
             "effective_profile_digest": self.effective_profile_digest,
@@ -90,6 +95,22 @@ def request_for(pin: InfraPin, *, repo: str | None, event_trust: str) -> dict:
 
 def _unavailable(pin, source, *reasons, **kw) -> InfraResolution:
     return InfraResolution(UNAVAILABLE, source, list(reasons), pin, **kw)
+
+
+_POLICY_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
+def authorization_facts(policy: object) -> str | None:
+    """None if `policy` is a complete authorization identity {id, revision, digest}, else what is missing. A
+    provider that resolves must say under which current policy it did (ADR 0023): incomplete facts fail
+    closed."""
+    if not isinstance(policy, dict) or set(policy) != {"id", "revision", "digest"}:
+        return "authorization_policy must be {id, revision, digest}"
+    if not all(isinstance(policy[k], str) and policy[k] for k in ("id", "revision")):
+        return "authorization_policy id and revision must be non-empty strings"
+    if not isinstance(policy["digest"], str) or not _POLICY_DIGEST.fullmatch(policy["digest"]):
+        return "authorization_policy digest must be 'sha256:' + 64 lowercase hex"
+    return None
 
 
 def evaluate(pin: InfraPin, request: dict, result: object, profile_bytes: bytes | None) -> InfraResolution:
@@ -121,6 +142,8 @@ def evaluate(pin: InfraPin, request: dict, result: object, profile_bytes: bytes 
             authorization_policy=policy,
         )
     # decision == "resolved": the identity must equal the pin exactly, and the profile must be the one named
+    if missing := authorization_facts(policy):
+        return _unavailable(pin, src, f"incomplete authorization facts: {missing}", *reasons)
     resolved = result.get("resolved")
     want = {"version": pin.config_release, "digest": pin.config_digest}
     if resolved != want:
@@ -137,6 +160,14 @@ def evaluate(pin: InfraPin, request: dict, result: object, profile_bytes: bytes 
     if result.get("effective_profile_digest") != eff:
         return _unavailable(
             pin, src, "effective_profile_digest does not match the supplied profile", resolved=resolved
+        )
+    if pin.config_digest_kind == "profile-file" and eff != pin.config_digest:
+        return _unavailable(
+            pin,
+            src,
+            "config_digest_kind is profile-file: the supplied profile must be exactly the pinned bytes",
+            resolved=resolved,
+            effective_profile_digest=eff,
         )
     try:
         doc = json.loads(profile_bytes)
@@ -160,6 +191,13 @@ def evaluate(pin: InfraPin, request: dict, result: object, profile_bytes: bytes 
 def from_vendored_file(pin: InfraPin, path: Path) -> InfraResolution:
     """A profile file in the consumer's repository: identity is its digest, which must equal the pin."""
     src = "vendored-file"
+    if pin.config_digest_kind == "release-tree":
+        return _unavailable(
+            pin,
+            src,
+            "config_digest_kind is release-tree: the pin identifies a configuration release, not a profile "
+            "file; it resolves only through a provider in a trusted context",
+        )
     try:
         data = Path(path).read_bytes()
     except OSError as e:

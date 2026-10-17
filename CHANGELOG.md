@@ -1,6 +1,14 @@
 # Changelog
 
 ## Unreleased
+- Infrastructure consolidation, stage 1 (ADR 0023, `docs/infra-consolidation.md`): generic configuration releases
+  (`infra_release`: CalVer, release-tree digest = `tree_digest`, append-only index, `dev-platform infra release verify`,
+  `infra digest releases/<v>`), the current authorization policy that narrows and never grants (`infra_authz`,
+  `infra authorization check`) and the generic provider (`infra_provider`, `dev-platform infra resolve --root DIR`).
+  Releases in the previous private layout resolve unchanged; results are identical to the previous private provider.
+- `[infra] config_digest_kind = "release-tree" | "profile-file"` (optional; omitted means exactly what it meant before).
+- The engine refuses a `resolved` result without a complete `authorization_policy {id, revision, digest}`
+  (incomplete authorization facts); new resolution conformance cases.
 
 ## 0.9.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Homebrew (ADR 0022, `docs/homebrew.md`): `tools/homebrew_formula.py` renders the formula of the public CLI from a release

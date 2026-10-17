@@ -160,6 +160,51 @@ class Resolution_(unittest.TestCase):
             self.assertNotIn(f'"{word}"', ev)
 
 
+class DigestKind(unittest.TestCase):
+    """What `config_digest` identifies is explicit when declared, and unchanged when not (ADR 0023)."""
+
+    def setUp(self):
+        self.scratch = tmpdir(self)
+
+    def resolve(self, kind, **kw):
+        pin = cfg(**PIN, config_digest_kind=kind).infra if kind else cfg(**PIN).infra
+        base = {"event_trust": "trusted", "repo": "o/r", "profile_file": None, "resolver_argv": None}
+        return infra.resolve(pin, scratch=self.scratch, **{**base, **kw})
+
+    def test_values(self):
+        self.assertEqual(
+            cfg(**PIN, config_digest_kind="release-tree").infra.config_digest_kind, "release-tree"
+        )
+        self.assertIsNone(cfg(**PIN).infra.config_digest_kind)
+        for bad in ("tree", "", "latest", 1):
+            with self.assertRaises(ConfigError, msg=bad):
+                cfg(**PIN, config_digest_kind=bad)
+
+    def test_a_release_tree_pin_never_matches_a_vendored_profile(self):
+        for trust in ("trusted", "untrusted"):
+            r = self.resolve("release-tree", profile_file=PROFILE, event_trust=trust)
+            self.assertEqual(r.status, "unavailable", trust)
+            self.assertIn("release-tree", " ".join(r.reasons))
+
+    def test_a_profile_file_pin_and_no_kind_accept_the_vendored_profile(self):
+        for kind in ("profile-file", None):
+            self.assertEqual(self.resolve(kind, profile_file=PROFILE).status, "resolved", kind)
+
+    def test_evidence_names_the_kind_only_when_declared(self):
+        self.assertEqual(self.resolve("profile-file", profile_file=PROFILE).evidence()["pinned"]["config_digest_kind"],
+                         "profile-file")  # fmt: skip
+        self.assertNotIn("config_digest_kind", self.resolve(None, profile_file=PROFILE).evidence()["pinned"])
+
+
+class AuthorizationFacts(unittest.TestCase):
+    def test_complete_identity_only(self):
+        ok = {"id": "p", "revision": "1", "digest": "sha256:" + "0" * 64}
+        self.assertIsNone(infra.authorization_facts(ok))
+        for bad in (None, {}, {**ok, "extra": 1}, {**ok, "revision": 1}, {**ok, "id": ""}, {**ok, "digest": "x"},
+                    {"id": "p", "revision": "1"}):  # fmt: skip
+            self.assertIsNotNone(infra.authorization_facts(bad), bad)
+
+
 class Conformance(unittest.TestCase):
     def test_every_resolution_case(self):
         self.assertEqual(infra.conformance(KIT / "resolution-cases.json", KIT), [])
