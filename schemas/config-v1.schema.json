@@ -27,7 +27,8 @@
               "description": "Consumer-owned pin of the infrastructure configuration release (ADR 0021). Absent: hosted runners only.",
               "properties": {"provider": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]*$"},
                              "config_release": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.]+)?$"},
-                             "config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}},
+                             "config_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+                             "config_digest_kind": {"enum": ["release-tree", "profile-file"], "description": "What config_digest identifies (ADR 0023): a provider's configuration release (release-tree digest, resolver only) or one profile's bytes (profile-file digest). Omitted: either, as before 0.10.0."}}},
     "check": {"type": "array", "minItems": 1, "items": {
       "type": "object", "additionalProperties": false, "required": ["id", "adapter", "stages"], "properties": {
         "id": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]*$"},
