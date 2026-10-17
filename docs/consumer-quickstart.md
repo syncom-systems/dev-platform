@@ -1,6 +1,7 @@
 # Consumer quickstart (what the pilot actually does)
 
-For the consumer-owned pins, the non-disruptive CI run and the verifiable evidence bundle see
+On a development machine, `brew install syncom-systems/dev-platform/dev-platform` and `dev-platform setup` do steps 2
+and 3 from the project's committed pins ([homebrew.md](homebrew.md)). For the consumer-owned pins, the non-disruptive CI run and the verifiable evidence bundle see
 [consumer-integration.md](consumer-integration.md).
 
 These steps are exactly what `tools/pilot.py` runs against a real public consumer

@@ -1,4 +1,4 @@
-"""Command line interface: init, detect, doctor, check, explain, digest."""
+"""Command line interface: init, setup, detect, doctor, check, explain, digest."""
 
 from __future__ import annotations
 
@@ -40,7 +40,14 @@ from dev_platform.errors import (
     DevPlatformError,
 )
 from dev_platform.model import Stage
-from dev_platform.resolve import default_store, needs_reexec, protected_context, reexec_env, resolve
+from dev_platform.resolve import (
+    default_store,
+    needs_reexec,
+    protected_context,
+    reexec_env,
+    reexec_python,
+    resolve,
+)
 
 
 def _common() -> argparse.ArgumentParser:
@@ -357,6 +364,53 @@ def build_parser() -> argparse.ArgumentParser:
     ps.add_argument(
         "--verifier-arg", action="append", default=[], help="argument for the verifier (repeatable)"
     )
+    su = sub.add_parser(
+        "setup",
+        help="make this project ready: its pinned release (verified), toolchains and environment checked",
+    )
+    su.add_argument(
+        "--project",
+        type=Path,
+        help="project root (default: nearest directory upwards with dev-platform.toml)",
+    )
+    su.add_argument(
+        "--home",
+        type=Path,
+        help="data root (env DEV_PLATFORM_HOME; default ~/.local/share/dev-platform, $RUNNER_TEMP in CI)",
+    )
+    su.add_argument(
+        "--store", type=Path, help="release store (env DEV_PLATFORM_STORE; default <home>/versions)"
+    )
+    su.add_argument(
+        "--toolchains",
+        type=Path,
+        help="toolchain root (env DEV_PLATFORM_TOOLCHAINS; default <home>/toolchains)",
+    )
+    su.add_argument(
+        "--cache", type=Path, help="cache (env DEV_PLATFORM_CACHE; default ~/.cache/dev-platform)"
+    )
+    su.add_argument(
+        "--allow-unaccepted",
+        action="store_true",
+        help="use a pinned release that is verified but not accepted",
+    )
+    su.add_argument("--allow-prerelease", action="store_true", help="use a pinned pre-release")
+    su.add_argument(
+        "--reverify", action="store_true", help="verify an installed release again with the trusted installer"
+    )
+    su.add_argument(
+        "--platform-repo",
+        default="https://github.com/syncom-systems/dev-platform",
+        help="public repository the pinned installer, verifier and policy are read from",
+    )
+    su.add_argument("--dry-run", action="store_true", help="report what would be done; no network, no writes")
+    so = su.add_mutually_exclusive_group()
+    so.add_argument("--json", action="store_true", help="machine-readable record")
+    so.add_argument(
+        "--print-env",
+        action="store_true",
+        help='print only shell exports, for eval "$(dev-platform setup --print-env)"; report on stderr',
+    )
     dg = sub.add_parser("digest", help="print the release tree digest of a directory")
     dg.add_argument("path", type=Path)
     return ap
@@ -382,13 +436,18 @@ class _Delegated(Exception):
 def _resolve_and_delegate(cfg, args):
     """Resolve the pinned release; if we are not running it, run it (from its private snapshot)."""
     res = resolve(cfg, protected=protected_context(os.environ, getattr(args, "protected", False)))
+    _delegate(res, args)
+    return res
+
+
+def _delegate(res, args) -> None:
+    """Run the command in the resolved release when it is not the code running now."""
     if needs_reexec(res):
         try:
-            child = subprocess.run([sys.executable, "-m", "dev_platform", *args._argv], env=reexec_env(res))
+            child = subprocess.run([reexec_python(), "-m", "dev_platform", *args._argv], env=reexec_env(res))
         finally:
             res.dispose()
         raise _Delegated(child.returncode)
-    return res
 
 
 def environment_for(cfg, res, root: Path) -> dict | None:
@@ -514,6 +573,7 @@ def cmd_doctor(args) -> int:
         add("ok", f"{CONFIG_FILENAME} valid ({len(cfg.checks)} checks)")
         try:
             res = resolve(cfg, protected=protected_context(os.environ, args.__dict__.get("protected", False)))
+            _delegate(res, args)  # the pinned release diagnoses its own environment, with its own code
             add("ok", f"platform resolved: mode={res.mode} version={res.version}")
             env_rec = environment_for(cfg, res, args.project.resolve())
             res.dispose()
@@ -1102,6 +1162,32 @@ def cmd_pr_check(args) -> int:
     return EXIT_OK if out["admission"] == "ok" else EXIT_UNSATISFIED
 
 
+def cmd_setup(args) -> int:
+    from dev_platform import locations, projectsetup
+
+    loc = locations.locate(
+        os.environ, home=args.home, store=args.store, toolchains=args.toolchains, cache=args.cache
+    )
+    rec, code = projectsetup.setup(
+        args.project,
+        loc,
+        allow_unaccepted=args.allow_unaccepted,
+        allow_prerelease=args.allow_prerelease,
+        reverify=args.reverify,
+        repo_url=args.platform_repo,
+        dry_run=args.dry_run,
+    )
+    if args.json:
+        print(json.dumps(rec, indent=2, sort_keys=True))
+    elif args.print_env:
+        print(projectsetup.render(rec), file=sys.stderr)
+        if code == EXIT_OK and rec.get("env"):
+            print(projectsetup.shell_env(rec))
+    else:
+        print(projectsetup.render(rec))
+    return code
+
+
 def cmd_digest(args) -> int:
     print(tree_digest(args.path))
     return EXIT_OK
@@ -1114,6 +1200,7 @@ _COMMANDS = {
     "explain": cmd_explain,
     "check": cmd_check,
     "digest": cmd_digest,
+    "setup": cmd_setup,
     "toolchain": cmd_toolchain,
     "provenance": cmd_provenance,
     "rollback": cmd_rollback,

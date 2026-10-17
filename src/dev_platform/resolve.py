@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,10 +18,11 @@ from dev_platform import release as releases
 from dev_platform.config import Config
 from dev_platform.digest import snapshot, tree_digest
 from dev_platform.errors import ConfigError, PlatformResolutionError
+from dev_platform.locations import HOME_ENV, STORE_ENV
 
 OVERRIDE_ENV = "DEV_PLATFORM_OVERRIDE"
-STORE_ENV = "DEV_PLATFORM_STORE"
 REEXEC_ENV = "DEV_PLATFORM_REEXEC"
+PYTHON_ENV = "DEV_PLATFORM_PYTHON"
 PACKAGE_ROOT = Path(dev_platform.__file__).resolve().parent.parent  # .../src
 
 
@@ -51,6 +53,8 @@ def protected_context(env=os.environ, flag: bool = False) -> bool:
 def default_store(env=os.environ) -> Path:
     if env.get(STORE_ENV):
         return Path(env[STORE_ENV])
+    if env.get(HOME_ENV):
+        return Path(env[HOME_ENV]) / "versions"
     base = env.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
     return Path(base) / "dev-platform" / "versions"
 
@@ -149,3 +153,16 @@ def reexec_env(res: Resolution, env=os.environ) -> dict[str, str]:
     e["PYTHONDONTWRITEBYTECODE"] = "1"  # keep the pinned tree byte-identical
     e[REEXEC_ENV] = res.version or res.mode
     return e
+
+
+def reexec_python(env=os.environ) -> str:
+    """The interpreter the pinned release runs on: `DEV_PLATFORM_PYTHON` (`dev-platform setup` sets it to a
+    profile's provisioned python), else this one. Only a selection: the release verifies the interpreter it
+    runs on against its manifest, so a wrong one yields a non-conformant environment, never a certified
+    result."""
+    exe = env.get(PYTHON_ENV)
+    if not exe:
+        return sys.executable
+    if not (os.path.isfile(exe) and os.access(exe, os.X_OK)):
+        raise PlatformResolutionError(f"{PYTHON_ENV}={exe} is not an executable file")
+    return exe

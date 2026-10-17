@@ -1,6 +1,21 @@
 # Changelog
 
 ## Unreleased
+- Homebrew (ADR 0022, `docs/homebrew.md`): `tools/homebrew_formula.py` renders the formula of the public CLI from a release
+  identity (release asset URL, archive sha256, test of the installed tree digest; depends on `gh` and `python@3.14`). The tap is
+  `syncom-systems/homebrew-dev-platform`. Workflow `homebrew` installs, upgrades (`brew upgrade`) and rolls back (`brew extract`)
+  the CLI through a local tap on macOS and Linux and checks that the store and the project pins are unchanged.
+- `dev-platform setup`: finds the project (`dev-platform.toml` + `dev-platform.release-pins.json`, upwards), requires the pins to
+  agree, installs exactly the pinned release with the trusted installer, verifier and policy taken at the pinned revision and
+  checked against the pinned digests (or re-checks an installed one: tree digest and the installer's record; a different tree is
+  refused, exit 3, and left untouched), verifies or provisions the profile with the pinned release itself and runs its `doctor`.
+  Never writes the project. `--dry-run`, `--json`, `--print-env`, `--reverify`, `--allow-unaccepted`, `--allow-prerelease`.
+  Supports pinned releases from 0.8.0.
+- Locations (`dev_platform.locations`): `DEV_PLATFORM_HOME`, `DEV_PLATFORM_TOOLCHAINS`, `DEV_PLATFORM_CACHE` (and flags) beside
+  `DEV_PLATFORM_STORE`; user-scoped XDG defaults; job-local `$RUNNER_TEMP/dev-platform` in CI. The launcher's store lookup
+  honours `DEV_PLATFORM_HOME`.
+- `DEV_PLATFORM_PYTHON`: the launcher re-executes the pinned release on this interpreter (setup exports a profile's provisioned
+  python, which the release verifies). `doctor` now delegates to the pinned release like `check` and `explain`.
 
 ## 0.8.2 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 Corrective patch for the reusable consumer workflow, found by the first real consumer pilot (NGA, with an inline copy of the workflow):

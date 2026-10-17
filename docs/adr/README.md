@@ -27,3 +27,4 @@ revision). Superseded records stay in place.
 | [0019](0019-application-release-approval-trust.md) | Application-release approval trust | Proposed |
 | [0020](0020-environment-approval-provider.md) | GitHub Environment approval as an authorization provider | Proposed |
 | [0021](0021-consumer-pins-and-infra-resolution.md) | Consumer-owned pins and infrastructure resolution | Proposed |
+| [0022](0022-homebrew-cli-and-project-setup.md) | Homebrew distribution of the CLI and project-aware setup | Proposed |
