@@ -46,7 +46,7 @@ class DevPlatform < Formula
     # The release tree byte for byte (src/, release.json, sbom.cdx.json): its digest is the release's pin.
     libexec.install "src", "release.json", "sbom.cdx.json"
     (bin/"dev-platform").write <<~EOS
-      #!#{{Formula["{python}"].opt_bin}}/python{python_series} -I
+      #!#{{formula_opt_bin("{python}")}}/python{python_series} -I
       import sys
       sys.dont_write_bytecode = True
       sys.path.insert(0, "#{{libexec}}/src")
@@ -71,7 +71,8 @@ class DevPlatform < Formula
 
   test do
     assert_match "dev-platform #{{version}}", shell_output("#{{bin}}/dev-platform --version")
-    assert_equal "{tree_sha256}", shell_output("#{{bin}}/dev-platform digest #{{libexec}}").strip
+    tree = shell_output("#{{bin}}/dev-platform digest #{{libexec}}").strip
+    assert_equal "{tree_sha256}", tree
     output = shell_output("#{{bin}}/dev-platform setup --project #{{testpath}} --home #{{testpath}}/h --dry-run", 2)
     assert_match "no dev-platform.toml", output
   end
