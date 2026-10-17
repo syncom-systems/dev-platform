@@ -127,6 +127,8 @@ authorization/current.v1.json   the current authorization policy: narrows or rev
 - **Engine:** a `resolved` result must carry the complete `authorization_policy {id, revision, digest}`; anything less
   is `unavailable` (incomplete authorization facts).
 
+See [infrastructure](infrastructure.md) for the commands (init, validate, profile, release, store, doctor, discover, drift).
+
 ## Consumer side
 A consumer passes the profile with `dev-platform check --infra-profile profile.json --event-trust <trusted|untrusted>`;
 routing then offers private runners only to trusted events and credentials only to trusted events, and refuses

@@ -1,4 +1,4 @@
-"""Command line interface: init, setup, detect, doctor, check, explain, digest."""
+"""Command line interface: init, setup, detect, doctor, check, explain, digest, workflow, infra."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from dev_platform import (
     depsubmit,
     engine,
     evidence,
+    infra_cli,
     isolation,
     pack,
     provenance,
@@ -296,6 +297,7 @@ def build_parser() -> argparse.ArgumentParser:
     idg.add_argument("profile", type=Path, help="a profile file, or a release directory releases/<version>")
     irl = isub.add_parser("release", help="immutable configuration releases of a configuration repository")
     irls = irl.add_subparsers(dest="ircmd", required=True)
+    infra_cli.add_release_build(irls)
     irv = irls.add_parser(
         "verify", help="every indexed release matches its digest; no unindexed release; the index only grew"
     )
@@ -314,6 +316,8 @@ def build_parser() -> argparse.ArgumentParser:
     irs.add_argument(
         "--evidence-out", type=Path, help="write the audit record (denial codes, narrowing) here"
     )
+    infra_cli.add_parsers(isub)
+    infra_cli.add_operator_parsers(isub)
     iau = isub.add_parser("authorization", help="current authorization policy (narrows, never grants)")
     iaus = iau.add_subparsers(dest="iacmd", required=True)
     iac = iaus.add_parser("check", help="validate a policy and print its identity")
@@ -443,6 +447,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dg = sub.add_parser("digest", help="print the release tree digest of a directory")
     dg.add_argument("path", type=Path)
+    wf = sub.add_parser(
+        "workflow",
+        help="print the GitHub Actions workflow this project would add (a proposal: nothing is committed or "
+        "enabled)",
+    )
+    wf.add_argument("--project", type=Path, default=Path("."))
+    wf.add_argument("--runs-on", default="ubuntu-24.04", help="a GitHub-hosted image label")
+    wf.add_argument("--branch", default="main", help="the protected branch pushes run on")
+    wf.add_argument("--allow-unaccepted", action="store_true", help="the pinned release may be unaccepted")
+    wf.add_argument("--output", type=Path, help="write a new file instead of stdout (never replaces one)")
     return ap
 
 
@@ -1130,6 +1144,8 @@ def cmd_plan(args) -> int:
 def cmd_infra(args) -> int:
     from . import prcheck, runners
 
+    if (code := infra_cli.run(args)) is not None:
+        return code
     if args.icmd == "event-trust":
         t = runners.event_trust(
             args.event,
@@ -1278,6 +1294,7 @@ _COMMANDS = {
     "plan": cmd_plan,
     "pr-check": cmd_pr_check,
     "infra": cmd_infra,
+    "workflow": infra_cli.workflow,
     "validate": cmd_validate,
     "affected": cmd_affected,
 }

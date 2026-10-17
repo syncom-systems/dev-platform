@@ -191,8 +191,10 @@ class DigestKind(unittest.TestCase):
             self.assertEqual(self.resolve(kind, profile_file=PROFILE).status, "resolved", kind)
 
     def test_evidence_names_the_kind_only_when_declared(self):
-        self.assertEqual(self.resolve("profile-file", profile_file=PROFILE).evidence()["pinned"]["config_digest_kind"],
-                         "profile-file")  # fmt: skip
+        self.assertEqual(
+            self.resolve("profile-file", profile_file=PROFILE).evidence()["pinned"]["config_digest_kind"],
+            "profile-file",
+        )
         self.assertNotIn("config_digest_kind", self.resolve(None, profile_file=PROFILE).evidence()["pinned"])
 
 
@@ -200,8 +202,15 @@ class AuthorizationFacts(unittest.TestCase):
     def test_complete_identity_only(self):
         ok = {"id": "p", "revision": "1", "digest": "sha256:" + "0" * 64}
         self.assertIsNone(infra.authorization_facts(ok))
-        for bad in (None, {}, {**ok, "extra": 1}, {**ok, "revision": 1}, {**ok, "id": ""}, {**ok, "digest": "x"},
-                    {"id": "p", "revision": "1"}):  # fmt: skip
+        for bad in (
+            None,
+            {},
+            {**ok, "extra": 1},
+            {**ok, "revision": 1},
+            {**ok, "id": ""},
+            {**ok, "digest": "x"},
+            {"id": "p", "revision": "1"},
+        ):
             self.assertIsNotNone(infra.authorization_facts(bad), bad)
 
 

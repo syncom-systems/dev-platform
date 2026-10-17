@@ -173,8 +173,15 @@ class Denies(Base):
             self.assertEqual(self.code(self.go(**kw)), code, kw)
 
     def test_malformed_requests(self):
-        for req in (None, [], "x", {**request(), "extra": 1}, request(repo="no-slash"), request(trust="maybe"),
-                    {**request(), "schema_version": "dev-platform.infra-resolve-request/v2"}):  # fmt: skip
+        for req in (
+            None,
+            [],
+            "x",
+            {**request(), "extra": 1},
+            request(repo="no-slash"),
+            request(trust="maybe"),
+            {**request(), "schema_version": "dev-platform.infra-resolve-request/v2"},
+        ):
             res = infra_provider.resolve(self.root, req)
             self.assertEqual(self.code(res), "request-invalid", req)
 
@@ -242,9 +249,13 @@ class Command(Base):
     def test_untrusted_never_writes_a_profile(self):
         out = tmpdir(self) / "p.json"
         req = request(trust="untrusted", digest=self.digest, profile_out=str(out))
-        p = subprocess.run([sys.executable, "-m", "dev_platform", "infra", "resolve", "--root", str(self.root)],
-                           input=json.dumps(req), capture_output=True, text=True,
-                           env={**os.environ, "PYTHONPATH": str(ROOT / "src")})  # fmt: skip
+        p = subprocess.run(
+            [sys.executable, "-m", "dev_platform", "infra", "resolve", "--root", str(self.root)],
+            input=json.dumps(req),
+            capture_output=True,
+            text=True,
+            env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+        )
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(json.loads(p.stdout)["decision"], "public-default")
         self.assertFalse(out.exists())
@@ -260,8 +271,9 @@ class Command(Base):
 
     def test_release_verify_and_digest_commands(self):
         env = {**os.environ, "PYTHONPATH": str(ROOT / "src")}
-        run = lambda *a: subprocess.run([sys.executable, "-m", "dev_platform", "infra", *a], capture_output=True,
-                                        text=True, env=env)  # fmt: skip
+        run = lambda *a: subprocess.run(
+            [sys.executable, "-m", "dev_platform", "infra", *a], capture_output=True, text=True, env=env
+        )
         p = run("release", "verify", "--root", str(self.root))
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
         p = run("digest", str(self.root / "releases" / VERSION))

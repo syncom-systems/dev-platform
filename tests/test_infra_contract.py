@@ -105,9 +105,19 @@ class InfraCli(unittest.TestCase):
         import tempfile
         from pathlib import Path
 
-        prof = {"schema": "dev-platform.infra/v1", "runners": [
-            {"id": "p", "labels": ["x"], "os": "linux", "arch": "x86_64", "isolation": "persistent", "trust": "trusted"}
-        ]}  # fmt: skip
+        prof = {
+            "schema": "dev-platform.infra/v1",
+            "runners": [
+                {
+                    "id": "p",
+                    "labels": ["x"],
+                    "os": "linux",
+                    "arch": "x86_64",
+                    "isolation": "persistent",
+                    "trust": "trusted",
+                }
+            ],
+        }
         with tempfile.TemporaryDirectory() as td:
             f = Path(td) / "p.json"
             f.write_text(json.dumps(prof))
@@ -117,8 +127,9 @@ class InfraCli(unittest.TestCase):
             self.assertEqual(out["warnings"], [])
 
     def test_workflows_are_checked_against_the_profile(self):
-        code, out = self.run_cli("check", str(KIT / "valid-admission.json"), "--workflows",
-                                 str(ROOT / ".github" / "workflows"))  # fmt: skip
+        code, out = self.run_cli(
+            "check", str(KIT / "valid-admission.json"), "--workflows", str(ROOT / ".github" / "workflows")
+        )
         self.assertEqual((code, out["pr_check"]["admission"]), (0, "ok"))
 
     def test_event_trust_cli(self):
