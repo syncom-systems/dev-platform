@@ -187,7 +187,7 @@ jobs:
             "contract": "dev-platform.infra/v1", "status": "ok"}] and .authorization_policy.revision == "1"'
           jq -n --arg d "$D" '{schema_version: "dev-platform.infra-resolve-request/v1", repo: "example-org/app",
             event_trust: "trusted", contract: "dev-platform.infra/v1", requested: {version: "2026.10.1", digest: $d},
-            profile_out: env.W + "/profile.json"}' > "$W/req.json"
+            profile_out: (env.W + "/profile.json")}' > "$W/req.json"
           dev-platform infra resolve --root "$IS" --request "$W/req.json" | jq -e '.decision == "resolved"'
           dev-platform setup --project "$P82" --allow-unaccepted --json | tee "$W/setup3.json"
           jq -e '.ok and .cli.version == env.B and .pinned.version == "0.8.2" and .release.action == "present"
