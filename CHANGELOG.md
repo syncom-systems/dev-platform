@@ -6,6 +6,16 @@
   `infra digest releases/<v>`), the current authorization policy that narrows and never grants (`infra_authz`,
   `infra authorization check`) and the generic provider (`infra_provider`, `dev-platform infra resolve --root DIR`).
   Releases in the previous private layout resolve unchanged; results are identical to the previous private provider.
+- Infrastructure consolidation, stages 2-3 (`docs/infrastructure.md`): `dev-platform.infra-config/v1`
+  (`schemas/infra-config-v1.schema.json`, `infra_config`): runners (github-hosted or self-hosted), runner groups,
+  caches, credential references, repositories, admission; fail-closed validation and projection onto per-repository
+  `dev-platform.infra/v1` profiles. `dev-platform infra init` (templates `github-hosted`, `self-hosted`; writes files
+  only), `infra validate` (config, profile, policy or repository; `--workflows` checks admission and undeclared runner
+  groups), `infra profile`, `infra release build`. Validated examples in `examples/infra/`.
+- `dev-platform workflow`: the proposed GitHub Actions workflow (reusable `consumer-pilot.yml` at the pinned release,
+  GitHub-hosted runner) on stdout or a new file; never commits or enables anything.
+- `dev-platform infra store fetch|import|sync|list` (exact selection only, write-once, forward-only policy, sources
+  always named), `infra doctor` (identities only), `infra discover` (`gh api` GET only), `infra audit`, `infra drift`.
 - `[infra] config_digest_kind = "release-tree" | "profile-file"` (optional; omitted means exactly what it meant before).
 - The engine refuses a `resolved` result without a complete `authorization_policy {id, revision, digest}`
   (incomplete authorization facts); new resolution conformance cases.

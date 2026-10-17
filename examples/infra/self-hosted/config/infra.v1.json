@@ -1,0 +1,133 @@
+{
+  "admission": {
+    "forbidden_triggers": [
+      "pull_request_target"
+    ],
+    "protected_environments": [
+      "release"
+    ]
+  },
+  "caches": [
+    {
+      "id": "build-cache",
+      "modes": {
+        "trusted": "read-write",
+        "untrusted": "none"
+      }
+    }
+  ],
+  "credential_refs": [
+    {
+      "binding": "unbound",
+      "class": "deploy",
+      "id": "deploy-key",
+      "provider": "github-environment-secret",
+      "scope": "environment:release"
+    }
+  ],
+  "owner": "example-org",
+  "repositories": [
+    {
+      "cache": "build-cache",
+      "desired": {
+        "default_token": "read",
+        "runner_registration": "org-group"
+      },
+      "name": "app",
+      "runners": [
+        "github-ubuntu-24.04",
+        "github-ubuntu-24.04-arm",
+        "github-macos-15",
+        "linux-build"
+      ],
+      "visibility": "private"
+    },
+    {
+      "desired": {
+        "default_token": "read",
+        "runner_registration": "org-group"
+      },
+      "name": "site",
+      "runners": [
+        "github-ubuntu-24.04"
+      ],
+      "visibility": "public"
+    }
+  ],
+  "runner_groups": [
+    {
+      "allows_public_repositories": false,
+      "name": "trusted-builds",
+      "repositories": [
+        "app"
+      ],
+      "restricted_to_workflows": true
+    }
+  ],
+  "runners": [
+    {
+      "arch": "x86_64",
+      "cache": "none",
+      "capabilities": [],
+      "credentials": [],
+      "id": "github-ubuntu-24.04",
+      "isolation": "ephemeral",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "os": "linux",
+      "placement": "github-hosted",
+      "trust": "public"
+    },
+    {
+      "arch": "arm64",
+      "cache": "none",
+      "capabilities": [],
+      "credentials": [],
+      "id": "github-ubuntu-24.04-arm",
+      "isolation": "ephemeral",
+      "labels": [
+        "ubuntu-24.04-arm"
+      ],
+      "os": "linux",
+      "placement": "github-hosted",
+      "trust": "public"
+    },
+    {
+      "arch": "arm64",
+      "cache": "none",
+      "capabilities": [],
+      "credentials": [],
+      "id": "github-macos-15",
+      "isolation": "ephemeral",
+      "labels": [
+        "macos-15"
+      ],
+      "os": "macos",
+      "placement": "github-hosted",
+      "trust": "public"
+    },
+    {
+      "arch": "x86_64",
+      "cache": "none",
+      "capabilities": [],
+      "credentials": [
+        "deploy"
+      ],
+      "description": "edit: your own runner class; declaring it does not register or secure it",
+      "id": "linux-build",
+      "isolation": "ephemeral",
+      "labels": [
+        "self-hosted",
+        "linux",
+        "x64",
+        "build"
+      ],
+      "os": "linux",
+      "placement": "self-hosted",
+      "runner_group": "trusted-builds",
+      "trust": "trusted"
+    }
+  ],
+  "schema": "dev-platform.infra-config/v1"
+}

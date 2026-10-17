@@ -1,0 +1,68 @@
+{
+  "admission": {
+    "forbidden_triggers": [
+      "pull_request_target"
+    ],
+    "protected_environments": []
+  },
+  "owner": "example-org",
+  "repositories": [
+    {
+      "desired": {
+        "default_token": "read"
+      },
+      "name": "app",
+      "runners": [
+        "github-ubuntu-24.04",
+        "github-ubuntu-24.04-arm",
+        "github-macos-15"
+      ],
+      "visibility": "private"
+    }
+  ],
+  "runners": [
+    {
+      "arch": "x86_64",
+      "cache": "none",
+      "capabilities": [],
+      "credentials": [],
+      "id": "github-ubuntu-24.04",
+      "isolation": "ephemeral",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "os": "linux",
+      "placement": "github-hosted",
+      "trust": "public"
+    },
+    {
+      "arch": "arm64",
+      "cache": "none",
+      "capabilities": [],
+      "credentials": [],
+      "id": "github-ubuntu-24.04-arm",
+      "isolation": "ephemeral",
+      "labels": [
+        "ubuntu-24.04-arm"
+      ],
+      "os": "linux",
+      "placement": "github-hosted",
+      "trust": "public"
+    },
+    {
+      "arch": "arm64",
+      "cache": "none",
+      "capabilities": [],
+      "credentials": [],
+      "id": "github-macos-15",
+      "isolation": "ephemeral",
+      "labels": [
+        "macos-15"
+      ],
+      "os": "macos",
+      "placement": "github-hosted",
+      "trust": "public"
+    }
+  ],
+  "schema": "dev-platform.infra-config/v1"
+}
