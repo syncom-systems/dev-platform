@@ -1,10 +1,14 @@
 # Integrating an infrastructure provider (dev-platform.infra/v1)
 
-The public platform and a private infrastructure repository (for example `dev-platform-infra`) are coupled by
-exactly one data contract, `dev-platform.infra/v1` ([ADR 0001](adr/0001-public-core-private-infrastructure.md),
-[ADR 0018](adr/0018-admission-policy-single-contract.md)). The provider never imports platform code and the
-platform never reads provider internals: the provider emits a profile (JSON) and its own CI runs the public
-tools below against it. Nothing here requires access to the private repository.
+The engine and a private infrastructure repository (for example `dev-platform-infra`) are coupled by exactly one
+consumer-facing data contract, the profile `dev-platform.infra/v1` ([ADR 0001](adr/0001-public-core-private-infrastructure.md),
+[ADR 0018](adr/0018-admission-policy-single-contract.md)), delivered through the resolver protocol
+`dev-platform.infra-resolve/v1` (ADR 0021). The provider never imports platform code and the engine never reads
+provider internals: the provider emits a profile (JSON) and its own CI runs the public tools below against it.
+Separately, the *provider-side* formats that the generic provider `dev-platform infra resolve` reads (configuration
+release store, release index, current authorization policy; ADR 0023, below) are inputs of that provider, not part
+of what the engine consumes: an organization may keep its own provider and formats as long as it answers the
+resolver protocol with a valid profile. Nothing here requires access to the private repository.
 
 ## What the provider supplies
 ```json
@@ -83,8 +87,10 @@ config_digest = "sha256:<64 hex>"   # identity: `dev-platform infra digest profi
 - The result record's `infra` block carries pinned, resolved, authorization policy and effective profile digest.
 
 ## Configuration releases, authorization and the generic provider (ADR 0023, from 0.10.0)
-An organization's configuration repository (or a local store of it) has this layout; the public platform builds,
-verifies and resolves it, and none of it is needed to use the platform without self-hosted infrastructure:
+These are provider-side formats: the generic provider reads them and answers the resolver protocol; the engine
+sees only that answer and the profile. An organization's configuration repository (or a local store of it) has this
+layout; the public platform builds, verifies and resolves it, and none of it is needed to use the platform without
+self-hosted infrastructure:
 ```
 releases/index.v1.json          {"schema_version": 1, "releases": [{"version", "digest" (bare hex), "contract"}]}
 releases/<YYYY.MM.N>/           immutable: manifest.json, profiles/<repository>.json, any further declared data
