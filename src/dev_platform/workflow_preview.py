@@ -35,8 +35,8 @@ def _pins(project: Path) -> dict:
     version, rev = pins.get("version"), pins.get("source_revision")
     if not isinstance(version, str) or not isinstance(rev, str) or not _SHA.fullmatch(rev):
         raise ConfigError([f"{p}: needs version and a full source_revision"])
-    m = re.match(r"^(\d+)\.(\d+)\.(\d+)", version)
-    if not m or tuple(int(x) for x in m.groups()) < FIRST_REUSABLE:
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.]+)?", version)  # it is written into the workflow
+    if not m or tuple(int(x) for x in m.groups()[:3]) < FIRST_REUSABLE:
         raise ConfigError(
             [f"{p}: release {version} predates a working reusable workflow; pin 0.8.2 or later"]
         )

@@ -66,6 +66,11 @@ class Render(unittest.TestCase):
         _, notes = W.render(project(self), runs_on="ubuntu-24.04-arm")
         self.assertTrue(any("linux-arm64" in n for n in notes))
 
+    def test_the_pinned_version_cannot_inject_yaml(self):
+        for v in ("0.8.2\n    secrets: inherit", "0.8.2 # x", "0.9.0x"):
+            with self.assertRaises(ConfigError, msg=v):
+                W.render(project(self, version=v))
+
     def test_needs_config_and_a_working_release(self):
         d = project(self)
         (d / "dev-platform.toml").unlink()

@@ -178,6 +178,9 @@ def problems(cfg: object) -> list[str]:
         if SECRET_SHAPES.search(s):
             errs.append("a value looks like an embedded secret: store a credential_ref, never the value")
             break
+    for k in ("runners", "repositories"):
+        if k not in cfg:
+            errs.append(f"{k}: required")
     raw = {
         k: _list(cfg, k, errs)
         for k in ("runners", "runner_groups", "caches", "credential_refs", "repositories")
@@ -237,6 +240,10 @@ def problems(cfg: object) -> list[str]:
                 )
             if r["trust"] == "public" and r["isolation"] != "ephemeral":
                 errs.append(f"{w}: a persistent runner must never serve untrusted events (trust public)")
+        for k in ("labels", "credentials", "capabilities"):
+            v = r.get(k, [])
+            if not (isinstance(v, list) and all(isinstance(x, str) and x for x in v)):
+                errs.append(f"{w}.{k}: a list of non-empty strings")
         if isinstance(creds_of, list):
             for c in creds_of:
                 if isinstance(c, str) and c not in classes:

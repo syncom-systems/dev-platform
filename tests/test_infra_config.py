@@ -211,6 +211,19 @@ class FailsClosed(unittest.TestCase):
             lambda c: c["admission"].update(forbidden_triggers=["pull_request_targett"]), "unknown trigger"
         )
 
+    def test_required_lists_are_required(self):
+        for key in ("runners", "repositories"):
+            self.assertRejects(lambda c, key=key: c.pop(key), f"{key}: required")
+
+    def test_credentials_and_capabilities_must_be_lists(self):
+        self.assertRejects(
+            lambda c: runner(c, "linux-build").update(credentials="deploy"), "credentials: a list"
+        )
+        self.assertRejects(
+            lambda c: runner(c, "linux-build").update(capabilities="docker"), "capabilities: a list"
+        )
+        self.assertRejects(lambda c: runner(c, "linux-build").update(labels="build"), "labels: a list")
+
     def test_an_unassigned_runner_is_validated_too(self):
         def f(c):
             c["runners"].append(dict(c["runners"][0], id="spare", os="windows"))

@@ -47,12 +47,22 @@ API = {
 }
 
 
+def paged(doc):
+    if isinstance(doc, list):
+        return [doc[:1], doc[1:]]
+    (key,) = [k for k, v in doc.items() if isinstance(v, list)]
+    return [{**doc, key: doc[key][:1]}, {**doc, key: doc[key][1:]}]
+
+
 def fake(api, calls):
     def runner(argv, **kw):
         calls.append(argv)
-        path = argv[-1]
+        path = argv[-1].split("?")[0]
         if path in api:
-            return subprocess.CompletedProcess(argv, 0, json.dumps(api[path]), "")
+            doc = api[path]
+            if "--slurp" in argv:  # every list endpoint is read to its last page (here: two pages)
+                doc = paged(doc)
+            return subprocess.CompletedProcess(argv, 0, json.dumps(doc), "")
         return subprocess.CompletedProcess(argv, 1, "", "HTTP 403: Resource not accessible by integration")
 
     return runner
@@ -65,8 +75,13 @@ class Discover(unittest.TestCase):
         self.assertEqual(snap["errors"], [])
         for argv in calls:
             self.assertEqual(argv[:4], ["gh", "api", "--method", "GET"])
-            self.assertEqual(len(argv), 5)
+            self.assertIn(argv[4:-1], ([], ["--paginate", "--slurp"]))
             self.assertNotIn("secret", argv[-1])
+            if "--paginate" in argv:
+                self.assertTrue(argv[-1].endswith("per_page=100"))
+        self.assertEqual(
+            sum("--paginate" in a for a in calls), 7
+        )  # groups, members, repositories, 2x(runners, rulesets)
         self.assertEqual(snap["runner_groups"][0]["repositories"], ["app"])
 
     def test_unreadable_is_recorded_as_unknown(self):
@@ -84,6 +99,24 @@ class Discover(unittest.TestCase):
                 O._get(path, runner=lambda *a, **k: self.fail("must not run"))
         with self.assertRaises(ValueError):
             O.discover("a b", [], runner=lambda *a, **k: self.fail("must not run"))
+
+
+class Pagination(unittest.TestCase):
+    def test_every_page_is_merged(self):
+        api = dict(API)
+        many = [
+            {"name": f"r{i}", "os": "Linux", "status": "online", "labels": [{"name": "self-hosted"}]}
+            for i in range(3)
+        ]
+        api["/repos/example-org/app/actions/runners"] = {"total_count": 3, "runners": many}
+        snap = O.discover("example-org", ["app"], fake(api, []))
+        self.assertEqual([r["name"] for r in snap["repos"]["app"]["repo_level_runners"]], ["r0", "r1", "r2"])
+
+    def test_an_unexpected_page_shape_is_an_error(self):
+        def runner(argv, **kw):
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"runners": []}), "")
+
+        self.assertIn("_error", O._get("/repos/a/b/actions/runners", runner, "runners"))
 
 
 class Drift(unittest.TestCase):
@@ -116,6 +149,25 @@ class Drift(unittest.TestCase):
         rows = O.drift(self_hosted(), snap)
         self.assertIn(("runner_group", "absent"), {(r["field"], r["observed"]) for r in rows})
         self.assertIn(("site", "unknown"), {(r["repo"], r["status"]) for r in rows})
+
+
+class AuditUnknowns(unittest.TestCase):
+    def test_a_snapshot_nobody_could_read_is_not_clean(self):
+        snap = O.discover("example-org", ["app"], fake({}, []))
+        findings = O.audit(snap)
+        self.assertTrue(findings)
+        self.assertEqual({f["id"] for f in findings}, {"UNKNOWN"})
+        self.assertTrue(all(f["severity"] == "high" for f in findings))
+
+    def test_unreadable_group_members_and_visibility_are_judged_conservatively(self):
+        snap = O.discover("example-org", ["app", "site"], fake(API, []))
+        snap["runner_groups"][0].update(runners=None, allows_public_repositories=None)
+        snap["repos"]["site"].update(
+            private=None, repo_level_runners=[{"name": "box", "labels": ["self-hosted"]}]
+        )
+        ids = {f["id"] for f in O.audit(snap)}
+        for fid in ("UNKNOWN", "GRP-PUBLIC", "PUBLIC-PERSISTENT"):
+            self.assertIn(fid, ids)
 
 
 class Audit(unittest.TestCase):
