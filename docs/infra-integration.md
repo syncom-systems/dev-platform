@@ -41,7 +41,10 @@ three ways, all fail-closed: the profile must validate under that release's `dev
 name `contract: dev-platform.infra/v1` (anything else is `unsupported contract`); and the resolved configuration must equal the
 consumer's pin. A provider that adds a field or a new schema version is incompatible with older releases until the consumer
 pins a platform release that understands it, and the pinned configuration digest changes with it. Releases:
-`dev-platform.infra/v1` and capabilities/cache since 0.1.x; pin, resolver, `check-resolution` and per-job facts 0.8.0.
+`dev-platform.infra/v1` and capabilities/cache since 0.1.x; pin, resolver, `check-resolution` and per-job facts 0.8.0;
+configuration releases, authorization, the generic provider, `config_digest_kind` and mandatory authorization facts
+0.10.0 (ADR 0023). Configuration-release formats are only ever added (`infra_release.FORMATS`), so a newer platform
+resolves every older release unchanged.
 
 ## Per-job facts for providers (issue #100)
 `dev-platform pr-check --facts` (or `prcheck.check(files, profile, facts=True)`) adds `facts` to the output: per workflow file the
@@ -78,6 +81,45 @@ config_digest = "sha256:<64 hex>"   # identity: `dev-platform infra digest profi
   --profile profile.json` judges a result exactly as the engine does; `contracts/infra/v1/resolution-cases.json` holds the
   cases (stale, newer, mismatch, denied, unsupported contract, missing profile, narrowed by a newer policy).
 - The result record's `infra` block carries pinned, resolved, authorization policy and effective profile digest.
+
+## Configuration releases, authorization and the generic provider (ADR 0023, from 0.10.0)
+An organization's configuration repository (or a local store of it) has this layout; the public platform builds,
+verifies and resolves it, and none of it is needed to use the platform without self-hosted infrastructure:
+```
+releases/index.v1.json          {"schema_version": 1, "releases": [{"version", "digest" (bare hex), "contract"}]}
+releases/<YYYY.MM.N>/           immutable: manifest.json, profiles/<repository>.json, any further declared data
+authorization/current.v1.json   the current authorization policy: narrows or revokes, never grants
+```
+- **Two digests, never confused.** The *release-tree digest* (`sha256:` + `tree_digest` of `releases/<version>/`,
+  `dev-platform infra digest releases/<version>`) identifies a configuration release and is what a consumer pins with a
+  provider. A *profile-file digest* (`dev-platform infra digest profile.json`) identifies one profile's bytes: the
+  vendored-profile pin, and the `effective_profile_digest` a provider reports (it changes when the policy narrows a
+  release; the release-tree digest does not). Declare which one a pin is with `config_digest_kind`:
+  ```toml
+  [infra]
+  provider = "acme-infra"
+  config_release = "2026.10.1"
+  config_digest = "sha256:<release-tree digest>"
+  config_digest_kind = "release-tree"   # optional; "profile-file" for a vendored profile; omitted = as before
+  ```
+  `release-tree` never matches a vendored file and resolves only through a provider for a trusted event;
+  `profile-file` requires the resolved profile to be exactly the pinned bytes. Platform releases before 0.10.0 reject
+  the key, so it is only used together with a platform pin that understands it.
+- **Authorization policy** (`dev-platform infra authorization check FILE`): exactly the keys `schema_version`,
+  `policy_id`, `revision`, `minimum_release`, `revoked_releases`, `repositories_enabled`, `withdrawn`,
+  `repository_withdrawn`. Stale (below the floor) and revoked releases are denied; withdrawals remove runners or
+  credential classes from the effective profile. Unknown keys make the policy invalid, and without a valid policy
+  nothing resolves.
+- **Generic provider:** `dev-platform infra resolve --root DIR` answers the resolver protocol from such a root; an
+  operator names it as `--infra-resolver "dev-platform infra resolve --root DIR"` in a trusted job. Denial codes:
+  `request-invalid`, `policy-invalid`, `unsupported-contract`, `selection-missing`, `version-unknown`,
+  `digest-mismatch`, `release-tampered`, `release-unreadable`, `unsupported-format`, `release-stale`,
+  `release-revoked`, `repo-not-enabled`, `repo-not-in-release`, `index-invalid`. `--evidence-out` writes the audit
+  record (identities, digests and codes only).
+- **Immutability in the configuration repository's CI:** `dev-platform infra release verify --root . --base-index
+  <the protected branch's index>`: every release matches its digest, nothing is unindexed, entries are only added.
+- **Engine:** a `resolved` result must carry the complete `authorization_policy {id, revision, digest}`; anything less
+  is `unavailable` (incomplete authorization facts).
 
 ## Consumer side
 A consumer passes the profile with `dev-platform check --infra-profile profile.json --event-trust <trusted|untrusted>`;

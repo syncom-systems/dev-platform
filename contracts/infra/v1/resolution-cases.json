@@ -1,5 +1,5 @@
 {
-  "description": "Resolution conformance for the consumer-pinned infrastructure configuration (ADR 0021, issue #99). Each case is a provider result judged against the pin exactly as the engine does; a provider's CI can run the same through `dev-platform infra check-resolution`.",
+  "description": "Resolution conformance for the consumer-pinned infrastructure configuration (ADR 0021, issue #99). Each case is a provider result judged against the pin exactly as the engine does; a provider's CI can run the same through `dev-platform infra check-resolution`. Cases marked ADR 0023 and the config_digest_kind pins apply from 0.10.0.",
   "cases": [
     {
       "name": "resolved exactly as pinned",
@@ -452,6 +452,162 @@
       "expect": {
         "status": "unavailable",
         "reason": "not a JSON object"
+      }
+    },
+    {
+      "name": "resolved without authorization facts (ADR 0023)",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": null,
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "incomplete authorization facts"
+      }
+    },
+    {
+      "name": "resolved with a partial authorization identity",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "incomplete authorization facts"
+      }
+    },
+    {
+      "name": "resolved with an empty authorization revision",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "incomplete authorization facts"
+      }
+    },
+    {
+      "name": "release-tree pin resolved by a provider",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "config_digest_kind": "release-tree"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:6ca9d14d7603295ae6d1fb799ef5a8085c162f20e720f337570906ee4969a77b"
+      },
+      "profile": "valid-trusted-credentials.json",
+      "expect": {
+        "status": "resolved"
+      }
+    },
+    {
+      "name": "profile-file pin: a narrowed profile is not the pinned bytes",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "config_digest_kind": "profile-file"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "resolved",
+        "reasons": [],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "authorization_policy": {
+          "id": "org-default",
+          "revision": "7",
+          "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "effective_profile_digest": "sha256:d4e4e2aa43e7b261c132920a7e11cd3d313a45b9e0eded2078bdd05b324b6cb2"
+      },
+      "profile": "valid-empty.json",
+      "expect": {
+        "status": "unavailable",
+        "reason": "profile-file"
       }
     }
   ]
