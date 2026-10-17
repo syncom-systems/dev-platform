@@ -1,0 +1,21 @@
+# appended byte
+FAILED  attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:b6e695c8127f65485ea9a497a4a15a7bab3cc4cfc6dcf551d346d1a28233e6ae?per_page=30&predicate_type=https%3A%2F%2Fslsa.dev%2Fprovenance%2Fv1))
+FAILED  sbom-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:b6e695c8127f65485ea9a497a4a15a7bab3cc4cfc6dcf551d346d1a28233e6ae?per_page=30&predicate_type=https%3A%2F%2Fcyclonedx.org%2Fbom))
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  continuity  (record is about a different archive)
+acceptance: failed  attestation-signature; sbom-attestation-signature; sbom-attestation-content; continuity
+# wrong source revision
+FAILED  source-revision  (release.json says 59ac8a3c752de106a8f1d3df1c31a559fe0fd824)
+FAILED  attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 59ac8a3c752de106a8f1d3df1c31a559fe0fd824)
+FAILED  sbom-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 59ac8a3c752de106a8f1d3df1c31a559fe0fd824)
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  environment-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got edadc4d089b0b5dae3f995121ce48b40cec0e8aa)
+FAILED  continuity  (predecessor did not run over this source revision)
+FAILED  continuity-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 59ac8a3c752de106a8f1d3df1c31a559fe0fd824)
+acceptance: failed  source-revision; attestation-signature; sbom-attestation-signature; sbom-attestation-content; environment-attestation-signature; continuity; continuity-attestation-signature
+# wrong archive digest pin
+FAILED  archive-digest  (actual a3473a0260b16d571c2832228e2e02e9d07c8b535da2439cc4f2f69ccd74099b)
+acceptance: failed  archive-digest
+# wrong tree digest pin
+FAILED  tree-digest
+acceptance: failed  tree-digest
