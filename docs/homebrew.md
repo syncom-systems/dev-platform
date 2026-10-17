@@ -20,7 +20,8 @@ brew install syncom-systems/dev-platform/dev-platform   # taps syncom-systems/ho
 gh auth login                                           # once: the trusted installer verifies attestations with gh
 dev-platform --version
 ```
-No sudo, nothing global: the CLI lives in the Homebrew prefix, releases and toolchains in your home directory.
+Installing by the fully qualified name trusts that one formula (Homebrew's tap trust); nothing else from the tap is
+trusted implicitly. No sudo, nothing global: the CLI lives in the Homebrew prefix, releases and toolchains in your home directory.
 Toolchain profiles have sources for macOS on Apple silicon and Linux x86_64; on an Intel Mac the CLI works but
 `setup` cannot provision a profile.
 

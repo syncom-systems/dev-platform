@@ -68,6 +68,7 @@ jobs:
           brew tap-new --no-git local/audit
           cp "$W/audit.rb" "$(brew --repository local/audit)/Formula/dev-platform.rb"
           brew audit --strict --formula local/audit/dev-platform
+          brew untap local/audit  # one dev-platform formula per tap set, as a user has
       - name: Install A from a tap (git history, as a published tap has)
         run: |
           T="$W/tap"; git init -q "$T"; mkdir "$T/Formula"
@@ -166,6 +167,7 @@ jobs:
             > "$(brew --repository local/bad)/Formula/dev-platform.rb"
           if brew fetch --formula local/bad/dev-platform > "$W/fetch.txt" 2>&1; then cat "$W/fetch.txt"; exit 1; fi
           cat "$W/fetch.txt"; grep -qi "mismatch" "$W/fetch.txt"
+          brew untap local/bad
       - name: Refused - a corrupted store entry (left untouched)
         run: |
           cp -R "$STORE" "$W/store-bad"; chmod -R u+w "$W/store-bad"
