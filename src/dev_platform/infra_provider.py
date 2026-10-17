@@ -170,7 +170,7 @@ def resolve(root: Path, request: object, policy_path: Path | None = None) -> dic
     try:
         files = read_tree(root / "releases" / req["version"])
     except ReleaseError as e:
-        return deny("release-tampered" if e.code == "release-tampered" else "release-unreadable", e.detail)
+        return deny(e.code, e.detail)  # release-unreadable or release-tampered (#140)
     except OSError as e:
         return deny("release-unreadable", str(e))
     if digest_of(files) != entry["digest"]:

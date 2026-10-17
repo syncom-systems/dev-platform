@@ -198,10 +198,20 @@ class Denies(Base):
         p.write_bytes(p.read_bytes().replace(b"x86_64", b"arm64"))
         self.assertEqual(self.code(self.go()), "release-tampered")
 
-    def test_symlinked_release_content(self):
-        p = self.root / "releases" / VERSION / "profiles" / "app.json"
-        p.unlink()
-        os.symlink(self.root / "elsewhere.json", p)
+    def test_content_that_is_not_plain_files_is_unreadable(self):
+        # The same code as the provider the generic one replaces (#140): symlink, special file, no directory.
+        d = self.root / "releases" / VERSION
+        os.symlink("/etc/hosts", d / "profiles" / "link.json")
+        self.assertEqual(self.code(self.go()), "release-unreadable")
+        (d / "profiles" / "link.json").unlink()
+        os.mkfifo(d / "fifo")
+        self.assertEqual(self.code(self.go()), "release-unreadable")
+        (d / "fifo").unlink()
+        shutil.move(d, self.root / "moved")
+        self.assertEqual(self.code(self.go()), "release-unreadable")
+
+    def test_generated_files_in_a_release_are_tampering(self):
+        (self.root / "releases" / VERSION / "x.pyc").write_bytes(b"")
         self.assertEqual(self.code(self.go()), "release-tampered")
 
     def test_tampered_index(self):

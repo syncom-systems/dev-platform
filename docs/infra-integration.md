@@ -120,7 +120,9 @@ authorization/current.v1.json   the current authorization policy: narrows or rev
   operator names it as `--infra-resolver "dev-platform infra resolve --root DIR"` in a trusted job. Denial codes:
   `request-invalid`, `policy-invalid`, `unsupported-contract`, `selection-missing`, `version-unknown`,
   `digest-mismatch`, `release-tampered`, `release-unreadable`, `unsupported-format`, `release-stale`,
-  `release-revoked`, `repo-not-enabled`, `repo-not-in-release`, `index-invalid`. `--evidence-out` writes the audit
+  `release-revoked`, `repo-not-enabled`, `repo-not-in-release`, `index-invalid`. `release-unreadable`: the release cannot be read as plain
+  files (a symlink, a special file, no directory); `release-tampered`: its content is not what the index names, or it
+  holds generated files (`__pycache__`, `*.pyc`). Both are the codes the previous private provider used (#140). `--evidence-out` writes the audit
   record (identities, digests and codes only).
 - **Immutability in the configuration repository's CI:** `dev-platform infra release verify --root . --base-index
   <the protected branch's index>`: every release matches its digest, nothing is unindexed, entries are only added.
