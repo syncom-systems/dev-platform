@@ -167,7 +167,7 @@ jobs:
             > "$(brew --repository local/bad)/Formula/dev-platform.rb"
           if brew fetch --formula local/bad/dev-platform > "$W/fetch.txt" 2>&1; then cat "$W/fetch.txt"; exit 1; fi
           cat "$W/fetch.txt"; grep -qiE "mismatch|different checksum" "$W/fetch.txt"
-          brew untap local/bad
+          rm -rf "$(brew --repository local/bad)"  # no later step uses Homebrew
       - name: Refused - a corrupted store entry (left untouched)
         run: |
           cp -R "$STORE" "$W/store-bad"; chmod -R u+w "$W/store-bad"
