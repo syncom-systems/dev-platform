@@ -69,6 +69,10 @@ jobs:
           cp "$W/audit.rb" "$(brew --repository local/audit)/Formula/dev-platform.rb"
           brew audit --strict --formula local/audit/dev-platform
           brew untap local/audit  # one dev-platform formula per tap set, as a user has
+      - name: Record what exists before installing (services, launch agents, the job's data root)
+        run: |
+          ls -A "$HOME/Library/LaunchAgents" 2>/dev/null > "$W/agents.before" || true
+          test ! -e "$RUNNER_TEMP/dev-platform"
       - name: Install A from a tap (git history, as a published tap has)
         run: |
           T="$W/tap"; git init -q "$T"; mkdir "$T/Formula"
@@ -81,6 +85,19 @@ jobs:
           dev-platform --version | tee /dev/stderr | grep -qx "dev-platform $A"
           test "$(dev-platform digest "$(brew --prefix local/dev-platform/dev-platform)/libexec")" = "$TREE_9_8_0"
           command -v gh
+      - name: Installing and running the CLI activates nothing (ADR 0023)
+        run: |
+          f="$(brew --repository local/dev-platform)/Formula/dev-platform.rb"
+          if grep -nE 'service do|post_install|plist|launchctl|systemctl|crontab' "$f"; then exit 1; fi
+          if brew services list 2>/dev/null | grep -q dev-platform; then exit 1; fi
+          ls -A "$HOME/Library/LaunchAgents" 2>/dev/null > "$W/agents.after" || true
+          diff "$W/agents.before" "$W/agents.after"
+          test ! -e "$RUNNER_TEMP/dev-platform"  # installing created no store, toolchain or infrastructure data
+          H="$W/home-quiet"; mkdir -p "$H"
+          ( export HOME="$H"; unset CI GITHUB_ACTIONS XDG_DATA_HOME XDG_CACHE_HOME DEV_PLATFORM_HOME
+            dev-platform --version; dev-platform infra --help; dev-platform workflow --help
+            dev-platform infra store list; dev-platform infra doctor || true ) > /dev/null
+          test -z "$(ls -A "$H")"  # reading commands write nothing into a user's home
       - name: User-local defaults (as on a development Mac); nothing written
         run: |
           env -u CI -u GITHUB_ACTIONS -u XDG_DATA_HOME -u XDG_CACHE_HOME HOME="$W/home" \
@@ -129,6 +146,25 @@ jobs:
           done
           for v in 0.8.1 0.8.2; do dev-platform digest "$STORE/$v"; done > "$W/store.before"
           ( cd "$STORE/.records" && cat 0.8.1.verification.json 0.8.2.verification.json ) | shasum -a 256 >> "$W/store.before"
+      - name: A synthetic infrastructure store and an [infra] pin (built with CLI A)
+        run: |
+          C="$W/infra-cfg"; IS="$W/infra-store"
+          dev-platform infra init --root "$C" --owner example-org --repo app --template self-hosted > /dev/null
+          dev-platform infra release build 2026.10.1 --root "$C" > "$W/build.json"
+          D=$(jq -r .digest "$W/build.json")
+          mkdir -p "$C/authorization"
+          printf '%s\n' '{"schema_version": 1, "policy_id": "example", "revision": 1, "minimum_release": "2026.10.1",
+            "revoked_releases": [], "repositories_enabled": ["app"], "withdrawn": {"runner_classes": [], "credentials": []},
+            "repository_withdrawn": {}}' > "$C/authorization/current.v1.json"
+          dev-platform infra store import 2026.10.1 --digest "$D" --from "$C" --with-policy --store "$IS" > /dev/null
+          mkdir "$W/infra-consumer"
+          printf '[infra]\nprovider = "example-infra"\nconfig_release = "2026.10.1"\nconfig_digest = "%s"\n' "$D" \
+            > "$W/infra-consumer/dev-platform.toml"
+          dev-platform infra doctor --store "$IS" --project "$W/infra-consumer" --repo example-org/app --json \
+            | jq -e '.ok and .selection.decision == "resolved"'
+          ( cd "$IS" && find . -type f | sort | xargs shasum -a 256 ) > "$W/infra-store.before"
+          shasum -a 256 "$W/infra-consumer/dev-platform.toml" > "$W/infra-pin.before"
+          echo "IS=$IS" >> "$GITHUB_ENV"; echo "D=$D" >> "$GITHUB_ENV"
       - name: brew upgrade changes the CLI only
         run: |
           cp "$W/formula-$B.rb" "$T/Formula/dev-platform.rb"
@@ -142,6 +178,17 @@ jobs:
           diff "$W/store.before" "$W/store.after"
           test "$(dev-platform digest "$P82")" = "$(cat "$W/p82.before")"
           git diff --exit-code -- fixtures-real
+          ( cd "$IS" && find . -type f | sort | xargs shasum -a 256 ) > "$W/infra-store.after"
+          diff "$W/infra-store.before" "$W/infra-store.after"   # the infrastructure store is untouched
+          shasum -a 256 -c "$W/infra-pin.before"                  # and so is the consumer's pin
+          dev-platform infra doctor --store "$IS" --project "$W/infra-consumer" --repo example-org/app --json \
+            | jq -e '.ok and .selection.decision == "resolved" and .cli.version == env.B'
+          dev-platform infra store list --store "$IS" | jq -e '.releases == [{"version": "2026.10.1", "digest": env.D,
+            "contract": "dev-platform.infra/v1", "status": "ok"}] and .authorization_policy.revision == "1"'
+          jq -n --arg d "$D" '{schema_version: "dev-platform.infra-resolve-request/v1", repo: "example-org/app",
+            event_trust: "trusted", contract: "dev-platform.infra/v1", requested: {version: "2026.10.1", digest: $d},
+            profile_out: env.W + "/profile.json"}' > "$W/req.json"
+          dev-platform infra resolve --root "$IS" --request "$W/req.json" | jq -e '.decision == "resolved"'
           dev-platform setup --project "$P82" --allow-unaccepted --json | tee "$W/setup3.json"
           jq -e '.ok and .cli.version == env.B and .pinned.version == "0.8.2" and .release.action == "present"
             and .toolchain.action == "reused"' "$W/setup3.json"

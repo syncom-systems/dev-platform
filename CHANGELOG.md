@@ -16,6 +16,11 @@
   GitHub-hosted runner) on stdout or a new file; never commits or enables anything.
 - `dev-platform infra store fetch|import|sync|list` (exact selection only, write-once, forward-only policy, sources
   always named), `infra doctor` (identities only), `infra discover` (`gh api` GET only), `infra audit`, `infra drift`.
+- Non-activation and boundary regressions (`tests/test_non_activation.py`, `tests/test_public_boundary.py`, `homebrew`
+  workflow): installing or running the CLI creates no service, launch agent or home-directory file and reaches GitHub
+  only from the explicit commands (GET only); an upgrade leaves an infrastructure store and `[infra]` pins unchanged;
+  the public tree carries no secret shapes, private addresses or internal hosts (`DEV_PLATFORM_PRIVATE_DENYLIST` adds
+  an organization's own identifiers). `infra doctor --config-release`.
 - `[infra] config_digest_kind = "release-tree" | "profile-file"` (optional; omitted means exactly what it meant before).
 - The engine refuses a `resolved` result without a complete `authorization_policy {id, revision, digest}`
   (incomplete authorization facts); new resolution conformance cases.

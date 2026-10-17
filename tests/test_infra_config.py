@@ -233,7 +233,13 @@ class FailsClosed(unittest.TestCase):
         self.assertRejects(f, "runners: runners[")
 
     def test_secret_values_anywhere(self):
-        for s in ("-----BEGIN OPENSSH PRIVATE KEY-----", "AKIA" + "A" * 16, "github_pat_x", "xoxb-12345"):
+        dashes = "-" * 5
+        for s in (
+            f"{dashes}BEGIN OPENSSH PRIVATE KEY{dashes}",
+            "AKIA" + "A" * 16,
+            "github" + "_pat_x",
+            "xoxb-12345",
+        ):
             self.assertRejects(
                 lambda c, s=s: runner(c, "linux-build").update(description=s), "embedded secret"
             )

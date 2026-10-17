@@ -274,9 +274,8 @@ def install_release(store: Path, src: Source, version: str, digest: str) -> str:
         raise ReleaseError(
             "release-tampered", f"{version}: received content does not have the indexed digest"
         )
-    manifest_of(
-        files, version, entry["contract"]
-    )  # a format this platform resolves for that contract, or refused
+    # a format this platform resolves for that contract, or refused
+    manifest_of(files, version, entry["contract"])
     dest = store / "releases" / version
     with _locked(store):
         idx = store_index(store)

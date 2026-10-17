@@ -57,6 +57,10 @@ def add_operator_parsers(isub) -> None:
     def with_selection(q, positional=True):
         if positional:
             q.add_argument("version", nargs="?", help="the exact configuration release (YYYY.MM.N)")
+        else:
+            q.add_argument(
+                "--config-release", dest="version", help="the exact configuration release (YYYY.MM.N)"
+            )
         q.add_argument("--digest", help="sha256:<hex>, the exact release-tree digest (the consumer's pin)")
         q.add_argument("--project", type=Path, help="take the selection from this project's [infra] pin")
         return q
