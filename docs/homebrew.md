@@ -115,6 +115,18 @@ everything with `chmod -R u+w ~/.local/share/dev-platform && rm -rf ~/.local/sha
 `setup` never writes the project's files, never calls an infrastructure provider (only a vendored profile the
 project committed is passed to `doctor`), and never creates or implies acceptance.
 
+## What installing never does
+`brew install` and `brew upgrade` install the CLI's release tree under the Homebrew prefix and the `dev-platform`
+launcher, nothing else: no service, launch agent or scheduled job, no file in your home directory, no private
+configuration, no credential, no runner registration, no workflow and no GitHub setting. The CLI reads GitHub only
+when a command is explicitly about it (`setup` installing a pinned release; `infra discover`, `infra store fetch` and
+`infra store sync`, each with a source you name), always with `gh api --method GET` for the infrastructure commands.
+The optional infrastructure capabilities ([infrastructure](infrastructure.md)) are available but inactive until you
+configure and activate them through your own review. The `homebrew` workflow checks this on macOS and Linux: no
+launch agent or service appears, the job's data root does not exist after installation, reading commands leave an
+empty home empty, and an upgrade leaves an infrastructure store and the consumer's `[infra]` pin byte for byte
+unchanged while the new CLI still resolves the pinned configuration release.
+
 ## Self-hosted runners
 CI runs **job-local verified releases**; a user-local CLI installation is a convenience for people.
 - Preferred: the reusable workflow [`consumer-pilot.yml`](consumer-integration.md) or `tools/consumer_run.py --work

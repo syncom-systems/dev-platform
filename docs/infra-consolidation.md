@@ -45,6 +45,21 @@ reused; nothing above introduces a second policy engine.
 3. Local store, `infra doctor`, discovery, audit, drift.
 4. Non-activation and boundary regressions, documentation.
 
+## Regression tests
+| Property | Where |
+|---|---|
+| Public-only use works without any infrastructure repository | `test_workflow_preview`, `test_non_activation` (no store, no provider, no network) |
+| GitHub-hosted CI configurable without private infrastructure | `test_infra_config.Templates`, `test_workflow_preview` |
+| Installing or upgrading activates nothing | `test_non_activation` (formula, empty home, GET-only, static guards); `homebrew` workflow (real Homebrew) |
+| An explicitly configured self-hosted profile validates | `test_infra_config.Templates`, `Projection` |
+| Unauthorized or incompatible runner configuration is rejected | `test_infra_config.FailsClosed`, `test_infra_provider.Denies` |
+| Existing immutable releases stay resolvable (also the previous private layout) | `test_infra_release.Formats`, `test_infra_provider.Resolves` |
+| Current authorization narrows or revokes older pins, never widens | `test_infra_provider.Narrowing`, `test_infra_store.Policy` |
+| Missing or invalid authorization fails closed | `test_infra_provider.Denies`, `test_infra_pin.AuthorizationFacts`, conformance kit |
+| No private infrastructure data in the public tree, fixtures or release tree | `test_public_boundary` (plus an organization's deny-list via `DEV_PLATFORM_PRIVATE_DENYLIST`) |
+| CLI upgrades preserve consumer pins and stores | `test_non_activation.UpgradePreservesSelections`; `homebrew` workflow |
+| Compatibility at the pinned platform version, including older releases | `test_infra_compat_releases` (engines of 0.8.0 to 0.9.0) |
+
 ## Handoff to the private infrastructure workspace (not performed from here)
 The private repository is not modified from this workspace. After a platform release with these modules exists:
 1. Pin that platform release in the private CI's public checkout (exact commit) and run the public provider against
