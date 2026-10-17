@@ -1,0 +1,15 @@
+# Weekly: the pre-merge jobs on main once a week, from a fresh checkout on cold GitHub-hosted runners, so a drift in a
+# toolchain, an action or an upstream registry shows up within a week instead of at the next change. It records
+# nothing; a red run is the signal. Public repository, so every job runs on a GitHub-hosted runner.
+name: weekly
+on:
+  schedule:
+    # Saturday 22:00 UTC.
+    - cron: "0 22 * * 6"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gates:
+    name: gates
+    uses: ./.github/workflows/pre-merge.yml
