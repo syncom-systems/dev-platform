@@ -1,0 +1,11 @@
+{
+  "version": "0.8.1",
+  "source_revision": "5fa25c68814ee9f4d284682215fa4c98198103ff",
+  "archive_sha256": "5671100327d3b8bdfbf74277ae0b21bde39ec2f1f85d4abde12799647740a898",
+  "tree_digest_pin": "35d5b2c99cc11e3da5b618ae4a19223b97834da2de2ac55f3a4e9f00759bffea",
+  "verifier_pins": {
+    "verify_release.py_sha256": "a2d53075b8bf11bb14f4a2dffb0b40fc6e66b04af73801951fcd768ba29f6f2e",
+    "trust_policy_sha256": "9074871080b437518cf0c7ad9558409297faf023b09365aa0ac6f52f7dba1120",
+    "install_release.py_sha256": "473a2c73eb71904ea6ee0e010f2288976126d4560e3efd11c33c11e44f15bb93"
+  }
+}

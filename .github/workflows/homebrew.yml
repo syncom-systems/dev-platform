@@ -1,0 +1,215 @@
+# Homebrew packaging of the public CLI (ADR 0022, docs/homebrew.md). The formula that tools/homebrew_formula.py
+# renders is installed, upgraded and rolled back through a local tap built from this change, and the installed
+# CLI's `setup` installs published, immutable releases with each release's own pinned trusted installer.
+# Failure cases: a wrong formula checksum, a corrupted store, mismatched release identities. Everything a job
+# writes is under $RUNNER_TEMP; the only token is the read-only job token, used by the installer's
+# `gh attestation verify`. Public repository: GitHub-hosted runners.
+name: homebrew
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tools/homebrew_formula.py"
+      - "fixtures-real/setup-*/**"
+      - ".github/workflows/homebrew.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  homebrew:
+    name: homebrew (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_ENV_HINTS: "1"
+      A: "9.8.0"  # synthetic CLI versions built from this change; never published
+      B: "9.8.1"
+      P82: fixtures-real/setup-0.8.2  # consumers pinned to published releases
+      P81: fixtures-real/setup-0.8.1
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - name: Homebrew on PATH (Linux)
+        if: runner.os == 'Linux'
+        run: echo /home/linuxbrew/.linuxbrew/bin >> "$GITHUB_PATH"
+      - name: Build release archives A and B from this change
+        run: |
+          brew install python@3.14
+          PY="$(brew --prefix python@3.14)/bin/python3.14"
+          W="$RUNNER_TEMP/hb"; mkdir -p "$W"
+          echo "W=$W" >> "$GITHUB_ENV"; echo "PY=$PY" >> "$GITHUB_ENV"
+          for v in "$A" "$B"; do
+            cp -R src "$W/src-$v"
+            sed -i.bak -E "s/^__version__ = \".*\"/__version__ = \"$v\"/" "$W/src-$v/dev_platform/__init__.py"
+            rm "$W/src-$v/dev_platform/__init__.py.bak"
+            PYTHONPATH=src "$PY" -m dev_platform release build --version "$v" --src "$W/src-$v" --out "$W/dist"
+            PYTHONPATH=src "$PY" -m dev_platform release pack "$W/dist/$v" --out "$W/dev-platform-$v.tar.gz"
+            sha=$(PYTHONPATH=src "$PY" -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$W/dev-platform-$v.tar.gz")
+            tree=$(PYTHONPATH=src "$PY" -m dev_platform digest "$W/dist/$v")
+            "$PY" tools/homebrew_formula.py --version "$v" --archive-sha256 "$sha" --tree-sha256 "$tree" \
+              --url "file://$W/dev-platform-$v.tar.gz" --out "$W/formula-$v.rb"
+            echo "TREE_$(echo "$v" | tr . _)=$tree" >> "$GITHUB_ENV"
+          done
+      - name: The release formula passes brew audit --strict
+        run: |
+          v=$(sed -nE 's/^__version__ = "(.*)"/\1/p' src/dev_platform/__init__.py)
+          "$PY" tools/homebrew_formula.py --version "$v" --archive-sha256 "$(printf 'a%.0s' $(seq 64))" \
+            --tree-sha256 "$(printf 'b%.0s' $(seq 64))" --out "$W/audit.rb"
+          brew tap-new --no-git local/audit
+          cp "$W/audit.rb" "$(brew --repository local/audit)/Formula/dev-platform.rb"
+          brew audit --strict --formula local/audit/dev-platform
+          brew untap local/audit  # one dev-platform formula per tap set, as a user has
+      - name: Install A from a tap (git history, as a published tap has)
+        run: |
+          T="$W/tap"; git init -q "$T"; mkdir "$T/Formula"
+          cp "$W/formula-$A.rb" "$T/Formula/dev-platform.rb"
+          git -C "$T" add -A; git -C "$T" -c user.name=ci -c user.email=ci@localhost commit -qm "dev-platform $A"
+          echo "T=$T" >> "$GITHUB_ENV"
+          brew tap local/dev-platform "$T"
+          brew install local/dev-platform/dev-platform
+          brew test local/dev-platform/dev-platform
+          dev-platform --version | tee /dev/stderr | grep -qx "dev-platform $A"
+          test "$(dev-platform digest "$(brew --prefix local/dev-platform/dev-platform)/libexec")" = "$TREE_9_8_0"
+          command -v gh
+      - name: User-local defaults (as on a development Mac); nothing written
+        run: |
+          env -u CI -u GITHUB_ACTIONS -u XDG_DATA_HOME -u XDG_CACHE_HOME HOME="$W/home" \
+            dev-platform setup --project "$P82" --dry-run --json | tee "$W/dry.json"
+          jq -e --arg h "$W/home" '.ok and .locations.scope == "user"
+            and .locations.store == ($h + "/.local/share/dev-platform/versions")
+            and .locations.toolchains == ($h + "/.local/share/dev-platform/toolchains")
+            and .locations.cache == ($h + "/.cache/dev-platform")
+            and .release.action == "would install"' "$W/dry.json"
+          test ! -e "$W/home"
+      - name: setup installs the pinned release (verified by its pinned installer), provisions and checks
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          dev-platform digest "$P82" > "$W/p82.before"
+          dev-platform setup --project "$P82" --allow-unaccepted --json | tee "$W/setup1.json"
+          jq -e --arg r "$RUNNER_TEMP" '.ok and .locations.scope == "job"
+            and .locations.store == ($r + "/dev-platform/versions")
+            and .cli.version == env.A and .pinned.version == "0.8.2"
+            and .release.action == "installed" and .release.state == "verified-unaccepted"
+            and .toolchain.action == "provisioned" and .toolchain.conformant and .toolchain.assurance == "certifiable"
+            and .doctor.exit == 0' "$W/setup1.json"
+          echo "STORE=$RUNNER_TEMP/dev-platform/versions" >> "$GITHUB_ENV"
+      - name: A second setup reuses, verifies and downloads nothing
+        run: |
+          dev-platform setup --project "$P82" --allow-unaccepted --json | tee "$W/setup2.json"
+          jq -e '.ok and .release.action == "present" and .toolchain.action == "reused"' "$W/setup2.json"
+          test "$(jq -r .toolchain.identity_digest "$W/setup1.json")" = "$(jq -r .toolchain.identity_digest "$W/setup2.json")"
+      - name: The launcher runs the pinned release on the verified interpreter
+        run: |
+          eval "$(dev-platform setup --project "$P82" --allow-unaccepted --print-env)"
+          dev-platform doctor --project "$P82" | tee "$W/doctor.txt"
+          grep -q "platform resolved: mode=pinned version=0.8.2" "$W/doctor.txt"
+          grep -q "tool python: expected 3.14.7 observed 3.14.7 \[closure-verified\] ok" "$W/doctor.txt"
+          dev-platform check --project "$P82" --stage full --changed tests/test_ok.py | tee "$W/check.txt"
+          grep -q "platform pinned 0.8.2" "$W/check.txt"
+          grep -q "PASS    python.unittest" "$W/check.txt"
+      - name: Versions coexist; each project gets exactly its own
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          dev-platform setup --project "$P81" --allow-unaccepted --json | tee "$W/setup81.json"
+          jq -e '.ok and .pinned.version == "0.8.1" and .release.action == "installed"' "$W/setup81.json"
+          test "$(ls "$STORE" | sort | tr '\n' ' ')" = "0.8.1 0.8.2 "
+          for p in "$P81:0.8.1" "$P82:0.8.2"; do
+            ( eval "$(dev-platform setup --project "${p%%:*}" --allow-unaccepted --print-env)"
+              dev-platform doctor --project "${p%%:*}" | grep -q "mode=pinned version=${p##*:}" )
+          done
+          for v in 0.8.1 0.8.2; do dev-platform digest "$STORE/$v"; done > "$W/store.before"
+          ( cd "$STORE/.records" && cat 0.8.1.verification.json 0.8.2.verification.json ) | shasum -a 256 >> "$W/store.before"
+      - name: brew upgrade changes the CLI only
+        run: |
+          cp "$W/formula-$B.rb" "$T/Formula/dev-platform.rb"
+          git -C "$T" -c user.name=ci -c user.email=ci@localhost commit -qam "dev-platform $B"
+          git -C "$(brew --repository local/dev-platform)" pull -q
+          brew upgrade local/dev-platform/dev-platform
+          dev-platform --version | grep -qx "dev-platform $B"
+          test "$(dev-platform digest "$(brew --prefix local/dev-platform/dev-platform)/libexec")" = "$TREE_9_8_1"
+          for v in 0.8.1 0.8.2; do dev-platform digest "$STORE/$v"; done > "$W/store.after"
+          ( cd "$STORE/.records" && cat 0.8.1.verification.json 0.8.2.verification.json ) | shasum -a 256 >> "$W/store.after"
+          diff "$W/store.before" "$W/store.after"
+          test "$(dev-platform digest "$P82")" = "$(cat "$W/p82.before")"
+          git diff --exit-code -- fixtures-real
+          dev-platform setup --project "$P82" --allow-unaccepted --json | tee "$W/setup3.json"
+          jq -e '.ok and .cli.version == env.B and .pinned.version == "0.8.2" and .release.action == "present"
+            and .toolchain.action == "reused"' "$W/setup3.json"
+      - name: Roll the CLI back to A (brew extract), then forward again
+        run: |
+          brew tap-new --no-git local/rollback
+          brew extract --version="$A" local/dev-platform/dev-platform local/rollback
+          brew unlink local/dev-platform/dev-platform
+          brew install "local/rollback/dev-platform@$A"
+          dev-platform --version | grep -qx "dev-platform $A"
+          dev-platform setup --project "$P82" --allow-unaccepted --json | jq -e '.ok and .cli.version == env.A
+            and .release.action == "present"'
+          brew uninstall "local/rollback/dev-platform@$A"
+          brew link local/dev-platform/dev-platform
+          dev-platform --version | grep -qx "dev-platform $B"
+          for v in 0.8.1 0.8.2; do dev-platform digest "$STORE/$v"; done > "$W/store.after2"
+          ( cd "$STORE/.records" && cat 0.8.1.verification.json 0.8.2.verification.json ) | shasum -a 256 >> "$W/store.after2"
+          diff "$W/store.before" "$W/store.after2"
+      - name: Refused - a formula whose checksum is not the archive's
+        run: |
+          brew tap-new --no-git local/bad
+          sed -E 's/sha256 "[0-9a-f]{64}"/sha256 "'"$(printf '0%.0s' $(seq 64))"'"/' "$W/formula-$B.rb" \
+            > "$(brew --repository local/bad)/Formula/dev-platform.rb"
+          if brew fetch --formula local/bad/dev-platform > "$W/fetch.txt" 2>&1; then cat "$W/fetch.txt"; exit 1; fi
+          cat "$W/fetch.txt"; grep -qiE "mismatch|different checksum" "$W/fetch.txt"
+          rm -rf "$(brew --repository local/bad)"  # no later step uses Homebrew
+      - name: Refused - a corrupted store entry (left untouched)
+        run: |
+          cp -R "$STORE" "$W/store-bad"; chmod -R u+w "$W/store-bad"
+          echo "# tampered" >> "$W/store-bad/0.8.2/src/dev_platform/cli.py"
+          set +e
+          dev-platform setup --project "$P82" --store "$W/store-bad" --allow-unaccepted --json > "$W/bad1.json"; rc=$?
+          set -e
+          cat "$W/bad1.json"; test "$rc" = 3
+          jq -e '.problem | test("not the pinned")' "$W/bad1.json"
+          tail -1 "$W/store-bad/0.8.2/src/dev_platform/cli.py" | grep -qx "# tampered"
+          set +e; DEV_PLATFORM_STORE="$W/store-bad" dev-platform check --project "$P82" --stage full \
+            --changed tests/test_ok.py > "$W/bad1.txt" 2>&1; rc=$?; set -e
+          cat "$W/bad1.txt"; test "$rc" = 3; grep -q "integrity failure" "$W/bad1.txt"
+      - name: Refused - mismatched release identities (nothing installed)
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          refuse() {  # expected-exit pattern project
+            set +e; dev-platform setup --project "$3" --store "$W/store-new" --allow-unaccepted --json > "$W/r.json"; rc=$?; set -e
+            cat "$W/r.json"; test "$rc" = "$1"; jq -e --arg p "$2" '.problem | test($p)' "$W/r.json"
+            test ! -e "$W/store-new/0.8.2"
+          }
+          mk() { rm -rf "$W/p"; cp -R "$P82" "$W/p"; jq "$1" "$P82/dev-platform.release-pins.json" > "$W/p/dev-platform.release-pins.json"; }
+          mk '.archive_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"'
+          refuse 1 "trusted installer refused" "$W/p"
+          mk '.verifier_pins["install_release.py_sha256"] = "0000000000000000000000000000000000000000000000000000000000000000"'
+          refuse 3 "does not equal" "$W/p"
+          mk '.source_revision = "5fa25c68814ee9f4d284682215fa4c98198103ff"'
+          refuse 3 "does not equal" "$W/p"
+          mk '.tree_digest_pin = "35d5b2c99cc11e3da5b618ae4a19223b97834da2de2ac55f3a4e9f00759bffea"'
+          refuse 2 "tree_digest_pin" "$W/p"
+          mk '.version = "0.8.1"'
+          refuse 2 "version 0.8.1" "$W/p"
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```json'; cat "$W/setup1.json" 2>/dev/null || echo '{}'; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: "homebrew-${{ matrix.os }}"
+          path: |
+            ${{ runner.temp }}/hb/*.json
+            ${{ runner.temp }}/hb/*.txt
+            ${{ runner.temp }}/hb/formula-*.rb
+          if-no-files-found: ignore

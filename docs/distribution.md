@@ -8,13 +8,14 @@ Everything marked *(planned)* is design only.
 | Artifact | Form | Integrity |
 |---|---|---|
 | Platform release | immutable directory: `src/`, `release.json` (toolchain profiles), `sbom.cdx.json`; built by `dev-platform release build` | sha256 tree digest pinned by consumers; *(planned)* Sigstore/SLSA attestations from `release.yml` |
-| Launcher | the same package; entry point `dev-platform` | bootstrap script *(planned)*: fetch release archive by version, verify the pinned digest **before** unpacking into the store |
+| Launcher | the same package; entry point `dev-platform` | Homebrew tap `syncom-systems/homebrew-dev-platform` (0.9.0, [homebrew.md](homebrew.md)): formula sha256 = archive digest, test = tree digest; `dev-platform setup` installs a project's pinned release with the trusted installer |
 | Reusable GitHub workflow | `.github/workflows/check.yml` (`workflow_call`) | consumers reference it by full commit SHA, never a branch or floating tag |
 | Skills / Claude Code plugin | *(planned)* `integrations/` directory in the same release | covered by the same release digest |
 
 ## Store
 
-`$DEV_PLATFORM_STORE` or `$XDG_DATA_HOME/dev-platform/versions/<version>/src/dev_platform/`.
+`$DEV_PLATFORM_STORE`, else `$DEV_PLATFORM_HOME/versions`, else `${XDG_DATA_HOME:-~/.local/share}/dev-platform/versions/<version>/src/dev_platform/`
+(toolchains and cache: [homebrew.md](homebrew.md#locations)).
 Versions are write-once; a different digest for an existing version is an error. The launcher
 reads only. Digest rules: sorted relative paths + contents, `__pycache__`/`*.pyc` excluded,
 symlinks rejected.

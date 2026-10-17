@@ -1,0 +1,21 @@
+# A consumer pinned to release 0.8.2 (pins from releases/0.8.2/identity.json), used by the homebrew
+# workflow to exercise `dev-platform setup` against the published, immutable release.
+schema_version = 1
+
+[platform]
+version = "0.8.2"
+sha256 = "0f9780801f9e2b718e4f953739f8df2b085628ee91db1a60926f0c3060e0e5ad"
+profile = "python"
+
+[project]
+name = "setup-0.8.2"
+assurance = "standard"
+languages = ["python"]
+
+[[check]]
+id = "python.unittest"
+adapter = "python"
+targets = ["tests"]
+stages = ["pre-commit", "pre-merge", "full"]
+obligation = "change"
+inputs = ["**/*.py"]
