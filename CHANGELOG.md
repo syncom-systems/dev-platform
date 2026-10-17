@@ -1,6 +1,17 @@
 # Changelog
 
 ## Unreleased
+
+## 0.10.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
+One public product with optional, explicitly configured infrastructure capabilities (ADR 0023). Nothing is activated
+by installing or upgrading the CLI.
+
+Declared incompatibilities (0.x minor; consumers reach them only by pinning 0.10.0):
+- A resolver result with `decision: resolved` and an incomplete or missing `authorization_policy {id, revision, digest}`
+  is now `unavailable` (it was accepted). Every known provider already sends the identity.
+- `[infra] config_digest_kind` is new; releases before 0.10.0 reject it as an unknown key, so declare it only together
+  with a 0.10.0 or later platform pin. Pins without it mean exactly what they meant before.
+
 - Generic provider: release content that is not plain files (symlink, special file, missing directory) is denied as
   `release-unreadable`, as the previous private provider did; `release-tampered` stays for digest mismatches and
   generated files (#140).
