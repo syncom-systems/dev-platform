@@ -1,0 +1,19 @@
+# appended byte
+FAILED  archive-digest  (actual 670df633c604aec50b0fe26c3ea4e353d8064a1bdfda41bbebaf645cab1b7ca3)
+FAILED  attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:670df633c604aec50b0fe26c3ea4e353d8064a1bdfda41bbebaf645cab1b7ca3?per_page=30&predicate_type=https%3A%2F%2Fslsa.dev%2Fprovenance%2Fv1))
+FAILED  sbom-attestation-signature  (Error: HTTP 404: Not Found (https://api.github.com/repos/syncom-systems/dev-platform/attestations/sha256:670df633c604aec50b0fe26c3ea4e353d8064a1bdfda41bbebaf645cab1b7ca3?per_page=30&predicate_type=https%3A%2F%2Fcyclonedx.org%2Fbom))
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  continuity  (record is about a different archive)
+acceptance: failed  archive-digest; attestation-signature; sbom-attestation-signature; sbom-attestation-content; continuity
+# wrong source revision
+FAILED  source-revision  (release.json says 222a106614af317e742bbf6fd4717f7f9056b8c8)
+FAILED  attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 222a106614af317e742bbf6fd4717f7f9056b8c8)
+FAILED  sbom-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 222a106614af317e742bbf6fd4717f7f9056b8c8)
+FAILED  sbom-attestation-content  (the attested SBOM must be exactly the SBOM inside the archive)
+FAILED  environment-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got edadc4d089b0b5dae3f995121ce48b40cec0e8aa)
+FAILED  continuity  (predecessor did not run over this source revision)
+FAILED  continuity-attestation-signature  (Error: expected SourceRepositoryDigest to be 0000000000000000000000000000000000000000, got 222a106614af317e742bbf6fd4717f7f9056b8c8)
+acceptance: failed  source-revision; attestation-signature; sbom-attestation-signature; sbom-attestation-content; environment-attestation-signature; continuity; continuity-attestation-signature
+# wrong archive digest pin
+FAILED  archive-digest  (actual 770742bd162bb58a6103654f6e1d37d6a9ab3cbc31e86a1bb577d4391194d9c2)
+acceptance: failed  archive-digest

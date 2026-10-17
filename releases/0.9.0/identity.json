@@ -1,0 +1,35 @@
+{
+  "version": "0.9.0",
+  "state": "verified-unaccepted (stable candidate; NOT accepted; release not certified)",
+  "git_tag": "v0.9.0",
+  "source_revision": "222a106614af317e742bbf6fd4717f7f9056b8c8",
+  "archive": "dev-platform-0.9.0.tar.gz",
+  "archive_sha256": "770742bd162bb58a6103654f6e1d37d6a9ab3cbc31e86a1bb577d4391194d9c2",
+  "tree_digest_pin": "1166f052261f1069028330ce69072a6548ea3a4dee639240f4970711ea0354d9",
+  "release_workflow_run": "https://github.com/syncom-systems/dev-platform/actions/runs/39024768777",
+  "signer": "syncom-systems/dev-platform/.github/workflows/release.yml@refs/tags/v0.9.0",
+  "github_release": {
+    "immutable": true,
+    "prerelease": true,
+    "title": "dev-platform 0.9.0 (verified, NOT accepted)"
+  },
+  "verifier_pins": {
+    "verify_release.py_sha256": "a2d53075b8bf11bb14f4a2dffb0b40fc6e66b04af73801951fcd768ba29f6f2e",
+    "trust_policy_sha256": "204e0eca7d632d0c47e59eb0dab4682f26fcca9bf5cb3a5396c24798735d6d29",
+    "install_release.py_sha256": "473a2c73eb71904ea6ee0e010f2288976126d4560e3efd11c33c11e44f15bb93",
+    "verify_app_release.py_sha256": "c53bf1351e4f87e7871e616b7eeaee8eca9cb999218e8f70519321cd361d8172",
+    "verify_platform_current.py_sha256": "55af0f2e20818b879fa998259e0e4d16da96afdbe48cd187e9203658408398fe",
+    "verify_consumer_evidence.py_sha256": "2c5ee2890925d496025d5193e60a0a56953fdbb301f3335845fbb9c63864bbe7",
+    "consumer_run.py_sha256": "bc502b3741ea5ba7632b1ed2d66d202e677ad91ca4d08ddc1f6b1330080d9a36",
+    "homebrew_formula.py_sha256": "362c4c6b6fe0360ff180753172e46a0a88617c39468355bbce9bdca68b23aefb"
+  },
+  "continuity": {
+    "predecessor": "0.8.2",
+    "predecessor_state": "verified-unaccepted",
+    "stage": "full",
+    "admission": "admitted"
+  },
+  "qualification_ci_run": "https://github.com/syncom-systems/dev-platform/actions/runs/39024759988",
+  "owner_authorization": "none",
+  "relation_to_earlier": "independent candidate; acceptance is per archive digest and no other candidate's state is implied"
+}
