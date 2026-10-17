@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 0.9.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 - Homebrew (ADR 0022, `docs/homebrew.md`): `tools/homebrew_formula.py` renders the formula of the public CLI from a release
   identity (release asset URL, archive sha256, test of the installed tree digest; depends on `gh` and `python@3.14`). The tap is
   `syncom-systems/homebrew-dev-platform`. Workflow `homebrew` installs, upgrades (`brew upgrade`) and rolls back (`brew extract`)
@@ -14,6 +16,7 @@
 - Locations (`dev_platform.locations`): `DEV_PLATFORM_HOME`, `DEV_PLATFORM_TOOLCHAINS`, `DEV_PLATFORM_CACHE` (and flags) beside
   `DEV_PLATFORM_STORE`; user-scoped XDG defaults; job-local `$RUNNER_TEMP/dev-platform` in CI. The launcher's store lookup
   honours `DEV_PLATFORM_HOME`.
+- `pr-check --facts`: structured `runs_on` group/labels and per-job `non_public_label_sets` (#128), first released here.
 - `DEV_PLATFORM_PYTHON`: the launcher re-executes the pinned release on this interpreter (setup exports a profile's provisioned
   python, which the release verifies). `doctor` now delegates to the pinned release like `check` and `explain`.
 
