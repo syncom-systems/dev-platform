@@ -103,10 +103,12 @@ def check_files(files: dict[str, bytes]) -> None:
 
 
 def read_tree(root: Path) -> dict[str, bytes]:
-    """All files of a release directory. Anything but plain directories and regular files is refused."""
+    """All files of a release directory. Anything but plain directories and regular files is refused:
+    `release-unreadable` when the content cannot be read as plain files (a symlink, a special file, no
+    directory), `release-tampered` when it holds what a release never contains (generated files)."""
     root = Path(root)
     if root.is_symlink():
-        raise ReleaseError("release-tampered", f"{root}: is a symlink")
+        raise ReleaseError("release-unreadable", f"{root}: is a symlink")
     if not root.is_dir():
         raise ReleaseError("release-unreadable", f"{root}: no release directory")
     out: dict[str, bytes] = {}
@@ -116,7 +118,7 @@ def read_tree(root: Path) -> dict[str, bytes]:
             rel = p.relative_to(root).as_posix()
             mode = os.lstat(p).st_mode
             if stat.S_ISLNK(mode) or not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
-                raise ReleaseError("release-tampered", f"{rel}: symlink or special file")
+                raise ReleaseError("release-unreadable", f"{rel}: symlink or special file")
             if why := _refuse(rel):
                 raise ReleaseError("release-tampered", why)
         dirnames.sort()

@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- Generic provider: release content that is not plain files (symlink, special file, missing directory) is denied as
+  `release-unreadable`, as the previous private provider did; `release-tampered` stays for digest mismatches and
+  generated files (#140).
 - Infrastructure consolidation, stage 1 (ADR 0023, `docs/infra-consolidation.md`): generic configuration releases
   (`infra_release`: CalVer, release-tree digest = `tree_digest`, append-only index, `dev-platform infra release verify`,
   `infra digest releases/<v>`), the current authorization policy that narrows and never grants (`infra_authz`,
