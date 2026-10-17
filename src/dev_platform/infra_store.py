@@ -301,14 +301,17 @@ def install_release(store: Path, src: Source, version: str, digest: str) -> str:
                     fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o444)
                     with os.fdopen(fd, "wb") as f:
                         f.write(data)
-                for d in sorted({(tmp / rel).parent for rel in files} | {tmp}, key=lambda p: -len(p.parts)):
+                for d in sorted({(tmp / rel).parent for rel in files} - {tmp}, key=lambda p: -len(p.parts)):
                     os.chmod(d, 0o555)  # noqa: S103 (read-only; store entries hold no secrets)
                 if digest_of(read_tree(tmp)) != hexd:  # what is stored is what was verified
                     raise ReleaseError("release-tampered", f"{version}: written content differs")
+                # The top directory stays writable until it is in place: macOS refuses to rename a read-only
+                # directory.
                 os.rename(tmp, dest)
             except BaseException:
                 _remove(tmp)
                 raise
+            os.chmod(dest, 0o555)  # noqa: S103 (read-only; store entries hold no secrets)
             action = "installed"
         if mine is None:
             idx["releases"].append(dict(entry))
