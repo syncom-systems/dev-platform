@@ -13,7 +13,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-from tests.helpers import ROOT
+from tests.helpers import ROOT, tmpdir
 
 SECRETS = re.compile(
     r"gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]{20}"
@@ -30,11 +30,16 @@ def tracked() -> list[Path]:
     out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
     if out.returncode != 0:
         raise unittest.SkipTest("not a git checkout")
-    return [ROOT / p for p in out.stdout.splitlines() if (ROOT / p).is_file()]
+    return [ROOT / p for p in out.stdout.splitlines() if (ROOT / p).is_symlink() or (ROOT / p).is_file()]
 
 
-def texts():
-    for f in tracked():
+def texts(paths=None):
+    """What is published for each tracked path: a file's content, or a symlink's target string (Git stores the
+    target, whether or not it exists)."""
+    for f in tracked() if paths is None else paths:
+        if f.is_symlink():
+            yield f, os.readlink(f)
+            continue
         try:
             yield f, f.read_text()
         except UnicodeDecodeError:
@@ -53,6 +58,13 @@ class Shapes(unittest.TestCase):
                 continue
             self.assertIsNone(PRIVATE_NET.search(text), rel)
             self.assertIsNone(INTERNAL_HOST.search(text), rel)
+
+    def test_symlink_targets_are_scanned(self):
+        d = tmpdir(self)
+        os.symlink("vpn.example.corp", d / "link")
+        published = [t for _, t in texts([d / "link"])]
+        self.assertEqual(published, ["vpn.example.corp"])
+        self.assertIsNotNone(INTERNAL_HOST.search(published[0]))
 
     def test_infrastructure_fixtures_are_synthetic(self):
         for f in [*(ROOT / "examples").rglob("*.json"), *(ROOT / "contracts" / "infra").rglob("*.json")]:
