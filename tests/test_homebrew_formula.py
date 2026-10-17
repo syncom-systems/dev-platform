@@ -27,7 +27,9 @@ class Render(unittest.TestCase):
         self.assertIn('url "https://github.com/syncom-systems/dev-platform/releases/download/v0.9.0/'
                       'dev-platform-0.9.0.tar.gz"', text)  # fmt: skip
         self.assertIn(f'sha256 "{"a" * 64}"', text)
-        self.assertIn(f'assert_equal "{"b" * 64}", tree', text)  # the installed tree must equal the release's pin
+        self.assertIn(
+            f'assert_equal "{"b" * 64}", tree', text
+        )  # the installed tree must equal the release's pin
         self.assertIn("c" * 40, text)
         self.assertIn('depends_on "gh"', text)
 
