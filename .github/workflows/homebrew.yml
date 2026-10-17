@@ -166,7 +166,7 @@ jobs:
           sed -E 's/sha256 "[0-9a-f]{64}"/sha256 "'"$(printf '0%.0s' $(seq 64))"'"/' "$W/formula-$B.rb" \
             > "$(brew --repository local/bad)/Formula/dev-platform.rb"
           if brew fetch --formula local/bad/dev-platform > "$W/fetch.txt" 2>&1; then cat "$W/fetch.txt"; exit 1; fi
-          cat "$W/fetch.txt"; grep -qi "mismatch" "$W/fetch.txt"
+          cat "$W/fetch.txt"; grep -qiE "mismatch|different checksum" "$W/fetch.txt"
           brew untap local/bad
       - name: Refused - a corrupted store entry (left untouched)
         run: |
