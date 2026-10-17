@@ -217,7 +217,9 @@ def problems(cfg: object) -> list[str]:
         if place not in PLACEMENTS:
             errs.append(f"{w}.placement: one of {list(PLACEMENTS)}")
             continue
-        labels = r["labels"] if isinstance(r["labels"], list) else []
+        labels = r["labels"]
+        if not (isinstance(labels, list) and all(isinstance(x, str) and x for x in labels)):
+            labels = []  # reported below; nothing is matched against an invalid label list
         creds_of = r.get("credentials", [])
         if place == "github-hosted":
             if "runner_group" in r:

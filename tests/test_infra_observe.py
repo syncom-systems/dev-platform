@@ -112,6 +112,18 @@ class Pagination(unittest.TestCase):
         snap = O.discover("example-org", ["app"], fake(api, []))
         self.assertEqual([r["name"] for r in snap["repos"]["app"]["repo_level_runners"]], ["r0", "r1", "r2"])
 
+    def test_a_missing_or_slow_gh_is_unknown_not_a_crash(self):
+        def missing(argv, **kw):
+            raise FileNotFoundError("gh")
+
+        def slow(argv, **kw):
+            raise subprocess.TimeoutExpired(argv, 300)
+
+        for runner in (missing, slow):
+            snap = O.discover("example-org", ["app"], runner)
+            self.assertIsNone(snap["runner_groups"])
+            self.assertEqual({f["id"] for f in O.audit(snap)}, {"UNKNOWN"})
+
     def test_an_unexpected_page_shape_is_an_error(self):
         def runner(argv, **kw):
             return subprocess.CompletedProcess(argv, 0, json.dumps({"runners": []}), "")

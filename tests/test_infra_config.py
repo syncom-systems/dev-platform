@@ -223,6 +223,8 @@ class FailsClosed(unittest.TestCase):
             lambda c: runner(c, "linux-build").update(capabilities="docker"), "capabilities: a list"
         )
         self.assertRejects(lambda c: runner(c, "linux-build").update(labels="build"), "labels: a list")
+        self.assertRejects(lambda c: c["runners"][0].update(labels=[None]), "labels: a list")
+        self.assertRejects(lambda c: runner(c, "linux-build").update(labels=[1, ""]), "labels: a list")
 
     def test_an_unassigned_runner_is_validated_too(self):
         def f(c):

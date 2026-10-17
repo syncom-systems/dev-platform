@@ -33,7 +33,12 @@ def _get(path: str, runner=subprocess.run, items: str | None = None):
     if items is not None:
         argv += ["--paginate", "--slurp"]
         path += ("&" if "?" in path else "?") + "per_page=100"
-    p = runner([*argv, path], capture_output=True, text=True, timeout=300)
+    try:
+        p = runner([*argv, path], capture_output=True, text=True, timeout=300)
+    except FileNotFoundError:
+        return {"_error": "gh is not installed"}
+    except subprocess.TimeoutExpired:
+        return {"_error": "gh timed out"}
     if p.returncode != 0:
         return {"_error": ((p.stderr or p.stdout or "").strip().splitlines() or ["gh failed"])[0][:200]}
     try:
