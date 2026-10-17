@@ -334,7 +334,10 @@ def problems(cfg: object) -> list[str]:
             ]
     if errs:
         return errs
-    # Every projected profile must satisfy the contract (the single source of truth for its rules).
+    # Every runner, assigned or not, and every projected profile must satisfy the contract (the single source
+    # of truth for its rules).
+    every = {"schema": INFRA_SCHEMA, "runners": [_profile_runner(r) for r in cfg["runners"]]}
+    errs += [f"runners: {p}" for p in validate_profile(every)]
     for name in repos:
         errs += [f"profile for {name!r}: {p}" for p in validate_profile(profile_for(cfg, name))]
     return errs

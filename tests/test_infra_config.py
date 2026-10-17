@@ -211,6 +211,12 @@ class FailsClosed(unittest.TestCase):
             lambda c: c["admission"].update(forbidden_triggers=["pull_request_targett"]), "unknown trigger"
         )
 
+    def test_an_unassigned_runner_is_validated_too(self):
+        def f(c):
+            c["runners"].append(dict(c["runners"][0], id="spare", os="windows"))
+
+        self.assertRejects(f, "runners: runners[")
+
     def test_secret_values_anywhere(self):
         for s in ("-----BEGIN OPENSSH PRIVATE KEY-----", "AKIA" + "A" * 16, "github_pat_x", "xoxb-12345"):
             self.assertRejects(
