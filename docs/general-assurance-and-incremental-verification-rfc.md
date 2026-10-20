@@ -140,7 +140,7 @@ The following distinctions are strict:
 - **Establishes a formal proposition:** a checked proof about the exact declared model/specification under its assumptions.
 - **Establishes the intended system contract:** requires an argument connecting the required behavior, evidence, implementation and external assumptions.
 
-None follows automatically from the preceding item. In particular, a test that guards changed source lines has not demonstrated detection of an arbitrary behavior-preserving refactor. A mutation rejected at one edit site is not evidence that every other mutation at that site would be rejected.
+None follows automatically from the preceding item. In particular, a test that guards changed source lines has not demonstrated detection of arbitrary behavior-changing mutations, nor established that an arbitrary behavior-preserving refactor is safe. A mutation rejected at one edit site is not evidence that every other mutation at that site would be rejected.
 
 **Counterfactual controls must be discriminating.** The injected defect must reach and violate the intended property, and the test must fail on its own meaningful assertion, not merely crash in surrounding scaffolding. Coverage of an irrelevant branch is not defect detection.
 
@@ -197,7 +197,7 @@ No result with an unresolved identity, absent execution, unknown relevant change
 
 A declared system root cannot silently disappear because its proof is difficult. A missing declaration and a declared but unresolved gap are different states. Human approval should bind to the *specific reviewed claim and premises*, not be a mutable Boolean within the claim.
 
-A valid full release closure is a conjunction of applicable machine evidence, current claim/assumption review and complete required assurance obligations, according to consumer policy.
+A valid full release closure requires every claim in the consumer's declared closure scope, including each required system-level/root claim, to have a non-empty, typed, resolvable support or obligation path. Such a path is necessary but never sufficient by itself: it must reach admissible, applicable evidence or an explicitly permitted and reviewed premise (for example an accepted assumption or established structural fact), and every applicable obligation must actually be satisfied. Empty, absent, unknown, exclusively non-applicable, or unresolved support leaves closure **INCOMPLETE**, never PASS. Closure also requires current claim/assumption reviews and the complete set of required assurance obligations, according to consumer policy.
 
 ## 8. Verification actions and incremental development
 
@@ -399,7 +399,7 @@ This follows Dev Platform's existing GitHub-native milestones/issues/PRs **once 
 - Read public Dev Platform and MCP-RE source, policies, test definitions, schemas, design records and relevant CI results; record exact revision and file links.
 - Critique this RFC for contradictions with executed source and ratified policies; report corrections with supporting evidence.
 - Write the **reconciliation study**, a **decision register**, and **draft** ADRs for owner review.
-- Define a **read-only** reference evaluation: its candidate data, negative controls, measurement plan and stop conditions. Propose experiments, but do not execute costly experiments without a separately approved scope.
+- Define a **read-only** reference evaluation: its candidate data, negative controls, measurement plan and stop conditions. Propose experiments but **do not execute any new experiment**, however cheap or bounded, without separate explicit authorization naming permitted actions, resource limits, and how outputs may be used. Inspection of existing source, recorded results and historical evidence is permitted.
 - Escalate unresolved policy, correctness, ownership or licensing decisions instead of inventing authority.
 
 ### Not authorized by this RFC
@@ -407,7 +407,7 @@ This follows Dev Platform's existing GitHub-native milestones/issues/PRs **once 
 - Do not change Dev Platform or MCP-RE executable code, CI, release policies, requirements, reviews, attestations, assumption registries, proofs or tests.
 - Do not move code, invent an agent framework, create a database/service, or make the planner authoritative.
 - Do not create implementation issues or a release milestone from this RFC alone.
-- Do not run unbounded test, fuzzing, mutation, model-checking or proof-generation campaigns.
+- Do not execute new experimental test, fuzzing, mutation, model-checking, proof-generation, or benchmarking runs, **including bounded low-cost runs**, without separate explicit authorization. An authorized experimental result remains exploratory and cannot automatically satisfy a current assurance obligation; its admissibility must be established through the applicable evidence policy.
 - Do not mark missing evidence current, downgrade mandatory checks, skip complete release verification, or grant agents new execution permissions.
 - Do not assume a design is ratified because this document records it.
 
