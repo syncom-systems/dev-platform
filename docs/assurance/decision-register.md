@@ -107,7 +107,7 @@
   bounded read set. Globs and declared paths are not (MCP-RE F-1/F-2 show the failure). Draft ADR B §2–§4 therefore
   records a boundary class (`complete / declared / unknown`) with every identity: `complete` only from a measuring or
   over-approximating mechanism (none exists today); `declared` carry is labelled and never certifies; `unknown` is
-  reported as uncertainty and treated as reached.
+  reported as uncertainty and carries nothing. Selection of owed checks is unchanged by carry (ADR B §4, rev. 3).
 - **Recommendation.** (b), presented as a *clarification* of what "provably" means in ADR 0006 §4. (ii): keep
   `declared` carry at admission — no weaker than today's glob selection — until E4 measures glob under-approximation.
 - **Owner decision.** (i) approve (b) and confirm it is a clarification; (ii) keep or refuse `declared` carry at
@@ -115,7 +115,7 @@
 - **Status (rev. 3, 2026-10-20).** (i): implementation **proposed** in PR #148 (open, not merged): identity over
   definition, platform, environment, global and declared inputs; boundary `declared`/`unknown` (`complete` produced by
   nothing); `current`/`stale`/`unknown` applicability; no carry at `full`; admission unchanged; inputs snapshotted
-  before and after execution. Limitations it states: records are unauthenticated; declared boundaries can
+  before and after execution; a previous identity whose digest or boundary is inconsistent is `unknown`. Limitations it states: records are unauthenticated; declared boundaries can
   under-approximate; no provider identity; an edit undone within a run is not detected. Carried state from it is
   labelled history-backed reuse, not authoritative evidence for a future evaluator. (ii): **open**. ADR 0006 §4
   wording: **open** (proposed text in PR #148).
