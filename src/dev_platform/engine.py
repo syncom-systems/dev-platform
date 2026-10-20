@@ -114,7 +114,9 @@ def build(
     prev_summary, prev_entries = (
         identity.validate_previous(previous, cfg) if previous is not None else (None, {})
     )
-    files = identity.FileDigests(root)
+    # Input identity is read before any check runs and re-read after: content that changed during the run
+    # was not what every check saw, so it establishes no reusable evidence.
+    snapshot = identity.FileDigests(root).snapshot(cfg)
     env_rec = environment or {"profile": None, "conformant": None, "tools": []}
     platform_id = {
         "running_version": __version__,
@@ -178,7 +180,7 @@ def build(
         ident = identity.compute(
             cfg,
             c,
-            files,
+            snapshot[c.id],
             platform=platform_id,
             environment=env_rec,
             execution=execution or isolation.INHERITED,
@@ -221,6 +223,12 @@ def build(
         entry |= {"outcome": outcome.value, "state": after.value, "identity": ident, "reuse": reuse}
         checks.append(entry)
 
+    if execute:
+        after = identity.FileDigests(root).snapshot(cfg)
+        for e in checks:
+            moved = identity.unstable(snapshot[e["id"]], after[e["id"]])
+            if moved:
+                identity.withdraw(e["identity"], moved)
     owed = [e for e in checks if e["selected"]]
     unsatisfied = [e["id"] for e in owed if e["outcome"] != Outcome.PASSED.value]
     # A non-conformant environment makes every admission claim false (no silent substitution).

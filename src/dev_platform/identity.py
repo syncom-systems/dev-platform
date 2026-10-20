@@ -10,6 +10,7 @@ record is caller-supplied, and matching digests in it prove nothing about where 
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
 from dataclasses import asdict
 from pathlib import Path
@@ -38,7 +39,7 @@ def tracked_files(root: Path) -> tuple[str, ...] | None:
         return None
     if r.returncode != 0:
         return None
-    return tuple(sorted({p.decode() for p in r.stdout.split(b"\0") if p}))
+    return tuple(sorted({os.fsdecode(p) for p in r.stdout.split(b"\0") if p}))
 
 
 class FileDigests:
@@ -70,6 +71,25 @@ class FileDigests:
             return None
         return canonical_digest(entries)
 
+    def snapshot(self, cfg: Config) -> dict[str, dict[str, str | None]]:
+        """The repository-input components of every check, read once (before any check runs)."""
+        g = self.over(cfg.impact_global)
+        return {c.id: {"global": g, "inputs": self.over(c.inputs)} for c in cfg.checks}
+
+
+def unstable(before: dict[str, str | None], after: dict[str, str | None]) -> list[str]:
+    """Components whose content differs between the pre- and post-run snapshots (or unknown after)."""
+    return [k for k in ("global", "inputs") if before[k] is not None and after[k] != before[k]]
+
+
+def withdraw(ident: dict, changed: list[str]) -> None:
+    """Inputs changed while the run executed: the outcome is tied to no single content, so the identity
+    establishes nothing reusable. The changed components become unknown."""
+    for k in changed:
+        ident["components"][k] = None
+    ident["digest"] = None
+    ident["unstable"] = changed
+
 
 def boundary(c: Check) -> str:
     """No configured check is `complete`: globs are declarations, never a demonstrated read set."""
@@ -81,7 +101,7 @@ def boundary(c: Check) -> str:
 def compute(
     cfg: Config,
     c: Check,
-    files: FileDigests,
+    files: dict[str, str | None],
     *,
     platform: dict,
     environment: dict,
@@ -105,8 +125,8 @@ def compute(
         "definition": canonical_digest(definition),
         "platform": canonical_digest(platform),
         "environment": canonical_digest(env) if tool else None,
-        "global": files.over(cfg.impact_global),
-        "inputs": files.over(c.inputs),
+        "global": files["global"],
+        "inputs": files["inputs"],
     }
     known = all(v is not None for v in components.values())
     return {
@@ -114,6 +134,7 @@ def compute(
         "boundary": boundary(c),
         "components": components,
         "digest": canonical_digest(components) if known else None,
+        "unstable": [],
     }
 
 

@@ -53,6 +53,10 @@ release), `environment` (toolchain identity, execution mode, runtime env, runner
 `global` (files matching `impact.global`) and `inputs` (files matching the check's `inputs`, tracked or
 untracked-not-ignored, by content), under encoding `dev-platform.evidence-identity/1`. The revision is
 not a component: a commit that does not touch a check's inputs leaves its evidence applicable.
+The `global`/`inputs` digests are read once before any check runs and again after the run; a
+component whose content differs is withdrawn (`null`, listed in `identity.unstable`), so a check that
+ran while its inputs were being edited establishes no reusable evidence. An edit undone within the
+run is not detected (only the two snapshots are compared).
 
 Each entry also records a **boundary class**: `declared` for a `change` check (its globs are a
 declaration; nothing verifies they cover what the check reads), `unknown` for `always`/`periodic`

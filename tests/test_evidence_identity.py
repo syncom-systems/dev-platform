@@ -3,11 +3,13 @@ evidence identity of the check still matches; otherwise the previous state is hi
 
 import copy
 import json
+import os
 import subprocess
 import tomllib
 import unittest
+from unittest import mock
 
-from dev_platform import engine
+from dev_platform import engine, identity
 from dev_platform.config import parse
 from dev_platform.model import Stage
 from dev_platform.resolve import Resolution
@@ -32,14 +34,27 @@ ENV = {
 LEGACY = {"checks": [{"id": "lint", "state": "verified"}, {"id": "docs", "state": "verified"}]}
 
 
+# Repository-selecting overrides (GIT_DIR, GIT_INDEX_FILE, ... as set inside a git hook) would point both this
+# helper and the engine's `git ls-files` at another repository. Execution-path settings are kept.
+KEEP_GIT = {"GIT_EXEC_PATH", "GIT_CONFIG_NOSYSTEM"}
+ISOLATED_ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") or k in KEEP_GIT}
+
+
 def git(root, *args):
     subprocess.run(
-        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=root, check=True, capture_output=True
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        env=ISOLATED_ENV,
     )
 
 
 class IdentityBoundReuseTest(unittest.TestCase):
     def setUp(self):
+        patcher = mock.patch.dict(os.environ, ISOLATED_ENV, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.root = tmpdir(self)
         for rel, text in {
             "src/a.py": "a = 1\n",
@@ -58,7 +73,16 @@ class IdentityBoundReuseTest(unittest.TestCase):
         p.write_text(text)
 
     def build(
-        self, stage=Stage.PRE_MERGE, changed=(), cfg=CFG, res=PINNED, env=ENV, execute=True, rc=0, **kw
+        self,
+        stage=Stage.PRE_MERGE,
+        changed=(),
+        cfg=CFG,
+        res=PINNED,
+        env=ENV,
+        execute=True,
+        rc=0,
+        run=None,
+        **kw,
     ):
         return engine.build(
             cfg,
@@ -67,7 +91,7 @@ class IdentityBoundReuseTest(unittest.TestCase):
             stage,
             changed,
             execute=execute,
-            executor=lambda cmd, cwd: rc,
+            executor=run or (lambda cmd, cwd: rc),
             environment=dict(env),
             revision="r1",
             **kw,
@@ -282,6 +306,63 @@ class IdentityBoundReuseTest(unittest.TestCase):
         self.assertEqual(a, c)
         self.assertEqual(json.dumps(a, sort_keys=True), json.dumps(c, sort_keys=True))
         self.assertRegex(a["digest"], r"^[0-9a-f]{64}$")
+
+    # Inputs that change while the run executes
+    def test_input_edited_during_the_run_establishes_no_reusable_evidence(self):
+        calls = []
+
+        def run(cmd, cwd):  # checks run in configuration order: the first call is lint
+            calls.append(cmd)
+            if len(calls) == 1:
+                self.write("src/a.py", "a = 'saved while lint ran'\n")
+            return 0
+
+        before = self.lint(self.build(changed=None, execute=False))["identity"]
+        doc = self.build(changed=None, run=run)
+        lint, docs = self.lint(doc)["identity"], {c["id"]: c for c in doc["checks"]}["docs"]["identity"]
+        self.assertEqual(lint["unstable"], ["inputs"])
+        self.assertIsNone(lint["components"]["inputs"])
+        self.assertIsNone(lint["digest"])
+        self.assertEqual(lint["components"]["global"], before["components"]["global"])
+        self.assertEqual(docs["unstable"], [])  # unaffected checks keep their identity
+        self.assertIsNotNone(docs["digest"])
+        # The edited content is now on disk; the record must not vouch for it.
+        nxt = self.build(previous=json.loads(json.dumps(doc)))
+        self.assert_not_carried(nxt, "unknown")
+
+    def test_change_reverted_within_the_run_is_not_detected(self):
+        # Limitation: only the pre- and post-run contents are compared; an edit undone mid-run is invisible.
+        expected = self.lint(self.build(changed=None, execute=False))["identity"]["components"]["inputs"]
+
+        def run(cmd, cwd):
+            self.write("src/a.py", "a = 'changed'\n")
+            self.write("src/a.py", "a = 1\n")
+            return 0
+
+        lint = self.lint(self.build(changed=None, run=run))["identity"]
+        self.assertEqual(lint["components"]["inputs"], expected)
+        self.assertEqual(lint["unstable"], [])
+
+    # Non-UTF-8 paths
+    def test_non_utf8_path_from_git_is_decoded_not_fatal(self):
+        out = subprocess.CompletedProcess([], 0, stdout=b"src/caf\xe9.py\0src/a.py\0", stderr=b"")
+        with mock.patch.object(identity.subprocess, "run", return_value=out):
+            files = identity.tracked_files(self.root)
+        self.assertEqual(files, ("src/a.py", os.fsdecode(b"src/caf\xe9.py")))
+
+    def test_non_utf8_file_name_on_disk_is_identified(self):
+        name = os.path.join(os.fsencode(self.root), b"src", b"caf\xe9.py")
+        try:
+            with open(name, "wb") as f:
+                f.write(b"x = 1\n")
+        except OSError:
+            self.skipTest("filesystem rejects non-UTF-8 names (APFS)")
+        git(self.root, "add", "-A")
+        prev = self.previous()
+        self.assertIsNotNone(self.lint(prev)["identity"]["digest"])
+        with open(name, "wb") as f:
+            f.write(b"x = 2\n")
+        self.assert_not_carried(self.build(previous=prev), "stale", "inputs")
 
 
 if __name__ == "__main__":
