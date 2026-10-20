@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+Declared incompatibility (0.x minor):
+- Certification requires every configured check to have **passed in the certifying run** (ADR 0006 §6,
+  clarified). Previously a `verified` state carried via `--previous` satisfied certification for a check
+  not defined for `full`, so a hand-supplied file could certify a check that never ran. Such a check is
+  now a certification blocker (`check <id> did not pass in this run (not defined for stage full)`),
+  `doctor` warns about it, and application-release assembly refuses a result that lists any check not
+  passed. Development-stage carry and `pre-merge` admission are unchanged.
+
 ## 0.10.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 One public product with optional, explicitly configured infrastructure capabilities (ADR 0023). Nothing is activated
 by installing or upgrading the CLI.

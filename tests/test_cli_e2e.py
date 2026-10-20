@@ -263,6 +263,17 @@ class MilestoneTest(unittest.TestCase):
         r = run(proj, self.store, "doctor")
         self.assertIn("[warn] detected python is not declared", r.stdout)
 
+    def test_doctor_warns_on_mandatory_check_absent_from_full(self):
+        proj = copy_fixture(self, "mixed-bazel")
+        run(proj, self.store, "init", "--platform-version", "0.1.0", "--profile", "py")
+        cfg = proj / "dev-platform.toml"
+        cfg.write_text(
+            cfg.read_text() + '\n[[check]]\nid = "late"\nadapter = "exec"\nargv = ["true"]\n'
+            'stages = ["pre-merge"]\nobligation = "always"\n'
+        )
+        r = run(proj, self.store, "doctor")
+        self.assertIn("[warn] check late (always) is not defined for stage full", r.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

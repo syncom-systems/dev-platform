@@ -1,8 +1,9 @@
 import tomllib
 import unittest
 
-from dev_platform import engine
+from dev_platform import engine, provenance
 from dev_platform.config import parse
+from dev_platform.errors import ConfigError
 from dev_platform.model import Stage
 from dev_platform.resolve import Resolution
 from tests.helpers import cfg_text, tmpdir
@@ -148,6 +149,59 @@ class EnginePolicyTest(unittest.TestCase):
         a = build(Stage.PRE_MERGE, ("src/a.py",))
         self.assertEqual(a, build(Stage.PRE_MERGE, ("src/a.py",)))
         self.assertEqual(a["schema"], "dev-platform.result/v1")
+
+
+# A mandatory check that is not configured for `full` (allowed: only `periodic` checks must include it).
+PRE_MERGE_ONLY = [
+    ("unit", '["pre-merge", "full"]', "always", "[]"),
+    ("lint", '["pre-merge"]', "change", '["src/**"]'),
+]
+PRE_MERGE_ONLY_CFG = parse(tomllib.loads(cfg_text(PRE_MERGE_ONLY)))
+CARRIED = {"checks": [{"id": "lint", "state": "verified"}]}
+
+
+class CertificationRequiresPassInRunTest(unittest.TestCase):
+    """ADR 0006 §6: certification needs every configured check to pass in the certifying run."""
+
+    def full(self, **kw):
+        return build(Stage.FULL, (), cfg=PRE_MERGE_ONLY_CFG, revision="abc", **kw)
+
+    def test_full_stage_never_certifies_from_carried_state(self):
+        doc = self.full(previous=CARRIED)
+        lint = by_id(doc)["lint"]
+        self.assertEqual(lint["outcome"], "not_run")
+        self.assertFalse(doc["certification"]["certified"])
+        self.assertIn("check lint did not pass in this run", " ".join(doc["certification"]["blockers"]))
+
+    def test_full_run_with_every_check_passing_still_certifies(self):
+        doc = build(Stage.FULL, (), revision="abc", previous=CARRIED)
+        self.assertTrue(doc["certification"]["certified"], doc["certification"]["blockers"])
+
+    def test_failed_check_at_full_names_the_outcome(self):
+        doc = build(Stage.FULL, (), {"rc": 1}, revision="abc")
+        self.assertIn("check unit did not pass in this run (failed)", doc["certification"]["blockers"])
+
+    def test_carry_at_pre_merge_is_unchanged(self):
+        doc = build(Stage.PRE_MERGE, ("docs/x.md",), cfg=PRE_MERGE_ONLY_CFG, previous=CARRIED)
+        self.assertEqual(by_id(doc)["lint"]["state"], "verified")  # unreached: carried as before
+        self.assertEqual(doc["admission"], "admitted")
+
+    def test_downstream_release_assembly_rejects_the_uncertified_result(self):
+        doc = self.full(previous=CARRIED)
+        with self.assertRaises(ConfigError):
+            provenance.assemble(
+                doc,
+                name="app",
+                version="1.0.0",
+                source_uri="https://example.invalid/app",
+                artifacts=[{"name": "app.tar", "sha256": "b" * 64}],
+                resolution="c" * 64,
+            )
+
+    def test_control_without_previous_evidence_is_not_certified(self):
+        doc = self.full()
+        self.assertEqual(by_id(doc)["lint"]["state"], "pending")
+        self.assertFalse(doc["certification"]["certified"])
 
 
 if __name__ == "__main__":

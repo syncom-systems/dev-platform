@@ -203,7 +203,12 @@ def build(
         blockers.append("working tree has uncommitted changes")
     if not execute:
         blockers.append("dry run")
-    blockers += [f"check {e['id']} is {e['state']}" for e in checks if e["state"] != "verified"]
+    # Certification rests on this run alone (ADR 0006 §6): a carried `verified` state never substitutes.
+    blockers += [
+        f"check {e['id']} did not pass in this run ({e['outcome'] if e['selected'] else e['reasons'][0]})"
+        for e in checks
+        if e["outcome"] != Outcome.PASSED.value
+    ]
     certified = not blockers
 
     return {

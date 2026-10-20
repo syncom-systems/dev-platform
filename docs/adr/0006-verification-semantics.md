@@ -12,5 +12,15 @@ Full model in [verification-model.md](../verification-model.md). Decisions:
 4. Evidence is a state machine (`pending | verified | failed | invalidated`). `verified` comes only
    from a pass or from carrying `verified` across a change that provably does not reach the check.
 5. A check has exactly one definition (unique id); stages are a property of that definition.
-6. Certification and release eligibility require a full-stage run, all checks verified, a known
-   revision and a non-override platform.
+6. Certification and release eligibility require a full-stage run in which every configured check
+   passed, a known revision and a pinned platform. A `verified` state carried from a previous record
+   never substitutes for passing in the certifying run, so a check not defined for `full` blocks
+   certification. Self mode and overrides are never certifiable.
+
+## Clarification (2026-10-20, owner-authorized)
+
+Decision 6 previously read "all checks verified … and a non-override platform". The intent, consistent
+with decision 4, is that the certifying run is itself the evidence: the engine had accepted a carried
+`verified` state for a check that did not run at `full`, and self mode was never certifiable in code.
+The wording now states that intent; no other semantics change. Development-stage carry and `pre-merge`
+admission (decisions 2-4) are unchanged.

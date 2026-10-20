@@ -67,6 +67,16 @@ def approval(rel, id="auth-1", at="2026-10-10T12:00:00Z", decision="approved", *
 
 
 class AssembleTest(unittest.TestCase):
+    def test_certified_flag_with_an_unpassed_check_is_refused(self):
+        # A record from an engine that certified on carried state (ADR 0006 §6) is not release input.
+        checks = [
+            {"id": "unit", "outcome": "passed"},
+            {"id": "lint", "outcome": "not_run", "state": "verified"},
+        ]
+        with self.assertRaises(ConfigError) as cm:
+            make_release("1.0.0", result(checks=checks))
+        self.assertIn("did not pass in the certifying run: lint", " ".join(cm.exception.problems))
+
     def test_assembles_a_valid_linked_record(self):
         res = result()
         rel = make_release("1.0.0", res)

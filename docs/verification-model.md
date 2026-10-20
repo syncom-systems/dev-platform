@@ -48,8 +48,9 @@ never realized. A `verified -> failed` transition is reported as a **regression*
 
 - **Admitted** (`pre-merge`/`full`): the run executed and every selected check passed. A dry run is
   never admitted. A selected check that is `unavailable`, unroutable or failed blocks.
-- **Certified**: stage `full`, executed, every check `verified`, revision known, platform mode
-  `pinned` or `self`. **Release eligible** currently equals certified; release-specific obligations
+- **Certified**: stage `full`, executed, every configured check **passed in this run** (a carried
+  `verified` never substitutes; a check not defined for `full` blocks, and `doctor` warns about it),
+  revision known, platform mode `pinned` (`self` and overrides never certify). **Release eligible** currently equals certified; release-specific obligations
   (provenance, signing) will extend it.
 
 ## Configuration invariants (rejected at load)
