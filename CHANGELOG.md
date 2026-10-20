@@ -9,6 +9,13 @@ Declared incompatibility (0.x minor):
   now a certification blocker (`check <id> did not pass in this run (not defined for stage full)`),
   `doctor` warns about it, and application-release assembly refuses a result that lists any check not
   passed. Development-stage carry and `pre-merge` admission are unchanged.
+- `--previous` carries evidence only when its **evidence identity** still applies (R-5(i)). Each check entry
+  in `result/v1` gains `identity` (component digests, encoding, boundary class) and `reuse`
+  (`current | stale | unknown`, cause, carried, boundary, origin); the result gains `previous` (validation
+  of the supplied record). All additive. Input digests are taken before the checks run; inputs edited during
+  the run withdraw the identity (`identity.unstable`). A record without identities (any record from 0.10.0 or earlier),
+  of another project, or malformed carries nothing; it no longer crashes the run. Stale evidence is reported
+  with its cause. Nothing carries at `full`. `always`/`periodic` checks never carry. Admission is unchanged.
 
 ## 0.10.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 One public product with optional, explicitly configured infrastructure capabilities (ADR 0023). Nothing is activated

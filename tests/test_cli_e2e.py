@@ -106,6 +106,29 @@ class MilestoneTest(unittest.TestCase):
         self.assertEqual(env["release"]["tree_digest"], tree_digest(self.vdir))
         self.assertEqual(len(env["identity_digest"]), 64)
 
+    def test_previous_record_applies_only_while_its_identity_matches(self):
+        run(self.proj, self.store, "init", "--platform-version", "0.1.0", "--profile", "py")
+        prev = self.proj / "prev.json"
+        r = run(self.proj, self.store, "check", "--changed", "app.py", "--result", str(prev))
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+        def plan():
+            r = run(
+                self.proj, self.store, "explain", "--changed", "app.py", "--previous", str(prev), "--json"
+            )
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            return json.loads(r.stdout)
+
+        doc = plan()  # another process computes the same identity
+        self.assertTrue(doc["previous"]["valid"], doc["previous"])
+        self.assertEqual(doc["checks"][0]["reuse"]["applicability"], "current")
+        self.assertEqual(doc["checks"][0]["identity"], json.loads(prev.read_text())["checks"][0]["identity"])
+        (self.proj / "app.py").write_text("changed = True\n")
+        reuse = plan()["checks"][0]["reuse"]
+        self.assertEqual((reuse["applicability"], reuse["cause"]), ("stale", "inputs"))
+        r = run(self.proj, self.store, "explain", "--changed", "app.py", "--previous", str(prev))
+        self.assertIn("previous: verified is stale (inputs)", r.stdout)
+
     def test_wrong_toolchain_profile_blocks_admission(self):
         run(self.proj, self.store, "init", "--platform-version", "0.1.0", "--profile", "wrong")
         r = run(self.proj, self.store, "check", "--changed", "app.py", "--json")
