@@ -11,7 +11,7 @@
 | H1 | Identity-bound evidence preservation (draft ADR B) never reports false freshness and labels every carry with its boundary class | false-fresh count (§4.4) = 0 | — |
 | H2 | Preservation in the development loop reduces repeated verification | machine time and repeated runs per change | missed checks, false-fresh |
 | H3 | Deterministic sequencing (`c/p` + gap actions) reduces time to first failure and diagnosis | time-to-first-failure, localization | missed checks, mandatory outcomes |
-| H4 | The assurance-aware planner beats a simple deterministic baseline on the whole loop | (T, K) including planner overhead | R metrics |
+| H4 | The assurance-aware planner beats a simple deterministic baseline on the whole loop | T including planner overhead (replay); K only from the consented E3 shadow comparison in which arms B and C are both logged for the same changes — without it H4 claims T only | R metrics |
 | H5 | Dev Platform's recomputation of MCP-RE assurance equals MCP-RE's own verdicts on EQ cases and is stricter on CORR cases (§5) | unexplained discrepancies = 0 | — |
 
 ## 2. Strategies compared (same obligations in every arm)
@@ -70,8 +70,8 @@ Sample characterization (60 recent MCP-RE runs, 2026-10-13..17): 27 scoped (18 w
   instrumented run, E4) — measures how far globs under-approximate.
 
 ### 4.5 Missed defect-revealing checks
-- Reference = the complete run on the same commit where available, else the next complete run, else the known-defect
-  label. A unit-lane that fails in the reference but is not selected (or is preserved) by the arm is a **miss**.
+- Reference = a complete run (any attempt) on the **same commit**, else a known-defect label for that commit; otherwise
+  the case is **unscorable** — excluded and counted, never scored against another revision. A unit-lane that fails in the reference but is not selected (or is preserved) by the arm is a **miss**.
 - Report misses separately for mandatory and optional obligations. **Any mandatory miss rejects the arm** unless an
   explicit consumer policy (e.g. a declared release-due obligation, draft ADR C B1) covers it, in which case the
   deferral is recorded with the gate that catches it.
@@ -167,7 +167,7 @@ diagnosis would have taken, or how many tokens it would have spent.
 | E0 | Archive MCP-RE `verification.yml` and `mutation-probe.yml` job logs (R-15) | downloads only (GET) | see [owner decision package](owner-decision-package.md) §2 | done or budget | evaluation input only |
 | E1 | Offline replay of arms A/B/C over archived logs and git history | MCP-RE `fingerprint`/`select-units` at historical heads in a scratch checkout; **no tests, proofs or probes** | ≤ 300 PR heads; ≤ 20 CPU-hours; no network beyond git | budget reached or first false-fresh in C | report; informational |
 | E2 | Projection equivalence (H5) on 3 committed closure targets + data controls N1–N10, N13, N14, N17–N24 | evaluator over data files only | ≤ 1 CPU-hour | any unexplained disagreement | report; gates R-16 |
-| E3 | Shadow mode on real changes | planner recommendations logged beside normal CI; **no change to any gate**; agent K measured only with consent | 30 PRs or 4 weeks, whichever first; 0 additional CI minutes beyond observation | budget, or any recommendation that would have skipped a mandatory check | report; informational |
+| E3 | Shadow mode on real changes | arm B and arm C recommendations both logged beside normal CI for each change; **no change to any gate**; agent K measured only with consent | 30 PRs or 4 weeks, whichever first; 0 additional CI minutes beyond observation | budget, or any recommendation that would have skipped a mandatory check | report; informational |
 | E4 | Exec controls N11, N12, N15, N16 and read-set instrumentation (the only route to a `complete` boundary class) | targeted runs in scratch copies | ≤ 10 runs; ≤ 4 CPU-hours | all four answered | findings to owners |
 
 No step may modify a gate, policy registry, proof, review or attestation, or produce evidence that a gate reads.

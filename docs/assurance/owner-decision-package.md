@@ -58,8 +58,10 @@ timings, for later evaluation (E1). Data collection only; nothing is executed, a
 3. *Seal*: write the manifest and verify every digest.
 
 **Estimated volume and cost.** Jobs per run were not counted (requires step 1); assuming 5–15 jobs per run gives
-~11,000–33,000 job logs at roughly 20 KB–2 MB each, i.e. ~0.5–20 GB. Proposed hard caps: 35,000 job logs, 25 GB,
-12 hours wall clock; stop and report on reaching any cap. CI minutes: zero. Model tokens: negligible — a script
+~11,000–33,000 job logs at roughly 20 KB–2 MB each. Those endpoints bound the volume at ~0.22–66 GB; the size
+distribution is unknown until step 1. Proposed hard caps: 35,000 job logs, 25 GB, 12 hours wall clock; the volume cap
+may bind before the log cap. Logs are fetched oldest first (earliest expiry); on reaching any cap, archival stops, the
+manifest records the truncation point, and the owner decides whether to raise the cap. CI minutes: zero. Model tokens: negligible — a script
 performs the download; no log content is read into an agent's context.
 
 **Provenance and integrity.** A manifest entry per file: run id, attempt, job id, workflow path, head SHA, event,

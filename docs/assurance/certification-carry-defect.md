@@ -3,7 +3,7 @@
 > **Resolution (rev. 3, 2026-10-20):** confirmed by a focused reproduction test and fixed in PR #147, merged as
 > `e73fd55` (option (a)/(d): outcome-based blocker, `doctor` warning, release-assembly re-check, ADR 0006 §6
 > clarified). The report below is kept unchanged as the pre-fix analysis at `6c0e7b4`.
-
+>
 > Status: **candidate defect, established by source inspection only. Not reproduced, not executed.** No code, test or
 > configuration was changed. Revision examined: `dev-platform` @ `6c0e7b4`. Register entries: R-5, R-6. This is a
 > correctness concern in the current implementation, independent of the proposed assurance architecture, and takes
@@ -71,6 +71,7 @@ b is not defined at stage full"). Companion assertions: carry at `pre-merge` kee
 which every check passes certifies as today (`test_engine.py:101-102`).
 
 ## 7. Corrective options
+
 | Option | Change | Consequence | Compatibility |
 |---|---|---|---|
 | **(a) recommended** | Certification blocker for every configured check whose `outcome` in this run is not `passed` | Closes the gap with no config change; carried state never certifies | A configuration with a mandatory check lacking `full` can no longer certify (today it can only via `--previous`). Existing certified results unaffected |

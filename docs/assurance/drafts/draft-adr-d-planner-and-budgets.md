@@ -47,12 +47,14 @@ CI `timeout-minutes`. Neither uses cost to sequence work. A CLI cannot see model
    authority. Never report success.
 
 ## Consequences
-- A bounded, auditable loop for agents using the CLI; honest limits where the CLI cannot see.
+- An auditable loop for agents using the CLI, bounded in time for checks with a finite `timeout` (checks without one
+  keep today's unbounded runtime); honest limits where the CLI cannot see.
 - New config keys (`timeout`, optional `permitted` stages) and two new record kinds (observation, session ledger).
 
 ## Compatibility
 Additive. Default without a `timeout` is today's behaviour. Whether exploratory authorization reuses `authorization/v1`
-(subject kind `exploration`) is an owner choice (R-13).
+(subject kind `exploration`) is an owner choice (R-13); reuse requires adding `exploration` to the
+`authorization/v1` subject-kind enum (a schema change), otherwise R-13 must define a separate record contract.
 
 ## Owner decisions required
 R-13 enforcement split and the authorization record; R-14 deterministic-first and the LLM gate; R-18 observation record.

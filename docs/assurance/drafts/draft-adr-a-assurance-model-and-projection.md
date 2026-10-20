@@ -1,7 +1,7 @@
 # Draft ADR A: General assurance model and read-only projection
 
-Status: **Draft for owner review — not an ADR, unnumbered, not in the ADR index, not ratified.** Rev. 2 (owner review
-C: argument semantics, item 4a). A number is assigned
+Status: **Draft for owner review — not an ADR, unnumbered, not in the ADR index, not ratified.** Rev. 3 (owner review
+C: argument semantics, item 4a; rev. 3 reserves `any-of`). A number is assigned
 only if the owner ratifies or accepts it as Proposed. Register entries: R-1, R-2, R-3, R-4, R-9, R-10, R-12, R-16.
 Evidence: [reconciliation](../reconciliation.md); design: [proposal](../architecture-proposal.md) §2–§6, §9.
 
@@ -50,7 +50,8 @@ be first-class; MCP-RE must remain authoritative for its own assurance.
    whether the result is monotone in added groups are open questions for a later decision, taken only when a consumer
    needs alternatives. Until then `any-of` is accepted syntactically and reported `unsupported-form`.
 
-   **Evidence kinds stay distinct.** Each unit declares `kind ∈ {proof, test, measurement, analysis, control}`. The core
+   **Evidence kinds stay distinct.** Each *evidence item* declares `kind ∈ {proof, test, measurement, analysis, control}`
+   (as in the projection, proposal §6); a unit may hold items of several kinds, such as a proof and a test. The core
    does not rank kinds or treat one as implying another; the `PASS` record lists the kinds that established each
    claim. A formal theorem, an empirical measurement and a behavioural test thus remain different evidence; whether a
    kind is adequate for a statement is the reviewed argument's question, not the evaluator's. Model–implementation

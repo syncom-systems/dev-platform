@@ -22,7 +22,9 @@ rarer. This draft therefore makes the *trust in the boundary* an explicit, repor
 
 ### 1. Identity
 Every evidence item carries an identity digest over components `inputs`, `definition`, `environment`, `platform`,
-optional opaque `provider`, and `encoding` (proposal §4.1), plus the run's `revision`. `always` checks carry no
+optional opaque `provider`, and `encoding` (proposal §4.1). The run's `revision` is recorded for diagnosis but is
+**not** a component and is not compared: a commit that does not touch a check's inputs leaves its evidence
+applicable (rev. 3, matching PR #148). `always` checks carry no
 reusable identity: they are owed at every admission (unchanged ADR 0006).
 
 ### 2. Boundary class
@@ -43,7 +45,7 @@ For each evidence item, relative to the current run:
   gate in question (§4). Only `current` items can be carried or support a claim.
 - **`stale(<cause>)`** iff any component differs; cause = first differing component. Never support.
 - **`unknown`** iff any component is unreadable, the class is `unknown`, or the previous record is not a valid,
-  identity-bearing `result/v1` record for this project. Never support. Reported as uncertainty, not as stale.
+  identity-bearing result record of a supported schema version (`result/v1` today) for this project. Never support. Reported as uncertainty, not as stale.
 - **historical**: every `stale`/`unknown` item and every item from another revision remains visible for planning and
   diagnosis, labelled historical; it never discharges an obligation.
 
@@ -97,7 +99,8 @@ requires a current unweakened pass of the same control. A control's pass support
 
 ## Compatibility
 `result/v1` gains optional identity, boundary-class and applicability fields (additive) or moves to v2 at the owner's
-choice; 0.x minor bump. Behaviour change: (i) certification as in §5; (ii) a `--previous` record without matching
+choice; 0.x minor bump. A move to v2 must state whether v1 identities stay readable (same encoding) or become
+`unknown`; the applicability rule itself is version-neutral. Behaviour change: (i) certification as in §5; (ii) a `--previous` record without matching
 identity contributes nothing. No known consumer relies on either.
 
 ## Alternatives rejected

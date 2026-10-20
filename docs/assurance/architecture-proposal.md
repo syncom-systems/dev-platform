@@ -147,7 +147,7 @@ Names fixed to remove the collision in reconciliation §5–§6.2:
 | Name | Meaning | Today |
 |---|---|---|
 | **development verification** | owed checks at `edit/pre-commit`; advisory, planner-ordered | Dev Platform (no owed obligations below pre-merge) |
-| **admission** | owed checks at `pre-merge` pass in this run (ADR 0006) | Dev Platform |
+| **admission** | owed (selected) checks at `pre-merge` pass in this run (ADR 0006); an unreached check is not owed, so a permitted carry changes only its reported state, never admission | Dev Platform |
 | **certification** | `full` stage, everything verified *in this run* (ADR B closes the carry gap) | Dev Platform |
 | **assurance closure** | L3 verdict for a declared scope at a gate | MCP-RE; Dev Platform proposed |
 | **release verification** | the archive is what the trusted workflow built (ADR 0015) | Dev Platform |
