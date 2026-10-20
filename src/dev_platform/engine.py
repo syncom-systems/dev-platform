@@ -229,6 +229,11 @@ def build(
             moved = identity.unstable(snapshot[e["id"]], after[e["id"]])
             if moved:
                 identity.withdraw(e["identity"], moved)
+                if e["reuse"] and e["reuse"]["carried"]:
+                    # The carry matched the pre-run snapshot; the content now differs from the previous one.
+                    e["reuse"] |= {"applicability": "stale", "cause": moved[0], "carried": False}
+                    if e["state"] == EvidenceState.VERIFIED.value:
+                        e["state"] = EvidenceState.INVALIDATED.value
     owed = [e for e in checks if e["selected"]]
     unsatisfied = [e["id"] for e in owed if e["outcome"] != Outcome.PASSED.value]
     # A non-conformant environment makes every admission claim false (no silent substitution).
