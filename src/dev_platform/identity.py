@@ -198,7 +198,9 @@ def applicability(prev: dict | None, current: dict) -> tuple[str, str | None]:
     for k in COMPONENTS:
         if current["components"][k] is None or not isinstance(old.get(k), str):
             return "unknown", f"identity component {k} is not computable"
-    if current["boundary"] == "unknown" or ident.get("boundary") not in BOUNDARIES:
+    if ident.get("digest") != canonical_digest({k: old[k] for k in COMPONENTS}):
+        return "unknown", "previous identity digest does not match its components"
+    if "unknown" in (current["boundary"], ident.get("boundary")) or ident.get("boundary") not in BOUNDARIES:
         return "unknown", "no dependency boundary bounds this check's outcome"
     for k in COMPONENTS:
         if old[k] != current["components"][k]:

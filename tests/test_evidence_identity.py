@@ -183,6 +183,23 @@ class IdentityBoundReuseTest(unittest.TestCase):
             del c["identity"]["components"]["environment"]
         self.assert_not_carried(self.build(previous=prev), "unknown")
 
+    def test_previous_digest_inconsistent_with_its_components_is_unknown(self):
+        for digest in (None, "0" * 64, 7):
+            with self.subTest(digest=digest):
+                prev = self.previous()
+                for c in prev["checks"]:
+                    if digest is None:
+                        del c["identity"]["digest"]
+                    else:
+                        c["identity"]["digest"] = digest
+                self.assert_not_carried(self.build(previous=prev), "unknown")
+
+    def test_previous_boundary_unknown_is_not_reusable(self):
+        prev = self.previous()
+        for c in prev["checks"]:
+            c["identity"]["boundary"] = "unknown"
+        self.assert_not_carried(self.build(previous=prev), "unknown")
+
     def test_uncomputable_current_component_is_unknown(self):
         prev = self.previous()
         env = {k: v for k, v in ENV.items() if k != "identity_digest"}

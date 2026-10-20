@@ -64,13 +64,15 @@ declaration; nothing verifies they cover what the check reads), `unknown` for `a
 checks (their outcome is not bounded by inputs). `complete` is reserved for a measuring or
 conservative mechanism; nothing produces it today. Against the previous record's entry, `reuse` says:
 
-- `current`: every component equal and the boundary not `unknown`. Carried (`carried: true`), at
+- `current`: every component equal, the stored `digest` consistent with the stored components, and
+  neither the previous nor the current boundary `unknown`. Carried (`carried: true`), at
   development and `pre-merge` only, labelled with its boundary. A change outside a `declared` boundary
   is not detected; that is the boundary's limitation, already shared by impact selection.
 - `stale` (`cause` = first differing component): history only; a `verified` previous state becomes
   `invalidated`, a `failed` one stays `failed`.
 - `unknown`: invalid record (schema, project, malformed entries), no entry, no identity, other encoding,
-  a component that cannot be computed now, an `unknown` boundary, or a `verified` entry the record
+  a component that cannot be computed now, a stored `digest` missing or inconsistent with its
+  components, an `unknown` boundary (previous or current), or a `verified` entry the record
   itself does not explain (no pass, no current carry). Nothing is carried.
 
 At `full` nothing carries. Reuse changes only the reported `state` and `regressions` (against any
