@@ -615,6 +615,13 @@ def cmd_doctor(args) -> int:
     try:
         cfg = load(args.project)
         add("ok", f"{CONFIG_FILENAME} valid ({len(cfg.checks)} checks)")
+        for c in cfg.checks:
+            if Stage.FULL not in c.stages:
+                add(
+                    "warn",
+                    f"check {c.id} ({c.obligation.value}) is not defined for stage full: "
+                    "no run can certify while it cannot pass in the certifying run (ADR 0006 §6)",
+                )
         try:
             res = resolve(cfg, protected=protected_context(os.environ, args.__dict__.get("protected", False)))
             _delegate(res, args)  # the pinned release diagnoses its own environment, with its own code

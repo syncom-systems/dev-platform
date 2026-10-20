@@ -36,6 +36,10 @@ def certified_problems(result: dict) -> list[str]:
         p.append("result is not an executed full-stage run")
     if not cert.get("certified"):
         p.append(f"result is not certified: {cert.get('blockers')}")
+    # Re-check ADR 0006 §6 independently of the producing version: every check passed in that run.
+    unpassed = [c.get("id") for c in result.get("checks") or [] if c.get("outcome") != "passed"]
+    if unpassed:
+        p.append(f"checks did not pass in the certifying run: {', '.join(map(str, unpassed))}")
     if (result.get("platform") or {}).get("mode") != "pinned":
         p.append("platform was not a pinned release")
     if env.get("assurance") != "certifiable":
