@@ -97,6 +97,27 @@ class ReadOnlyCommands(Sandbox):
         self.assertFalse(store.exists())
         self.assertNothingActivated()
 
+    def test_assurance_evaluate_runs_nothing_and_writes_nothing(self):
+        from dev_platform import assurance
+        from tests.test_assurance import projection
+
+        work = self.base / "work"
+        work.mkdir()
+        doc = projection(producer_verdicts={"closure": "PASS"})
+        (work / "p.json").write_text(json.dumps(doc))
+        (work / "dev-platform.toml").write_text(
+            '[[check]]\nid = "x"\nadapter = "exec"\nargv = ["touch", "ran"]\n'
+        )
+        before = snapshot(work)
+        p = self.cli("assurance", "evaluate", "--projection", str(work / "p.json"), "--json", cwd=work)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(json.loads(p.stdout), assurance.evaluate(doc))  # the CLI adds nothing
+        self.assertEqual(
+            self.cli("assurance", "evaluate", "--projection", str(work / "p.json"), cwd=work).returncode, 0
+        )
+        self.assertEqual(snapshot(work), before)
+        self.assertNothingActivated()
+
     def test_default_locations_are_not_created_by_reading(self):
         for argv in (["infra", "store", "list"], ["infra", "doctor"]):
             self.cli(*argv)

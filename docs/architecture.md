@@ -13,6 +13,7 @@
 | Adapters | `adapters.py` | Check definition -> deterministic command (`bazel`, `python`, `cargo`, `exec`) |
 | Runner routing | `runners.py` | Logical requirement + event trust + infra profile -> runner |
 | Result record | `engine.py`, [schema](../schemas/result-v1.schema.json) | Versioned JSON evidence (`dev-platform.result/v1`) |
+| Assurance evaluation (prototype) | `assurance.py`, [projection schema](../schemas/assurance-projection-v1.schema.json) | Read-only, informational claim and closure evaluation ([details](assurance-evaluation.md)) |
 
 Everything is a deterministic function of: configuration, change set, previous evidence, platform
 digest, and (for execution) the adapters' tool output. Results contain no timestamps or host data.

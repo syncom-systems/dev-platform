@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+Added (prototype, informational):
+- `dev-platform assurance evaluate --projection FILE [--json]` evaluates claims, units, premises, reviews and closure
+  from a `dev-platform.assurance-projection/v1` document (new schemas `assurance-projection-v1` and
+  `assurance-evaluation-v1`). Conjunctive support only; `any-of` and other forms are reported `unsupported-form`.
+  Producer verdicts are compared, and a disagreement is `projection-inconsistent`, never `PASS`. Read-only: runs and
+  writes nothing, and its verdict satisfies no admission, certification, release or acceptance obligation. Draft ADR A
+  is not ratified ([details](docs/assurance-evaluation.md)).
+
 Declared incompatibility (0.x minor):
 - Certification requires every configured check to have **passed in the certifying run** (ADR 0006 §6,
   clarified). Previously a `verified` state carried via `--previous` satisfied certification for a check

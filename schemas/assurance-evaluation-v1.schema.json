@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/assurance-evaluation-v1.schema.json",
+  "title": "dev-platform.assurance-evaluation/v1",
+  "description": "Output of `dev-platform assurance evaluate` (prototype, informational). It satisfies no admission, certification, release or owner-acceptance obligation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "authority", "limitations", "projection", "closure", "consistency", "claims", "units", "premises"],
+  "properties": {
+    "schema": {"const": "dev-platform.assurance-evaluation/v1"},
+    "authority": {"const": "informational"},
+    "limitations": {"type": "array", "items": {"type": "string"}},
+    "projection": {"type": "object", "required": ["digest", "producer"],
+                   "properties": {"digest": {"type": "string"}, "producer": {"type": "string"}}},
+    "closure": {"type": "object", "additionalProperties": false,
+                "required": ["scope", "verdict", "recomputed_verdict", "blockers"],
+                "properties": {
+                  "scope": {"type": "object", "required": ["closure", "roots", "claims"]},
+                  "verdict": {"enum": ["PASS", "INCOMPLETE", "FAILED", "UNDECLARED"]},
+                  "recomputed_verdict": {"enum": ["PASS", "INCOMPLETE", "FAILED", "UNDECLARED"]},
+                  "blockers": {"type": "array", "items": {"type": "object", "required": ["code"]}},
+                  "basis": {"type": "object", "required": ["claims", "premises", "kinds", "boundaries", "evidence"]}}},
+    "consistency": {"type": "object", "required": ["state", "disagreements"],
+                    "properties": {"state": {"enum": ["not-compared", "consistent", "projection-inconsistent"]},
+                                   "disagreements": {"type": "array"}}},
+    "claims": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "state", "review", "support", "depends_on", "reasons"],
+      "properties": {
+        "id": {"type": "string"},
+        "state": {"enum": ["established", "failed", "not-established"]},
+        "review": {"type": "object", "required": ["state"],
+                   "properties": {"state": {"enum": ["current", "stale", "absent", "incompatible"]},
+                                  "cause": {"type": "string"}}},
+        "support": {"type": "object", "required": ["form"]},
+        "depends_on": {"type": "array", "items": {"type": "string"}},
+        "reasons": {"type": "array", "items": {"type": "object", "required": ["code"]}},
+        "basis": {"type": "object"}
+      }}},
+    "units": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "state", "premises", "evidence"],
+      "properties": {
+        "id": {"type": "string"},
+        "state": {"enum": ["established", "failed", "not-established", "no-evidence"]},
+        "premises": {"type": "array", "items": {"type": "string"}},
+        "evidence": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["id", "kind", "outcome", "provenance", "boundary", "applicability", "identity", "state", "reasons"],
+          "properties": {
+            "id": {"type": "string"}, "kind": {"type": "string"}, "outcome": {"type": "string"},
+            "provenance": {"type": "string"}, "boundary": {"type": "string"},
+            "applicability": {"enum": ["current", "stale", "unknown"]},
+            "identity": {"type": ["string", "null"]},
+            "state": {"enum": ["supports", "counterevidence", "does-not-support"]},
+            "reasons": {"type": "array", "items": {"type": "string"}}
+          }}}
+      }}},
+    "premises": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "class", "state"],
+      "properties": {"id": {"type": "string"}, "class": {"type": "string"},
+                     "state": {"enum": ["current", "unreviewed", "stale"]}}}}
+  }
+}
