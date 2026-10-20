@@ -68,4 +68,5 @@ The producer's outcomes, applicability and boundaries are taken as reported: the
 producer or show that a `declared` boundary contains everything a check reads; a `PASS` resting on `declared`
 boundaries says so in its basis. Native claim declarations, other support forms, release-due obligations and any
 MCP-RE exporter are not part of this prototype. Its synthetic tests are no evidence of agreement with MCP-RE's own
-evaluator (evaluation plan E1–E4 have not run).
+evaluator. Evaluation step E2 ([report](assurance/e2-projection-equivalence.md)) found that MCP-RE's committed records
+cannot support that agreement: they carry no per-unit evidence; E1, E3 and E4 have not run.
