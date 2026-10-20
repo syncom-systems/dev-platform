@@ -33,7 +33,9 @@ LEGACY = {"checks": [{"id": "lint", "state": "verified"}, {"id": "docs", "state"
 
 
 def git(root, *args):
-    subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=root, check=True, capture_output=True
+    )
 
 
 class IdentityBoundReuseTest(unittest.TestCase):
@@ -48,7 +50,7 @@ class IdentityBoundReuseTest(unittest.TestCase):
             self.write(rel, text)
         git(self.root, "init", "-q")
         git(self.root, "add", "-A")
-        git(self.root, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+        git(self.root, "commit", "-qm", "base")
 
     def write(self, rel, text):
         p = self.root / rel
