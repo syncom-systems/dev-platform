@@ -117,8 +117,8 @@ Controls marked *data* are perturbations of records/projections (no execution); 
 | N16 | Certification carry | mandatory check without `full`, verified `--previous` | not certified | CORR (Dev Platform, [defect report](certification-carry-defect.md)) |
 | N17 | Projection inconsistency | producer verdict `PASS` with a failing unit | `projection-inconsistent`, never `PASS` | SPEC |
 | N18 | Toolchain bump | move environment component only | all evidence `stale(environment)`, reviews current | EQ (MCP-RE v0.18.0→v0.18.1) |
-| N19 | Alternative with counterevidence | `any-of`: group 1 passes, group 2 has a current `failed` item | `FAILED` | SPEC (ADR A §4a) |
-| N20 | Empty alternative | `any-of` with an empty group and a not-run group | `INCOMPLETE` | SPEC |
+| N19 | Alternative with counterevidence | `any-of`: group 1 passes, group 2 has a current `failed` item | `unsupported-form` → `INCOMPLETE` until alternative semantics are decided (rev. 3) | SPEC (ADR A §4a, reserved) |
+| N20 | Empty alternative | `any-of` with an empty group and a not-run group | `INCOMPLETE` (`unsupported-form`) | SPEC (reserved) |
 | N21 | Incomplete argument | `argument = "incomplete"`, all support passing, review current | `INCOMPLETE(argument-incomplete)` | SPEC |
 | N22 | Unaccepted premise | supporting unit premised on a premise with no current review | `premise-unaccepted`, not established | SPEC (MCP-RE parity to be checked: EQ if it matches) |
 | N23 | Unsupported form | `any-of` given to an `all`-only evaluator | `unsupported-form` → `INCOMPLETE`, never reinterpreted | SPEC |

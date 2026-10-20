@@ -1,5 +1,9 @@
 # Defect report (candidate): certification can rest on carried, unexecuted evidence
 
+> **Resolution (rev. 3, 2026-10-20):** confirmed by a focused reproduction test and fixed in PR #147, merged as
+> `e73fd55` (option (a)/(d): outcome-based blocker, `doctor` warning, release-assembly re-check, ADR 0006 §6
+> clarified). The report below is kept unchanged as the pre-fix analysis at `6c0e7b4`.
+
 > Status: **candidate defect, established by source inspection only. Not reproduced, not executed.** No code, test or
 > configuration was changed. Revision examined: `dev-platform` @ `6c0e7b4`. Register entries: R-5, R-6. This is a
 > correctness concern in the current implementation, independent of the proposed assurance architecture, and takes

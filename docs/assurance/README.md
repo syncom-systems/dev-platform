@@ -32,6 +32,23 @@
 | 6 | [Certification carry defect report](certification-carry-defect.md) | Candidate defect in the current engine (by inspection, not reproduced): control flow, reproduction plan, regression test, fixes, authorization |
 | 7 | [Owner decision package](owner-decision-package.md) | Decisions by readiness; the R-15 / E0 archival authorization proposal; recommended sequence |
 
+## Status (revision 3, 2026-10-20)
+
+**Merging this directory records an investigation and a set of proposals. It does not ratify draft ADRs A–D, number
+them, or authorize implementation.** Each decision below keeps the status shown; the analysis and its source-revision
+citations (`6c0e7b4`, `8262c5fa`) are historical and unchanged.
+
+| Decision | Status |
+|---|---|
+| R-6 certification carry | **Decided and implemented** — PR #147, merged `e73fd55`; ADR 0006 §6 clarified there |
+| R-19 self-mode wording | **Done** in PR #147 |
+| R-5(i) identity-bound carry | **Implementation proposed** — PR #148 (open). Labelled, unauthenticated, declared-boundary reuse; not authoritative for a future evaluator |
+| R-5(ii) `declared` carry at admission | **Open** |
+| ADR 0006 §4 wording for R-5 | **Open** (text proposed in PR #148) |
+| R-15 / E0 log archival | **Open, urgent** — earliest MCP-RE logs expire ~2026-11-09 |
+| ADR A `any-of` semantics | **Reserved** (rev. 3): reported `unsupported-form`; the rev. 2 cross-group counterevidence rule is withdrawn |
+| All other register entries (R-1…R-4, R-7…R-18), draft ADRs A–D | **Open — proposals only** |
+
 ## Revision 2 (owner review)
 
 Focused corrections after the owner review; the examined source revisions above are unchanged (`dev-platform`

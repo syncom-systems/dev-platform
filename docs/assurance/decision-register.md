@@ -13,8 +13,8 @@
 | R-2 | Native declaration format | defer; projection first, native TOML after equivalence | config/v1 later | A |
 | R-3 | Projection contract and producer ownership (Q1, Q10) | `dev-platform.assurance-projection/v1`; MCP-RE owns its exporter | MCP-RE | A |
 | R-4 | Core vocabulary, closure verdicts and argument subset (Q2) | four axes; `PASS/INCOMPLETE/FAILED/UNDECLARED`; scope per gate; explicit partial argument subset (ADR A §4a) | — | A |
-| R-5 | Bind evidence carry to input identity (Q4) | (i) yes, refuse unbound carry; every carry states its boundary class; (ii) keep `declared` carry at admission until E4 | ⚠ ratified ADR 0006 §4 (clarification; (ii)=refuse would amend) | B |
-| R-6 | Certification carry gap — **urgent, independent** ([defect report](certification-carry-defect.md)) | certification requires a pass *in the certifying run* | ⚠ ratified ADR 0006 §6 (clarification) | B §5 |
+| R-5 | Bind evidence carry to input identity (Q4) — (i) proposed in #148; (ii) open | (i) yes, refuse unbound carry; every carry states its boundary class; (ii) keep `declared` carry at admission until E4 | ⚠ ratified ADR 0006 §4 (clarification; (ii)=refuse would amend) | B |
+| R-6 | Certification carry gap — **decided; fixed in #147** ([defect report](certification-carry-defect.md)) | certification requires a pass *in the certifying run* | ⚠ ratified ADR 0006 §6 (clarification) | B §5 |
 | R-7 | ADR 0006 vs bounded merge selection (Q3) | keep ADR 0006; offer explicit, consumer-declared release-due obligations; reject size-conditional deferral | ⚠ ratified ADR 0006 §2 (amendment) | C |
 | R-8 | Default for paths outside every provider read set | unmapped = unknown = owed; implicit ignore must become explicit | ⚠ ratified ADR 0006 §3 (scope statement) | B |
 | R-9 | Claim review records and reviewer identity (Q6) | native: `authorization/v1` with a claim-review subject; projected: consumer's records | ADR 0013 record shape (Proposed part) | A |
@@ -82,10 +82,11 @@
 - **Evidence.** RFC §7.1, §7.5; MCP-RE folds incomplete support into `FAIL` at closure level (reconciliation §6.3) but
   distinguishes `INCOMPLETE` at aggregate and root levels; Dev Platform's evidence states answer a narrower question.
 - **Argument semantics (rev. 2).** Conjunction is MCP-RE's model, not the universal semantics of assurance
-  arguments. Draft ADR A §4a supports an explicit subset — conjunctive support, one level of alternatives (`any-of`,
-  reserved), prerequisite claims, premises that must be accepted, review bound to the argument digest, and an explicit
-  `incomplete`/`unknown` argument marker — and reports anything else as `unsupported-form`. Non-vacuity holds for every
-  form; current counterevidence in any alternative makes the claim `FAILED`; evidence kinds stay distinct.
+  arguments. Draft ADR A §4a supports an explicit subset — conjunctive support, prerequisite claims, premises that
+  must be accepted, review bound to the argument digest, and an explicit `incomplete`/`unknown` argument marker — and
+  reports anything else, including `any-of`, as `unsupported-form`. Non-vacuity holds for every implemented form;
+  evidence kinds stay distinct. **Rev. 3:** the rev. 2 rule "counterevidence in any alternative makes the claim
+  `FAILED`" is withdrawn; alternative semantics are reserved for a later decision (ADR A §4a).
 - **Recommendation.** (a); closure scope (`roots` or `all-active`) is consumer policy per gate; `UNDECLARED` for empty
   roots/active set; `FAILED` only for current counterevidence; the argument subset approved as explicitly partial.
 - **Owner decision.** Approve the vocabulary in draft ADR A item 4 and the subset in §4a; answer the open questions in
@@ -111,6 +112,13 @@
   `declared` carry at admission — no weaker than today's glob selection — until E4 measures glob under-approximation.
 - **Owner decision.** (i) approve (b) and confirm it is a clarification; (ii) keep or refuse `declared` carry at
   admission (refusing would be a stricter amendment of §4).
+- **Status (rev. 3, 2026-10-20).** (i): implementation **proposed** in PR #148 (open, not merged): identity over
+  definition, platform, environment, global and declared inputs; boundary `declared`/`unknown` (`complete` produced by
+  nothing); `current`/`stale`/`unknown` applicability; no carry at `full`; admission unchanged; inputs snapshotted
+  before and after execution. Limitations it states: records are unauthenticated; declared boundaries can
+  under-approximate; no provider identity; an edit undone within a run is not detected. Carried state from it is
+  labelled history-backed reuse, not authoritative evidence for a future evaluator. (ii): **open**. ADR 0006 §4
+  wording: **open** (proposed text in PR #148).
 
 ### R-6 Certification carry gap ⚠ ratified (ADR 0006 §6, clarification)
 - **Question.** Can certification rely on state carried from a previous record?
@@ -127,6 +135,9 @@
   defect with precedence over the evaluator and planner; full analysis, reproduction plan and authorization request in
   the [defect report](certification-carry-defect.md). Not experimentally confirmed.
 - **Owner decision.** Approve (a) as a clarification of ADR 0006 §6 ("every check verified" = passed in this run).
+- **Status (rev. 3, 2026-10-20).** **Decided and implemented**: reproduced, then fixed in PR #147, merged as `e73fd55`
+  (outcome-based certification blocker, `doctor` warning, independent re-check in release assembly, ADR 0006 §6
+  clarification with a dated note, R-19 wording). The evidence above is kept as examined at `6c0e7b4`.
 
 ### R-7 ADR 0006 versus bounded merge selection ⚠ ratified (ADR 0006 §2, amendment if B1)
 - **Question.** Should Dev Platform admit consumer policies where a mandatory obligation is satisfied later than merge?

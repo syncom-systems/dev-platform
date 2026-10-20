@@ -32,17 +32,23 @@ be first-class; MCP-RE must remain authoritative for its own assurance.
    | Element | Representation | Rule |
    |---|---|---|
    | Conjunctive support (default) | `support = {form: "all", units: [...]}` | established iff the list is non-empty and every unit is current and passing |
-   | Alternative strategies | `support = {form: "any-of", groups: [[...], [...]]}`, each group conjunctive | established iff some non-empty group is fully established; one level only (no nesting, weights, thresholds or negation) |
+   | Alternative strategies | `support = {form: "any-of", groups: [[...], [...]]}` — **name reserved, semantics not decided (rev. 3)** | always reported `INCOMPLETE(unsupported-form)`; never established, never `FAILED`, never coerced to `all` |
    | Prerequisite claims | `depends_on` | each must be established (fixpoint), independent of support form |
    | Premises / assumptions | `premised_on` (unit) or `premises` (claim); class `assumed / external-boundary / review-obligation` | an unaccepted premise (no current review of the premise) → `premise-unaccepted`; an established claim's record lists every premise it rests on — "established under P" is never reported as unconditional |
    | Human semantic review | review bound to the claim's statement digest **and** its argument digest (support form, units, premises, `depends_on`) | changing any part of the argument stales the review; the review is the judgement that the evidence, of whatever kind, actually bears on the statement |
    | Incomplete or unknown argument | `argument: "incomplete"` or `"unknown"`, or a support form the evaluator does not implement | never established; reported as `INCOMPLETE(argument-incomplete / unsupported-form)`, never coerced to `all` |
 
-   Non-vacuity holds for every form: an empty list, an empty group, a group of only `not_run`/non-applicable/`unknown`
-   items, or an unresolved reference never establishes support. **Counterevidence is not hidden by alternatives:** a
-   current `failed` item in any group of a claim makes the claim `FAILED`, because a failing test or refuted proof
-   offered for a statement is evidence against the statement, not merely a failed strategy. A consumer that intends a
-   group to be a fallback for an *unavailable* method uses `unavailable`/`not_run`, which does not count as failure.
+   Non-vacuity holds for every implemented form: an empty list, a list of only `not_run`/non-applicable/`unknown`
+   items, or an unresolved reference never establishes support. Under `all`, a current `failed` unit makes the claim
+   `FAILED` (current counterevidence).
+
+   **Alternatives are reserved, not specified (rev. 3).** Rev. 2 proposed that a current `failed` item in *any* group
+   makes the claim `FAILED`. That rule is withdrawn: it conflates evidence against the statement with a failed
+   strategy (a measurement strategy that misses a threshold does not refute a proof of the same statement unless both
+   bear on the same proposition), and it makes adding an alternative able to turn an established claim into `FAILED`.
+   Which failures count as counterevidence across groups, how `unavailable` and `failed` differ in a fallback, and
+   whether the result is monotone in added groups are open questions for a later decision, taken only when a consumer
+   needs alternatives. Until then `any-of` is accepted syntactically and reported `unsupported-form`.
 
    **Evidence kinds stay distinct.** Each unit declares `kind ∈ {proof, test, measurement, analysis, control}`. The core
    does not rank kinds or treat one as implying another; the `PASS` record lists the kinds that established each
@@ -50,7 +56,7 @@ be first-class; MCP-RE must remain authoritative for its own assurance.
    kind is adequate for a statement is the reviewed argument's question, not the evaluator's. Model–implementation
    correspondence is itself a claim (item 9).
 
-   The first evaluator may implement `all` only; it must then report `any-of` as `unsupported-form`, not reject the
+   The first evaluator implements `all` only and reports `any-of` as `unsupported-form`; it does not reject the
    document or reinterpret it. MCP-RE's model is the `all` subset with review bound to the claim fingerprint.
 5. **Closure scope** (`roots` or `all-active`) and which gates require closure are consumer policy. The platform sets
    no default obligation.
@@ -77,8 +83,9 @@ Additive: new command, new schema, new `authorization/v1` subject kind (ADR 0013
 No change to ADR 0004, 0006, 0007, 0015 semantics. Native declaration format deferred (R-2).
 
 ## Open questions on the argument model (owner, R-4)
-- Is `any-of` needed in v1, or reserved and reported `unsupported-form` until a consumer needs it? (Recommendation:
-  reserve; no current consumer uses alternatives — MCP-RE claims are conjunctive.)
+- `any-of` semantics (rev. 3: reserved; see §4a): counterevidence across groups, `unavailable` versus `failed` in a
+  fallback, monotonicity. Decided only when a consumer needs alternatives; no current consumer does (MCP-RE claims are
+  conjunctive).
 - Should an accepted `assumed` premise be allowed at the release gate, or must release closure list it as a blocker
   unless the consumer's release policy names it? (Recommendation: allowed, but listed in the `PASS` record.)
 - Does the argument digest belong in the claim fingerprint (as MCP-RE's claim fingerprint does for its own fields) or in a separate digest?

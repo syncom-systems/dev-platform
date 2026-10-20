@@ -42,7 +42,7 @@ Authority rules (normative in the drafts):
 
 | Object | Fields (minimal) | Generalizes | Deliberately not included |
 |---|---|---|---|
-| **Claim** | `id`, `statement`, `scope`, `kind` (free consumer tag: functional, security, performance, …), `depends_on: [claim]`, `support` (`{form: all, units}` or `{form: any-of, groups}`, ADR A §4a), `premises?`, `argument?` (`incomplete`/`unknown` marker), `review_requirement`, `replaced_by?` | MCP-RE theorem (`_theorems.py:51-70`) | severity, consequence text, owner-as-unit, layers — consumer extension fields |
+| **Claim** | `id`, `statement`, `scope`, `kind` (free consumer tag: functional, security, performance, …), `depends_on: [claim]`, `support` (`{form: all, units}`; `{form: any-of, groups}` reserved, reported `unsupported-form`, ADR A §4a), `premises?`, `argument?` (`incomplete`/`unknown` marker), `review_requirement`, `replaced_by?` | MCP-RE theorem (`_theorems.py:51-70`) | severity, consequence text, owner-as-unit, layers — consumer extension fields |
 | **Root set** | `roots: [claim]`, declared, never inferred | `root_theorems` | — |
 | **Assurance unit** | `id`, `inputs` (identity specification §4.1), `evidence: [check:<id>]`, `consumes: [{unit, contract, sealed}]` | MCP-RE unit (`_manifest.py:111-139`) | V-class, prover symbols, Lean theorem names — consumer extension fields |
 | **Premise** | `id`, `statement`, `class ∈ {assumed, external-boundary, review-obligation}`, `scope: [unit]`, `discharge?` | `assumptions.toml` (`_premise.py:65-282`) | prover-mechanism tokens, Rust seam sites |

@@ -9,7 +9,7 @@
 | ID | Decision asked | Recommendation | Why now |
 |---|---|---|---|
 | **R-15** | Authorize E0 (§2) | authorize | earliest MCP-RE logs expire ~**2026-11-09**; `select-units`-era logs from ~2026-12-24 |
-| **R-6** | Certification requires every configured check to *pass in the certifying run* (clarification of ADR 0006 §6) | approve; authorize the reproduction test, then the fix ([defect report](certification-carry-defect.md) §9) | current-implementation correctness concern reaching release provenance; independent of all other work |
+| ~~R-6~~ | **Done (rev. 3):** decided, reproduced and fixed in PR #147 (`e73fd55`) | — | — |
 
 ### 1.2 Ready (evidence sufficient for the decision itself)
 | ID | Decision asked | Recommendation | Remaining dependency |
@@ -18,7 +18,7 @@
 | R-8 | Unmapped provider paths are owed unless the provider's read set is `complete` for every non-ignored path | approve | none: with no `complete` provider it equals today's fail-closed rule |
 | R-1 | Module inside Dev Platform; a projected consumer's own verdict stays authoritative | approve | — |
 | R-3 | Dev Platform owns `assurance-projection/v1`; MCP-RE would own its exporter | approve the boundary; requesting the exporter is a separate MCP-RE decision | MCP-RE owner |
-| R-4 | Four axes; `PASS/INCOMPLETE/FAILED/UNDECLARED`; argument subset of ADR A §4a (`all`, explicit `incomplete`, premises, review bound to argument digest; `any-of` reserved) | approve the subset as explicitly partial | see §3 open questions |
+| R-4 | Four axes; `PASS/INCOMPLETE/FAILED/UNDECLARED`; argument subset of ADR A §4a (`all`, explicit `incomplete`, premises, review bound to argument digest; `any-of` reserved, semantics undecided) | approve the subset as explicitly partial | see §3 open questions |
 | R-19 | Correct `verification-model.md` / ADR 0006 §6 wording on self mode | approve; bundle with the R-6 fix | — |
 | R-13, R-14 (deterministic part), R-16, R-18 | CLI/runtime enforcement split; deterministic planner first; migration criterion; separate observation record | approve | R-18 is draft ADR D, not part of ADR B |
 
@@ -87,18 +87,18 @@ and `mutation-probe.yml` run metadata, job lists and job logs since 2026-08-11, 
 retained until <date>." Requested by **~2026-11-01** to leave margin before the first expiry.
 
 ## 3. Open questions on the generic model (R-4)
-1. Is `any-of` needed in v1, or reserved (`unsupported-form`) until a consumer needs it? Recommendation: reserve.
+1. `any-of`: rev. 3 reserves it (`unsupported-form`) and withdraws the rev. 2 cross-group counterevidence rule;
+   its semantics are decided only when a consumer needs alternatives.
 2. May an accepted `assumed` premise stand at the release gate? Recommendation: yes, listed in the `PASS` record.
 3. Should the argument digest be part of the claim fingerprint or a separate digest?
 4. Should evidence `kind` be a closed vocabulary (`proof, test, measurement, analysis, control`) or a free tag?
    Recommendation: closed, so `PASS` records are comparable across consumers.
 
-## 4. Recommended sequence (each step separately authorized; none started)
-1. **Certification defect:** decide R-6 → reproduction test (defect report §9.1) → fix with regression test and
-   R-19 wording (§9.2). Smallest, highest-value change; no dependency.
+## 4. Recommended sequence (each step separately authorized)
+1. **Certification defect:** done — PR #147 (`e73fd55`), including R-19 wording.
 2. **E0** (R-15), in parallel with 1, before ~2026-11-09.
-3. **Carry binding:** decide R-5(i) → interim identity check on `--previous`, then draft ADR B identity with boundary
-   classes once ratified.
+3. **Carry binding:** R-5(i) implementation proposed in PR #148 (identity, boundary classes, applicability; open).
+   R-5(ii) and the ADR 0006 §4 wording remain owner decisions.
 4. **Evaluator, data only:** after R-1/R-3/R-4, a projection evaluator implementing the `all` subset; E2 against
    MCP-RE closure records and controls (EQ/CORR/SPEC, evaluation §5). MCP-RE exporter only on MCP-RE owner request.
 5. **Observations and budgets:** R-18 record and per-check timeouts (draft ADR D); then E1 replay over the E0 archive.
