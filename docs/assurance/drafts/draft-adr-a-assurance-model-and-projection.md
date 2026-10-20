@@ -1,6 +1,7 @@
 # Draft ADR A: General assurance model and read-only projection
 
-Status: **Draft for owner review — not an ADR, unnumbered, not in the ADR index, not ratified.** A number is assigned
+Status: **Draft for owner review — not an ADR, unnumbered, not in the ADR index, not ratified.** Rev. 2 (owner review
+C: argument semantics, item 4a). A number is assigned
 only if the owner ratifies or accepts it as Proposed. Register entries: R-1, R-2, R-3, R-4, R-9, R-10, R-12, R-16.
 Evidence: [reconciliation](../reconciliation.md); design: [proposal](../architecture-proposal.md) §2–§6, §9.
 
@@ -19,11 +20,38 @@ be first-class; MCP-RE must remain authoritative for its own assurance.
 3. **Typed relations** `depends_on`, `supported_by`, `evidenced_by`, `premised_on`, `consumes`, `identity` are kept
    distinct (proposal §3.2). A build-graph edge may populate `consumes`/`identity`, never `supported_by`/`depends_on`.
 4. **State axes and verdicts.** Outcome, applicability, claim assurance and scope completion are reported separately
-   with closed vocabularies. A claim is *established* iff its review is current, every supporting unit is current and
-   passing, and every `depends_on` claim is established (fixpoint). Closure for a declared scope at a gate is
+   with closed vocabularies. A claim is *established* iff its argument is declared supported (§4a), its review is
+   current, its support is established under its support form, every premise it rests on is accepted, and every
+   `depends_on` claim is established (fixpoint). Closure for a declared scope at a gate is
    `UNDECLARED` (no roots or no active claim), `FAILED` (current counterevidence or failed prerequisite), `INCOMPLETE`
    (anything else not established, including empty, unknown, non-applicable-only or unresolved support) or `PASS`.
    A `PASS` record names the identities it was computed from.
+4a. **Argument semantics — a deliberately small, explicit subset.** The core does not claim that conjunction is the
+   semantics of every assurance argument. It supports exactly these structures and rejects or reports everything else:
+
+   | Element | Representation | Rule |
+   |---|---|---|
+   | Conjunctive support (default) | `support = {form: "all", units: [...]}` | established iff the list is non-empty and every unit is current and passing |
+   | Alternative strategies | `support = {form: "any-of", groups: [[...], [...]]}`, each group conjunctive | established iff some non-empty group is fully established; one level only (no nesting, weights, thresholds or negation) |
+   | Prerequisite claims | `depends_on` | each must be established (fixpoint), independent of support form |
+   | Premises / assumptions | `premised_on` (unit) or `premises` (claim); class `assumed / external-boundary / review-obligation` | an unaccepted premise (no current review of the premise) → `premise-unaccepted`; an established claim's record lists every premise it rests on — "established under P" is never reported as unconditional |
+   | Human semantic review | review bound to the claim's statement digest **and** its argument digest (support form, units, premises, `depends_on`) | changing any part of the argument stales the review; the review is the judgement that the evidence, of whatever kind, actually bears on the statement |
+   | Incomplete or unknown argument | `argument: "incomplete"` or `"unknown"`, or a support form the evaluator does not implement | never established; reported as `INCOMPLETE(argument-incomplete / unsupported-form)`, never coerced to `all` |
+
+   Non-vacuity holds for every form: an empty list, an empty group, a group of only `not_run`/non-applicable/`unknown`
+   items, or an unresolved reference never establishes support. **Counterevidence is not hidden by alternatives:** a
+   current `failed` item in any group of a claim makes the claim `FAILED`, because a failing test or refuted proof
+   offered for a statement is evidence against the statement, not merely a failed strategy. A consumer that intends a
+   group to be a fallback for an *unavailable* method uses `unavailable`/`not_run`, which does not count as failure.
+
+   **Evidence kinds stay distinct.** Each unit declares `kind ∈ {proof, test, measurement, analysis, control}`. The core
+   does not rank kinds or treat one as implying another; the `PASS` record lists the kinds that established each
+   claim. A formal theorem, an empirical measurement and a behavioural test thus remain different evidence; whether a
+   kind is adequate for a statement is the reviewed argument's question, not the evaluator's. Model–implementation
+   correspondence is itself a claim (item 9).
+
+   The first evaluator may implement `all` only; it must then report `any-of` as `unsupported-form`, not reject the
+   document or reinterpret it. MCP-RE's model is the `all` subset with review bound to the claim fingerprint.
 5. **Closure scope** (`roots` or `all-active`) and which gates require closure are consumer policy. The platform sets
    no default obligation.
 6. **One contract.** The evaluator reads `dev-platform.assurance-projection/v1` only. Native declarations, when
@@ -48,8 +76,17 @@ be first-class; MCP-RE must remain authoritative for its own assurance.
 Additive: new command, new schema, new `authorization/v1` subject kind (ADR 0013's record shape is the Proposed part).
 No change to ADR 0004, 0006, 0007, 0015 semantics. Native declaration format deferred (R-2).
 
+## Open questions on the argument model (owner, R-4)
+- Is `any-of` needed in v1, or reserved and reported `unsupported-form` until a consumer needs it? (Recommendation:
+  reserve; no current consumer uses alternatives — MCP-RE claims are conjunctive.)
+- Should an accepted `assumed` premise be allowed at the release gate, or must release closure list it as a blocker
+  unless the consumer's release policy names it? (Recommendation: allowed, but listed in the `PASS` record.)
+- Does the argument digest belong in the claim fingerprint (as MCP-RE's claim fingerprint does for its own fields) or in a separate digest?
+
 ## Alternatives rejected
-Extracting MCP-RE tooling as the core (security vocabulary, provenance, authority move); parsing MCP-RE registries
+A general assurance-case language (GSN/SACM-style nodes, defeaters, confidence arithmetic): no consumer needs it, and
+it would make the evaluator a second interpreter of argument policy. Treating conjunction as universal without an
+`incomplete` escape: forces consumers to misstate arguments that do not fit. Extracting MCP-RE tooling as the core (security vocabulary, provenance, authority move); parsing MCP-RE registries
 directly (coupling, second interpreter); a separate package (no demonstrated boundary); a single green status (RFC §7.1).
 
 ## Owner decisions required

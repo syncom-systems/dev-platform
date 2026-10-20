@@ -28,7 +28,18 @@
 | 2 | [Refined architecture proposal](architecture-proposal.md) | The minimal generic model, authority boundaries, evidence semantics, the read-only projection, worked examples |
 | 3 | [Decision register](decision-register.md) | Each open decision: alternatives, evidence, consequences, compatibility, recommendation, exact owner decision |
 | 4 | Draft ADRs: [A assurance model and projection](drafts/draft-adr-a-assurance-model-and-projection.md), [B evidence identity and applicability](drafts/draft-adr-b-evidence-identity-and-applicability.md), [C obligation due-gates and admission](drafts/draft-adr-c-obligation-due-gates.md), [D planner and verification budgets](drafts/draft-adr-d-planner-and-budgets.md) | Decision-ready text; unnumbered so they cannot be mistaken for index entries |
-| 5 | [Reference evaluation plan](evaluation-plan.md) | Baselines, datasets, metrics, negative controls, failure criteria, a bounded plan for separate authorization |
+| 5 | [Reference evaluation plan](evaluation-plan.md) | Baselines, datasets, metrics, equivalence / correction / specification controls, acceptance criteria, a bounded plan for separate authorization |
+| 6 | [Certification carry defect report](certification-carry-defect.md) | Candidate defect in the current engine (by inspection, not reproduced): control flow, reproduction plan, regression test, fixes, authorization |
+| 7 | [Owner decision package](owner-decision-package.md) | Decisions by readiness; the R-15 / E0 archival authorization proposal; recommended sequence |
+
+## Revision 2 (owner review)
+
+Focused corrections after the owner review; the examined source revisions above are unchanged (`dev-platform`
+`6c0e7b4`, `mcp-re` `8262c5fa`; branch head before rev. 2 `4c9c5d9`). Changes: dependency-boundary classes and
+gate-specific carry rules (draft ADR B, proposal §4.1/§7.1); explicit argument subset (draft ADR A §4a, proposal
+§3); equivalence vs correction controls (evaluation §5–§6); planner behaviour on sparse/correlated/absent data
+(proposal §7.2, draft ADR D); the standalone defect report; the decision package with the E0 proposal. ADR 0006
+admission semantics are retained as the baseline; release-due obligations remain only in draft ADR C.
 
 ## Labels used throughout
 

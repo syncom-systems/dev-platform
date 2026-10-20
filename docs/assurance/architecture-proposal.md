@@ -42,16 +42,17 @@ Authority rules (normative in the drafts):
 
 | Object | Fields (minimal) | Generalizes | Deliberately not included |
 |---|---|---|---|
-| **Claim** | `id`, `statement`, `scope`, `kind` (free consumer tag: functional, security, performance, …), `depends_on: [claim]`, `supported_by: [unit]`, `review_requirement`, `replaced_by?` | MCP-RE theorem (`_theorems.py:51-70`) | severity, consequence text, owner-as-unit, layers — consumer extension fields |
+| **Claim** | `id`, `statement`, `scope`, `kind` (free consumer tag: functional, security, performance, …), `depends_on: [claim]`, `support` (`{form: all, units}` or `{form: any-of, groups}`, ADR A §4a), `premises?`, `argument?` (`incomplete`/`unknown` marker), `review_requirement`, `replaced_by?` | MCP-RE theorem (`_theorems.py:51-70`) | severity, consequence text, owner-as-unit, layers — consumer extension fields |
 | **Root set** | `roots: [claim]`, declared, never inferred | `root_theorems` | — |
 | **Assurance unit** | `id`, `inputs` (identity specification §4.1), `evidence: [check:<id>]`, `consumes: [{unit, contract, sealed}]` | MCP-RE unit (`_manifest.py:111-139`) | V-class, prover symbols, Lean theorem names — consumer extension fields |
 | **Premise** | `id`, `statement`, `class ∈ {assumed, external-boundary, review-obligation}`, `scope: [unit]`, `discharge?` | `assumptions.toml` (`_premise.py:65-282`) | prover-mechanism tokens, Rust seam sites |
 | **Review** | `subject` (claim or premise id), `reviewed_fingerprint`, `semantic_digest?`, reviewer identity assertion | MCP-RE review record (`_review.py:76-86`) + Dev Platform `authorization/v1` identity (ADR 0013) | stored status booleans (forbidden, as in MCP-RE) |
 | **Evidence item** | `check`, `unit`, `outcome`, `input_identity`, `environment.identity_digest`, platform digest, revision, check-definition digest | Dev Platform result entry + MCP-RE `EvidenceRecord` | timestamps inside `result/v1` (determinism, `docs/architecture.md:31`) |
 
-Rejected as separate objects (minimality): **Argument** (an argument is the typed `supported_by`/`depends_on`
-structure plus a review that binds it; MCP-RE needs nothing more and RFC §4's "a reference link is not itself a
-justified argument" is enforced by requiring a current review), **Requirement** (stays consumer prose; a claim's
+Rejected as separate objects (minimality): **Argument** (an argument is the typed `support`/`depends_on`/premise
+structure plus a review bound to its digest; RFC §4's "a reference link is not itself a justified argument" is
+enforced by requiring a current review. The supported structures are a deliberately small subset — conjunction,
+one level of alternatives, explicit `incomplete` — listed in ADR A §4a; anything else is reported, not coerced), **Requirement** (stays consumer prose; a claim's
 `statement` is the reviewable proposition), **Verification action** (it is a check), **Contract** as a node (it is a
 named property on a `consumes` edge, as in MCP-RE).
 
@@ -75,7 +76,7 @@ A build/import edge (Bazel, Cargo) may *populate* `consumes` or `identity`; it n
 |---|---|---|
 | Execution outcome (per run × check) | `passed / failed / unavailable / not_run` | existing `model.Outcome` |
 | Applicability (per evidence item) | `current / stale(cause) / unknown`; causes `inputs, definition, environment, platform, dependency, premise, policy` | new (ADR B); maps MCP-RE `FRESH / DIRTY_* / UNKNOWN` |
-| Claim assurance (per claim) | review `current / stale(cause) / absent / unknown`; support `established / not-established(units) / no-support / unknown`; `established` = review current ∧ support established ∧ every `depends_on` established | MCP-RE `theorem_assurance` (`_review.py:417-492`) |
+| Claim assurance (per claim) | review `current / stale(cause) / absent / unknown`; support `established / not-established(units) / no-support / unknown / unsupported-form`; argument `declared / incomplete`; premises `accepted / premise-unaccepted(ids)`; `established` = argument declared ∧ review current ∧ support established under its form ∧ premises accepted ∧ every `depends_on` established | MCP-RE `theorem_assurance` (`_review.py:417-492`) |
 | Scope completion (per gate × scope) | `PASS / INCOMPLETE(blockers) / FAILED(counterevidence) / UNDECLARED` | MCP-RE root completeness + closure, with RFC §7.5 `INCOMPLETE` |
 
 Closure rules (normative in ADR A):
@@ -105,13 +106,20 @@ A Dev Platform evidence item's identity is a canonical digest (`records.canonica
 
 Rules:
 - An `always` check has no carryable identity: it is owed at every admission (unchanged ADR 0006).
-- Carry is permitted only if every component of the previous item's identity equals the current one; otherwise
-  `stale(<first differing component>)`; any unreadable component → `unknown`.
+- Each identity records a **boundary class** for its `inputs`/`provider` component — `complete` (asserted only by a
+  measuring or conservatively over-approximating mechanism), `declared` (globs, declared paths) or `unknown` (ADR B
+  §2). No check in either repository has a `complete` boundary today; nothing here establishes read-set completeness.
+- Carry is permitted only if every component of the previous item's identity equals the current one **and** the
+  boundary class permits it at that gate (ADR B §4: `declared` carries at development and, as today, at admission,
+  always reported as `declared`; nothing carries into certification); otherwise `stale(<first differing component>)`;
+  any unreadable component, `unknown` class or unbound previous record → `unknown`, reported as uncertainty and
+  treated as reached.
 - Granularity is the check, because adapters report one exit code (`adapters.py`). Finer evidence needs finer
   declared checks or a provider; the core does not parse test output.
 - A consumer whose glob `inputs` under-approximate what the check reads gets false freshness. That is already true of
-  ADR 0006 impact today; the proposal makes it *measurable* (ADR B "read-set conformance", evaluation §5) instead of
-  claiming more than globs provide.
+  ADR 0006 impact today. Equal digests over such a set are **not** evidence of validity; the proposal therefore never
+  upgrades a `declared` boundary to `complete`, labels every carry with its class, and makes the gap *measurable*
+  (evaluation E4) instead of replacing unbound carry with a fingerprint that hides it.
 
 ### 4.2 Provenance classes (RFC §7.2)
 Every item carries `provenance ∈ {declared, observed, measured, inferred}`. Only `observed`/`measured` items with
@@ -209,10 +217,15 @@ that result, the Dev Platform evaluation of MCP-RE is informational.
 
 ### 7.1 Evidence preservation (what remains valid)
 - **Development (edit/pre-commit):** a check whose bound identity is unchanged since its last `passed` need not be
-  re-run to inform the developer; report it as `current (carried)`. This is where agents repeatedly re-run whole
-  suites, so it is where time and tokens are saved.
-- **Admission:** unchanged ADR 0006 — unreached checks are not owed; reached checks run in this run.
-- **Certification and release:** no carry. Every check runs in the certifying run (closes reconciliation finding 4).
+  re-run to inform the developer; report it as `current (carried, <boundary class>)`. This is where agents repeatedly
+  re-run whole suites, so it is where time and tokens are saved.
+- **Admission:** unchanged ADR 0006 — unreached checks are not owed; reached checks run in this run; carry now
+  requires matching identity and states its boundary class (ADR B §4; whether `declared` carry is refused is R-5(ii)).
+- **Certification and release:** no carry. Every check passes in the certifying run (closes reconciliation finding 4;
+  [defect report](certification-carry-defect.md)).
+- Optimization order (owner review E): (1) preserve valid evidence without false freshness; (2) reduce unnecessary
+  invalidation and full-run escalation (finer checks, `complete` providers once measured); (3) sequence permitted
+  incremental checks (§7.2); (4) anything more elaborate only after measurement.
 
 ### 7.2 Verification sequencing (what to run next)
 Deterministic baseline, no model:
@@ -220,7 +233,17 @@ Deterministic baseline, no model:
 2. Order owed checks by ascending `c / p` — expected cost per detected failure — where `c` is the observed median
    duration in this environment and `p` the smoothed historical failure frequency of the check on changes reaching its
    inputs. For independent checks this minimizes expected time to the first failure (a standard sequencing result);
-   correlation is handled in evaluation, not assumed away.
+   correlation is handled in evaluation, not assumed away. `p` is a **ranking statistic, not a probability of
+   correctness**: it says how often this check has been the one to fail, not how likely the change is to be right.
+   - *Absent data* (no observations for the check in this environment): no `c/p`; the check keeps its configuration
+     order, placed after ranked checks only if the consumer opts in, else the whole plan abstains (item 5).
+   - *Sparse data*: `p = (failures + 1) / (runs + 2)` (Laplace) and `c` = median only with ≥ 5 observations, otherwise
+     the configured `cost` class maps to a fixed default; both reported with their counts so the ordering's basis is
+     visible.
+   - *Correlated checks* (one failure implies another): the independence result does not hold; the planner does not
+     model correlation, and E1 measures how much ordering gain survives it. A detected strong correlation is reported,
+     never used to skip the dependent check.
+   - Whatever the data, every owed check still runs; a bad estimate costs time to first failure, never assurance.
 3. Before running anything, emit **gap actions**: an affected claim with `no-support`, or a new claim with no
    supporting unit, yields "author a test/contract/proof" — not "run more existing tests" (RFC §12 scenario 2).
 4. Stop optional actions at the budget (ADR D); mandatory ones are never dropped, only reported as outstanding.

@@ -8,11 +8,11 @@
 
 | ID | Hypothesis | Primary metric | Must not worsen |
 |---|---|---|---|
-| H1 | Identity-bound evidence preservation (draft ADR B) never reports false freshness | false-fresh count (§4.4) = 0 | — |
+| H1 | Identity-bound evidence preservation (draft ADR B) never reports false freshness and labels every carry with its boundary class | false-fresh count (§4.4) = 0 | — |
 | H2 | Preservation in the development loop reduces repeated verification | machine time and repeated runs per change | missed checks, false-fresh |
 | H3 | Deterministic sequencing (`c/p` + gap actions) reduces time to first failure and diagnosis | time-to-first-failure, localization | missed checks, mandatory outcomes |
 | H4 | The assurance-aware planner beats a simple deterministic baseline on the whole loop | (T, K) including planner overhead | R metrics |
-| H5 | Dev Platform's recomputation of MCP-RE assurance equals MCP-RE's own verdicts | disagreement count = 0 | — |
+| H5 | Dev Platform's recomputation of MCP-RE assurance equals MCP-RE's own verdicts on EQ cases and is stricter on CORR cases (§5) | unexplained discrepancies = 0 | — |
 
 ## 2. Strategies compared (same obligations in every arm)
 
@@ -21,7 +21,7 @@
 | **A — current** | MCP-RE as wired: `select-units` scope; empty scope → nothing; deferred → full pre-merge; mutation deferred → weekly (`verification.yml:925-961`, `mutation-probe.yml:120-141`). Dev Platform/NGA: glob selection (`impact.py`) | reconstructed from logs, not re-run |
 | A′ — documented | `select-units` as documented: deferred → weekly/release | reported for contrast only; not a candidate |
 | **B — simple deterministic** | Dev Platform glob impact over each MCP-RE unit's declared `paths` as `inputs`, unmapped → all, no consumer closure, fixed order | the "obvious" generic baseline |
-| **C — assurance-aware** | fingerprint-based applicability with fail-closed unmapped paths (ADR B §5) + prerequisite consumer closure + `c/p` ordering + gap actions + budget stop for optional actions | the proposal |
+| **C — assurance-aware** | fingerprint-based applicability with fail-closed unmapped paths (ADR B §6) + prerequisite consumer closure + `c/p` ordering + gap actions + budget stop for optional actions | the proposal |
 | D — LLM ranker | ranking of permitted optional candidates over C | **excluded** from the first experiment; considered only if C shows gains and R-14 is approved |
 
 A hand-curated "oracle" scope may be computed for diagnosis of information gaps; it is not an arm.
@@ -83,43 +83,75 @@ applicability items; open gap actions. At release: assurance-closure verdict and
 ### 4.7 Planner overhead
 CPU time and, for D only, tokens of the planner itself; counted in T and K.
 
-## 5. Nonvacuity and negative controls
+## 5. Nonvacuity, equivalence and correction controls
 
-Each control has an expected verdict; an arm or evaluator that does not produce it fails. Controls marked *data* are
-perturbations of records/projections (no execution); *exec* need an authorized run.
+Each control has an expected verdict and a **class**:
+- **EQ — equivalence.** Existing, accepted behaviour (MCP-RE's evaluator or Dev Platform's current engine). The new
+  evaluator must agree exactly.
+- **CORR — intentional correction.** Existing behaviour known or suspected to be unsound (cited finding). The new
+  evaluator must produce the stricter expected verdict; the existing system is *expected to differ*, and the difference
+  is recorded against the finding. If the existing system turns out to agree with the expected verdict, the finding is
+  refuted and the case is reclassified EQ.
+- **SPEC — new semantics.** No existing counterpart (argument forms, boundary classes, projection consistency). The
+  new evaluator must match the draft ADR text; a mismatch is an evaluator defect or a specification ambiguity.
 
-| # | Control | Construction | Expected |
-|---|---|---|---|
-| N1 | Empty claim set | projection with no active claims | closure `UNDECLARED`, never `PASS` |
-| N2 | Empty roots | roots `[]` | `UNDECLARED` |
-| N3 | Claim with empty support | `supported_by = []` | `no-support` → `INCOMPLETE` |
-| N4 | Support only non-applicable/not-run | all lanes `NOT_REQUIRED` / `not_run` | `INCOMPLETE` |
-| N5 | Unresolvable reference | `supported_by` names a missing unit | load error or `INCOMPLETE`, never `PASS` |
-| N6 | Stale review | change a claim statement digest | review `stale(claim)`; dependants not established |
-| N7 | Changed proof model | move the provider/model component | `stale`; closure `INCOMPLETE` |
-| N8 | Omitted result | drop one evidence item | `unknown`/`INCOMPLETE`; MCP-RE `REFUSE` parity |
-| N9 | Failed prerequisite | one supporting unit failed | closure `FAILED`, consumers blocked |
-| N10 | Unknown impact | change set unknown / unmapped path | every owed check selected; never empty |
-| N11 | Python test hollowing (F-1) | empty a pytest body named by a unit | must be `stale` under C; arm A reports `current` → documents the gap |
-| N12 | Undeclared V0 helper change (F-2) | change a helper outside a V0 unit's `paths` that its tests call | C must not report `current` unless read set covers it; expected to expose the gap |
-| N13 | False mutation attribution | replay 9e0ba722's pre-fix probes; a control that fails by scaffolding panic | not counted as detection under `assertion` attribution; flagged under `test-identity` |
-| N14 | Selector self-narrowing | change the selection/fingerprint code | everything owed; never narrower |
-| N15 | Unbound carry (Dev Platform) | `--previous` from another revision/config | carry refused (ADR B); today accepted — documents the gap |
-| N16 | Certification carry (Dev Platform) | change check without `full`, verified `--previous` | not certified (ADR B); today certified by reading — confirms or refutes finding 4 |
-| N17 | Projection inconsistency | producer verdict `PASS` with a failing unit | `projection-inconsistent`, never `PASS` |
-| N18 | Toolchain bump | move environment component only | all evidence `stale(environment)`, reviews current (MCP-RE v0.18.0→v0.18.1 parity) |
+Controls marked *data* are perturbations of records/projections (no execution); *exec* need an authorized run.
 
-N11, N12, N15, N16 *exec*; the rest *data*. N1–N9, N17, N18 run against the three committed MCP-RE closure targets.
+| # | Control | Construction | Expected | Class (vs) |
+|---|---|---|---|---|
+| N1 | Empty claim set | projection with no active claims | closure `UNDECLARED`, never `PASS` | EQ (MCP-RE `bool(active)`) |
+| N2 | Empty roots | roots `[]` | `UNDECLARED` | EQ (MCP-RE) |
+| N3 | Claim with empty support | `units = []` | `no-support` → `INCOMPLETE` | EQ (MCP-RE) |
+| N4 | Support only non-applicable/not-run | all lanes `NOT_REQUIRED` / `not_run` | `INCOMPLETE` | EQ (MCP-RE) |
+| N5 | Unresolvable reference | support names a missing unit | load error or `INCOMPLETE`, never `PASS` | EQ (MCP-RE) |
+| N6 | Stale review | change a claim statement digest | review `stale(claim)`; dependants not established | EQ (MCP-RE) |
+| N7 | Changed proof model | move the provider/model component | `stale`; closure `INCOMPLETE` | EQ (MCP-RE) |
+| N8 | Omitted result | drop one evidence item | `unknown`/`INCOMPLETE` | EQ (MCP-RE `REFUSE`) |
+| N9 | Failed prerequisite | one supporting unit failed | closure `FAILED`, consumers blocked | EQ (MCP-RE) |
+| N10 | Unknown impact | change set unknown / unmapped path | every owed check selected; never empty | EQ (Dev Platform `impact.py:81-84`); CORR (MCP-RE empty scope, F-3) |
+| N11 | Python test hollowing | empty a pytest body named by a unit | not `current` (`stale` or `unknown`) | CORR (MCP-RE, F-1) |
+| N12 | Undeclared V0 helper change | change a helper outside a V0 unit's `paths` that its tests call | not `current` unless a `complete` boundary covers it; `declared` carry must be labelled | CORR (MCP-RE, F-2) |
+| N13 | False mutation attribution | replay 9e0ba722's pre-fix probes | not counted as detection under `assertion`; flagged under `test-identity` | EQ (MCP-RE after 9e0ba722); CORR (before) |
+| N14 | Selector self-narrowing | change the selection/fingerprint code | everything owed; never narrower | EQ (Dev Platform fail-closed rule); MCP-RE behaviour not established — classify at E2 |
+| N15 | Unbound carry | `--previous` from another revision/config | contributes nothing (`unknown`) | CORR (Dev Platform, R-5) |
+| N16 | Certification carry | mandatory check without `full`, verified `--previous` | not certified | CORR (Dev Platform, [defect report](certification-carry-defect.md)) |
+| N17 | Projection inconsistency | producer verdict `PASS` with a failing unit | `projection-inconsistent`, never `PASS` | SPEC |
+| N18 | Toolchain bump | move environment component only | all evidence `stale(environment)`, reviews current | EQ (MCP-RE v0.18.0→v0.18.1) |
+| N19 | Alternative with counterevidence | `any-of`: group 1 passes, group 2 has a current `failed` item | `FAILED` | SPEC (ADR A §4a) |
+| N20 | Empty alternative | `any-of` with an empty group and a not-run group | `INCOMPLETE` | SPEC |
+| N21 | Incomplete argument | `argument = "incomplete"`, all support passing, review current | `INCOMPLETE(argument-incomplete)` | SPEC |
+| N22 | Unaccepted premise | supporting unit premised on a premise with no current review | `premise-unaccepted`, not established | SPEC (MCP-RE parity to be checked: EQ if it matches) |
+| N23 | Unsupported form | `any-of` given to an `all`-only evaluator | `unsupported-form` → `INCOMPLETE`, never reinterpreted | SPEC |
+| N24 | Declared boundary at certification | identity equal, boundary `declared`, stage `full` | no carry; check must pass in the run | SPEC (ADR B §4–§5) |
 
-## 6. Failure criteria (reject the proposed optimization if any holds)
-1. Any false-fresh item (§4.4).
-2. Any mandatory miss not covered by a declared consumer policy (§4.5).
-3. Any mandatory gate outcome less strict than arm A on any change.
-4. Any control in §5 not producing its expected verdict.
-5. Net `T_machine + planner overhead` not lower than arm A on the held-out set, or (in shadow) K not lower, with
-   uncertainty intervals excluding zero gain.
-6. Any H5 disagreement unexplained by a documented, owner-accepted mapping loss.
+N11, N12, N15, N16 *exec* (N15/N16 can be engine unit tests, defect report §5); the rest *data*. N1–N9, N17, N18 run
+against the three committed MCP-RE closure targets.
+
+### 5.1 Discrepancy procedure
+Every disagreement between the new evaluator and the expected verdict or the existing system is recorded with: the
+case, both verdicts, the class, and one of **evaluator defect**, **mapping loss** (information the projection cannot
+carry, R-3), **existing-system defect** (CORR; cites the finding), or **specification ambiguity**. Each is explained and
+owner-reviewed; none is resolved by changing the expected verdict to match whichever system is newer.
+
+## 6. Acceptance and failure criteria
+Accept the evaluator as a candidate only if all hold; reject the proposed optimization if any fails.
+1. **Zero false-fresh** (§4.4) in every class, for any model proposed as authoritative.
+2. **EQ:** exact agreement on every EQ case, or an owner-accepted mapping loss.
+3. **CORR:** the stricter verdict on every CORR case, with the existing system's divergence recorded against its
+   finding; exact equality with the existing system is *not* required and would indicate the correction is missing.
+4. **SPEC:** agreement with the draft ADR text on every SPEC case.
+5. No mandatory miss not covered by a declared consumer policy (§4.5); no mandatory gate outcome less strict than arm A.
+6. For optimization claims (H2–H4): net `T_machine + planner overhead` lower than arm A on the held-out set with the
+   uncertainty interval excluding zero gain; K claims only from shadow mode (E3).
+7. Every discrepancy classified and reviewed (§5.1).
 Improved test counts or raw coverage are not success criteria (RFC §14).
+
+### 6.1 Evidence labels in the report
+Every number is labelled as one of: **observed** (measured in logs or runs: costs, outcomes, durations), **estimated**
+(replay of an arm over observed data: savings an arm *would* have had, with its assumptions), or **experimental**
+(end-to-end result of an authorized shadow or live experiment). Replay never establishes counterfactual agent
+behaviour: an arm that would have run fewer checks says nothing about what an agent would then have done, how long
+diagnosis would have taken, or how many tokens it would have spent.
 
 ## 7. Holdout and validity
 - Split MCP-RE changes chronologically: tune nothing on the last third; report on it only. Do not iterate on the
@@ -132,11 +164,11 @@ Improved test counts or raw coverage are not success criteria (RFC §14).
 
 | Step | Action | Executes | Budget (proposed) | Stop condition | Output use |
 |---|---|---|---|---|---|
-| E0 | Archive MCP-RE `verification.yml` and `mutation-probe.yml` job logs (R-15) | downloads only (GET) | ≤ 3,000 logs; private storage | done | evaluation input only |
+| E0 | Archive MCP-RE `verification.yml` and `mutation-probe.yml` job logs (R-15) | downloads only (GET) | see [owner decision package](owner-decision-package.md) §2 | done or budget | evaluation input only |
 | E1 | Offline replay of arms A/B/C over archived logs and git history | MCP-RE `fingerprint`/`select-units` at historical heads in a scratch checkout; **no tests, proofs or probes** | ≤ 300 PR heads; ≤ 20 CPU-hours; no network beyond git | budget reached or first false-fresh in C | report; informational |
-| E2 | Projection equivalence (H5) on 3 committed closure targets + data controls N1–N9, N17, N18 | evaluator over data files only | ≤ 1 CPU-hour | any unexplained disagreement | report; gates R-16 |
+| E2 | Projection equivalence (H5) on 3 committed closure targets + data controls N1–N10, N13, N14, N17–N24 | evaluator over data files only | ≤ 1 CPU-hour | any unexplained disagreement | report; gates R-16 |
 | E3 | Shadow mode on real changes | planner recommendations logged beside normal CI; **no change to any gate**; agent K measured only with consent | 30 PRs or 4 weeks, whichever first; 0 additional CI minutes beyond observation | budget, or any recommendation that would have skipped a mandatory check | report; informational |
-| E4 | Exec controls N11, N12, N15, N16 and read-set instrumentation | targeted runs in scratch copies | ≤ 10 runs; ≤ 4 CPU-hours | all four answered | findings to owners |
+| E4 | Exec controls N11, N12, N15, N16 and read-set instrumentation (the only route to a `complete` boundary class) | targeted runs in scratch copies | ≤ 10 runs; ≤ 4 CPU-hours | all four answered | findings to owners |
 
 No step may modify a gate, policy registry, proof, review or attestation, or produce evidence that a gate reads.
 

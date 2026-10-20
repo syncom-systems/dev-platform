@@ -9,7 +9,7 @@ ADR 0006 §2 requires every mandatory (`always`/`change`) check to be admissible
 MCP-RE's bounded merge selection as conflicting with it. Investigation shows the conflict is narrower than stated:
 MCP-RE is not a Dev Platform consumer; as wired, its 20-unit cap triggers a *full* pre-merge run, which is compatible;
 the real differences are (i) its mutation lane is deferred to the weekly complete run when over cap or
-platform-touching, (ii) an unmapped path yields an empty scope (handled by draft ADR B §5), and (iii) its verification
+platform-touching, (ii) an unmapped path yields an empty scope (handled by draft ADR B §6), and (iii) its verification
 jobs are not required status checks (consumer policy). No deferred obligation is recorded anywhere.
 
 ## Options
@@ -26,7 +26,7 @@ jobs are not required status checks (consumer policy). No deferred obligation is
    the result (and observable by later runs).
 5. Certification (and therefore release eligibility) is blocked while any outstanding obligation for an ancestor
    revision is undischarged; discharge requires a pass at `full` at or after that revision (in practice: the certifying
-   run, which runs everything — draft ADR B §4).
+   run, which runs everything — draft ADR B §5).
 6. Unknown impact never empties the obligation set; it makes every owed check owed at its due gate.
 
 **B2 — Conditional deferral by runtime predicate (scope size, cost).** Rejected: admission would depend on cost

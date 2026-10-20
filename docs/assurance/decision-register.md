@@ -12,9 +12,9 @@
 | R-1 | Placement and authority of the assurance capability (Q1, Q9, Q12) | module inside Dev Platform; consumer evaluator stays authoritative when projected | — | A |
 | R-2 | Native declaration format | defer; projection first, native TOML after equivalence | config/v1 later | A |
 | R-3 | Projection contract and producer ownership (Q1, Q10) | `dev-platform.assurance-projection/v1`; MCP-RE owns its exporter | MCP-RE | A |
-| R-4 | Core vocabulary and closure verdicts (Q2) | four axes; `PASS/INCOMPLETE/FAILED/UNDECLARED`; scope per gate | — | A |
-| R-5 | Bind evidence carry to input identity (Q4) | yes; refuse unbound carry | ⚠ ratified ADR 0006 §4 (clarification) | B |
-| R-6 | Certification carry gap | certification requires a pass *in the certifying run* | ⚠ ratified ADR 0006 §6 (clarification) | B |
+| R-4 | Core vocabulary, closure verdicts and argument subset (Q2) | four axes; `PASS/INCOMPLETE/FAILED/UNDECLARED`; scope per gate; explicit partial argument subset (ADR A §4a) | — | A |
+| R-5 | Bind evidence carry to input identity (Q4) | (i) yes, refuse unbound carry; every carry states its boundary class; (ii) keep `declared` carry at admission until E4 | ⚠ ratified ADR 0006 §4 (clarification; (ii)=refuse would amend) | B |
+| R-6 | Certification carry gap — **urgent, independent** ([defect report](certification-carry-defect.md)) | certification requires a pass *in the certifying run* | ⚠ ratified ADR 0006 §6 (clarification) | B §5 |
 | R-7 | ADR 0006 vs bounded merge selection (Q3) | keep ADR 0006; offer explicit, consumer-declared release-due obligations; reject size-conditional deferral | ⚠ ratified ADR 0006 §2 (amendment) | C |
 | R-8 | Default for paths outside every provider read set | unmapped = unknown = owed; implicit ignore must become explicit | ⚠ ratified ADR 0006 §3 (scope statement) | B |
 | R-9 | Claim review records and reviewer identity (Q6) | native: `authorization/v1` with a claim-review subject; projected: consumer's records | ADR 0013 record shape (Proposed part) | A |
@@ -23,7 +23,7 @@
 | R-12 | Terminology collisions | "tool closure" vs "assurance closure"; "release verification" vs "release assurance" | ADR 0015 wording (no semantic change) | A |
 | R-13 | Budget authority and enforcement split (Q7) | CLI: timeouts, refusal, reporting; runtime: hard caps | ADR 0007 (consistent) | D |
 | R-14 | Planner authority and LLM gate (Q8) | deterministic baseline only; LLM after blinded evaluation | — | D |
-| R-15 | Historical data preservation and consent | authorize archival of MCP-RE CI logs before 2026-11-09; decide on transcript use | none (data) | — |
+| R-15 | Historical data preservation and consent — **time-sensitive** | authorize E0 ([package](owner-decision-package.md) §2) by ~2026-11-01; transcripts excluded, separate consent | none (data) | — |
 | R-16 | Migration criterion for any MCP-RE gate (Q10) | equivalence + negative controls + consumer-owner approval; no replacement in scope now | MCP-RE | A |
 | R-17 | Meaning of a full release run (Q11) | consumer-declared; fresh complete run; certification + release assurance + release verification + acceptance kept separate | — | C |
 | R-18 | Duration/cost observations | separate `execution-observation` record; `result/v1` stays deterministic | — | D |
@@ -81,9 +81,15 @@
   (c) a single green/red status.
 - **Evidence.** RFC §7.1, §7.5; MCP-RE folds incomplete support into `FAIL` at closure level (reconciliation §6.3) but
   distinguishes `INCOMPLETE` at aggregate and root levels; Dev Platform's evidence states answer a narrower question.
+- **Argument semantics (rev. 2).** Conjunction is MCP-RE's model, not the universal semantics of assurance
+  arguments. Draft ADR A §4a supports an explicit subset — conjunctive support, one level of alternatives (`any-of`,
+  reserved), prerequisite claims, premises that must be accepted, review bound to the argument digest, and an explicit
+  `incomplete`/`unknown` argument marker — and reports anything else as `unsupported-form`. Non-vacuity holds for every
+  form; current counterevidence in any alternative makes the claim `FAILED`; evidence kinds stay distinct.
 - **Recommendation.** (a); closure scope (`roots` or `all-active`) is consumer policy per gate; `UNDECLARED` for empty
-  roots/active set; `FAILED` only for current counterevidence.
-- **Owner decision.** Approve the vocabulary in draft ADR A §2.
+  roots/active set; `FAILED` only for current counterevidence; the argument subset approved as explicitly partial.
+- **Owner decision.** Approve the vocabulary in draft ADR A item 4 and the subset in §4a; answer the open questions in
+  the [package](owner-decision-package.md) §3.
 
 ### R-5 Bind evidence carry to input identity ⚠ ratified (ADR 0006 §4, clarification)
 - **Question.** May `verified` be carried from a record whose identity is not checked?
@@ -96,8 +102,15 @@
   a planner; (c) loses the only preservation mechanism.
 - **Compatibility.** Behaviour change for callers passing a mismatched `--previous`: carry becomes `stale(…)`/`unknown`.
   `result/v1` gains optional fields (additive) — or v2 if the owner prefers strictness. 0.x minor bump.
-- **Recommendation.** (b), presented as a *clarification* of what "provably" means in ADR 0006 §4.
-- **Owner decision.** Approve (b) and confirm it is a clarification, not an amendment.
+- **Dependency completeness (rev. 2).** Matching digests are sufficient only over a complete or conservatively
+  bounded read set. Globs and declared paths are not (MCP-RE F-1/F-2 show the failure). Draft ADR B §2–§4 therefore
+  records a boundary class (`complete / declared / unknown`) with every identity: `complete` only from a measuring or
+  over-approximating mechanism (none exists today); `declared` carry is labelled and never certifies; `unknown` is
+  reported as uncertainty and treated as reached.
+- **Recommendation.** (b), presented as a *clarification* of what "provably" means in ADR 0006 §4. (ii): keep
+  `declared` carry at admission — no weaker than today's glob selection — until E4 measures glob under-approximation.
+- **Owner decision.** (i) approve (b) and confirm it is a clarification; (ii) keep or refuse `declared` carry at
+  admission (refusing would be a stricter amendment of §4).
 
 ### R-6 Certification carry gap ⚠ ratified (ADR 0006 §6, clarification)
 - **Question.** Can certification rely on state carried from a previous record?
@@ -110,7 +123,9 @@
 - **Consequences.** (a) closes the gap with no configuration change; a configuration with pre-merge-only checks can no
   longer certify (today it can only via `--previous`). (b) rejects such configurations at load (breaking). (c) changes
   stage semantics.
-- **Recommendation.** (a), plus a `doctor` warning for checks lacking `full`.
+- **Recommendation.** (a), plus a `doctor` warning for checks lacking `full`. Treated as a current-implementation
+  defect with precedence over the evaluator and planner; full analysis, reproduction plan and authorization request in
+  the [defect report](certification-carry-defect.md). Not experimentally confirmed.
 - **Owner decision.** Approve (a) as a clarification of ADR 0006 §6 ("every check verified" = passed in this run).
 
 ### R-7 ADR 0006 versus bounded merge selection ⚠ ratified (ADR 0006 §2, amendment if B1)
@@ -147,7 +162,8 @@
 - **Alternatives.** (a) unmapped = unknown = owed (Dev Platform rule) for provider impact too; (b) provider read set
   is authoritative (MCP-RE rule); (c) (b) only when the consumer declares an explicit ignore list and the provider
   proves its read set covers every tracked path not ignored.
-- **Recommendation.** (c), which reduces to (a) when no proof is supplied. Record MCP-RE's present behaviour as an
+- **Recommendation.** (c), where "proves" means a `complete` boundary class (draft ADR B §2), which no provider has
+  today; (c) therefore reduces to (a). Record MCP-RE's present behaviour as an
   evaluation negative control (F-3).
 - **Owner decision.** Approve (c) as the generic rule; whether MCP-RE changes its own behaviour is the MCP-RE owner's
   decision (F-3).
@@ -210,7 +226,8 @@
   `select-units` era.
 - **Recommendation.** (a), as a separately authorized data-collection action (no execution of any verification), and a
   separate explicit decision on whether agent transcripts may be mined, by whom, and what aggregates may be published.
-- **Owner decision.** Authorize or decline (a); decide transcript consent and handling.
+- **Owner decision.** Authorize or decline (a) as specified in the [package](owner-decision-package.md) §2 (scope,
+  integrity, caps, storage, non-publication, success criteria); transcripts are not covered and need separate consent.
 
 ### R-16 Migration criterion
 - **Recommendation.** No MCP-RE gate is replaced in this program. Any future replacement requires: verdict equivalence
@@ -230,7 +247,8 @@
   `tests/test_engine.py:147`); no consumer records machine-readable durations (dataset inventory).
 - **Recommendation.** A separate `execution-observation` record (wall-clock, exit, environment digest, runner) written
   alongside the result, never read by admission or certification.
-- **Owner decision.** Approve a separate record.
+- **Owner decision.** Approve a separate record. Part of draft ADR D (execution observations and budgets); not a
+  condition of draft ADR B.
 
 ### R-19 Documentation correction
 - **Evidence.** `docs/verification-model.md:51-52` and ADR 0006 §6 imply `self` mode certifies; `resolve.py:39-42` and

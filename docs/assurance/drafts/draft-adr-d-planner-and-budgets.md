@@ -16,6 +16,10 @@ CI `timeout-minutes`. Neither uses cost to sequence work. A CLI cannot see model
    observations. Output: an ordered recommendation or an abstention. Nothing it writes is evidence or policy.
 2. **Deterministic baseline:** owed checks ordered by ascending expected cost per detected failure (`c/p`, proposal
    §7.2); gap actions ("author a test/contract/proof") for affected claims with no support; abstain without data.
+   Sparse data use smoothed counts reported with their sample sizes; correlation is not modelled and never used to
+   skip a check (proposal §7.2). The failure frequency is a ranking statistic, not a calibrated probability of
+   correctness. Optimization order: preserve valid evidence (ADR B) → reduce unnecessary invalidation and full-run
+   escalation → sequence → anything more elaborate only after measurement.
 3. Ordering changes when a failure is seen, never whether an owed check runs.
 4. An LLM or Jev ranker may be added only for *permitted optional* candidates and only after the reference evaluation
    shows a net time/token gain over the deterministic planner with no loss on residual-risk metrics, on held-out
@@ -23,7 +27,9 @@ CI `timeout-minutes`. Neither uses cost to sequence work. A CLI cannot see model
 
 ### Execution observations
 5. Wall-clock, exit, environment digest and runner are recorded in a separate `execution-observation` record, never in
-   `result/v1` (which stays deterministic) and never read by admission or certification.
+   `result/v1` (which stays deterministic) and never read by admission or certification. This belongs here (R-18),
+   not to draft ADR B; ADR B can be ratified without it. Observations are nondeterministic measurements, historical by
+   nature, and are used only for planning and evaluation.
 
 ### Budgets and activity classes
 6. Activities are **mandatory** (policy at a gate; budget never waives), **planned** (permitted at the checkpoint,
@@ -32,7 +38,9 @@ CI `timeout-minutes`. Neither uses cost to sequence work. A CLI cannot see model
 7. **CLI-enforced:** per-check `timeout` (new optional key; a timeout is `unavailable`, never a pass); only declared
    checks run through the CLI; an exploratory action run through the CLI is refused without a matching authorization
    record; a session ledger records counts, wall-clock and purpose.
-8. **Not CLI-enforceable, stated as such:** model tokens, commands run outside the CLI, cumulative compute across tools.
+8. **Not CLI-enforceable, stated as such:** model tokens, commands run outside the CLI (an agent with an unrestricted
+   shell can run any test, prover or mutation tool directly), cumulative compute across tools. The CLI's ledger can
+   only report what passed through it; it must not be presented as a bound on total agent activity.
    These need agent-runtime permission rules/hooks, a sandbox, CI-only execution of expensive lanes or reduced
    credentials. Agent instructions remain non-enforcing (ADR 0007).
 9. **On exhaustion:** stop optional execution, keep outstanding obligations visible, report the blocker, request renewed

@@ -19,7 +19,7 @@
 4. **Candidate certification defect (Interpretation, by reading; not executed).** A `change`/`always` check need not
    declare `full` (`config.py:314-322`). At `--stage full` such a check is not a candidate, gets `NOT_RUN` unimpacted
    (`engine.py:129-130`) and keeps its carried state; certification requires every configured check `verified`
-   (`engine.py:206`). An arbitrary `--previous` file can therefore satisfy certification for a check that did not run.
+   (`engine.py:206`). An arbitrary `--previous` file can therefore satisfy certification for a check that did not run. Standalone analysis: [defect report](certification-carry-defect.md).
    No test covers the case (`tests/test_engine.py:10-14` declares `full` on every change check).
 5. **MCP-RE's assurance ladder is implemented and non-vacuous, and is the right model to generalize:** lane verdict →
    unit freshness at a fingerprint → review currency → evidence establishment → `currently_verified` with dependency
