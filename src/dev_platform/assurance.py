@@ -480,7 +480,7 @@ def _consistency(pv: dict | None, by_id: dict[str, dict], verdict: str) -> dict:
 
 def load(path: Path) -> tuple[dict | None, list[str]]:
     try:
-        doc = json.loads(Path(path).read_text())
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))  # JSON is UTF-8 (RFC 8259), not the locale
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as ex:
         return None, [f"{path}: {ex}"]
     problems = validate(doc)
