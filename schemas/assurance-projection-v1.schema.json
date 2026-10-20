@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/assurance-projection-v1.schema.json",
+  "title": "dev-platform.assurance-projection/v1",
+  "description": "Read-only projection evaluated by `dev-platform assurance evaluate` (prototype of draft ADR A, not ratified). Mirrors assurance.validate, which is authoritative. A support form other than `all` is accepted and evaluated as unsupported-form; its contents are not interpreted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "producer", "claims", "units", "premises"],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "extensions": {"type": "object", "description": "carried, never interpreted"}
+  },
+  "properties": {
+    "schema": {"const": "dev-platform.assurance-projection/v1"},
+    "producer": {"type": "object", "required": ["name"], "properties": {"name": {"type": "string", "minLength": 1}}},
+    "subject": {"type": "object"},
+    "scope": {"type": "object", "additionalProperties": false, "required": ["closure"],
+              "properties": {"closure": {"enum": ["roots", "all-active"]}, "roots": {"$ref": "#/$defs/ids"}}},
+    "claims": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "statement_digest", "argument", "support"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "statement": {"type": "string", "description": "convenience text; the review is bound to statement_digest"},
+        "statement_digest": {"$ref": "#/$defs/sha256"},
+        "argument": {"enum": ["declared", "incomplete", "unknown"]},
+        "support": {"type": "object", "required": ["form"], "properties": {"form": {"type": "string", "minLength": 1}},
+                    "if": {"properties": {"form": {"const": "all"}}},
+                    "then": {"additionalProperties": false, "required": ["form", "units"],
+                             "properties": {"form": {"const": "all"}, "units": {"$ref": "#/$defs/ids"}}}},
+        "depends_on": {"$ref": "#/$defs/ids"},
+        "premises": {"$ref": "#/$defs/ids"},
+        "review": {"type": "object", "additionalProperties": false,
+                   "required": ["encoding", "statement_digest", "argument_digest"],
+                   "properties": {"encoding": {"type": "string", "minLength": 1},
+                                  "statement_digest": {"$ref": "#/$defs/sha256"},
+                                  "argument_digest": {"$ref": "#/$defs/sha256"},
+                                  "reviewer": {}, "extensions": {"$ref": "#/$defs/extensions"}}},
+        "extensions": {"$ref": "#/$defs/extensions"}
+      }}},
+    "units": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "evidence"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "premises": {"$ref": "#/$defs/ids"},
+        "evidence": {"type": "array", "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["id", "kind", "outcome", "provenance", "applicability", "boundary"],
+          "properties": {
+            "id": {"type": "string", "minLength": 1},
+            "kind": {"enum": ["proof", "test", "measurement", "analysis", "control"]},
+            "outcome": {"enum": ["passed", "failed", "unavailable", "not_run"]},
+            "provenance": {"enum": ["observed", "measured", "declared", "inferred"]},
+            "applicability": {"enum": ["current", "stale", "unknown"]},
+            "cause": {"type": "string", "minLength": 1},
+            "boundary": {"enum": ["complete", "declared", "unknown"]},
+            "identity": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+            "extensions": {"$ref": "#/$defs/extensions"}
+          }}},
+        "extensions": {"$ref": "#/$defs/extensions"}
+      }}},
+    "premises": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["id", "statement_digest", "class"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "statement": {"type": "string"},
+        "statement_digest": {"$ref": "#/$defs/sha256"},
+        "class": {"enum": ["assumed", "external-boundary", "review-obligation"]},
+        "review": {"type": "object", "additionalProperties": false, "required": ["statement_digest"],
+                   "properties": {"statement_digest": {"$ref": "#/$defs/sha256"}, "reviewer": {},
+                                  "extensions": {"$ref": "#/$defs/extensions"}}},
+        "extensions": {"$ref": "#/$defs/extensions"}
+      }}},
+    "producer_verdicts": {"type": "object", "additionalProperties": false, "properties": {
+      "claims": {"type": "object", "additionalProperties": {"enum": ["established", "failed", "not-established"]}},
+      "closure": {"enum": ["PASS", "INCOMPLETE", "FAILED", "UNDECLARED"]}}},
+    "extensions": {"$ref": "#/$defs/extensions"}
+  }
+}

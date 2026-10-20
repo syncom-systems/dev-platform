@@ -42,12 +42,13 @@ citations (`6c0e7b4`, `8262c5fa`) are historical and unchanged.
 |---|---|
 | R-6 certification carry | **Decided and implemented** — PR #147, merged `e73fd55`; ADR 0006 §6 clarified there |
 | R-19 self-mode wording | **Done** in PR #147 |
-| R-5(i) identity-bound carry | **Implementation proposed** — PR #148 (open). Labelled, unauthenticated, declared-boundary reuse; not authoritative for a future evaluator |
+| R-5(i) identity-bound carry | **Implemented** — PR #148, merged `c88a2d9`. Labelled, unauthenticated, declared-boundary reuse; not authoritative for a future evaluator |
 | R-5(ii) `declared` carry at admission | **Open** |
 | ADR 0006 §4 wording for R-5 | **Open** (text proposed in PR #148) |
-| R-15 / E0 log archival | **Open, urgent** — earliest MCP-RE logs expire ~2026-11-09 |
+| R-15 / E0 log archival | **Open, optional** (owner, 2026-10-20) — not a prerequisite for other work; earliest MCP-RE logs expire ~2026-11-09 |
+| R-1 placement, R-3 projection, R-4 `all` only | **Applied to the evaluator prototype only** ([assurance evaluation](../assurance-evaluation.md)); not ratification of draft ADR A |
 | ADR A `any-of` semantics | **Reserved** (rev. 3): reported `unsupported-form`; the rev. 2 cross-group counterevidence rule is withdrawn |
-| All other register entries (R-1…R-4, R-7…R-18), draft ADRs A–D | **Open — proposals only** |
+| All other register entries (R-2, R-7…R-18; R-1, R-3, R-4 beyond the prototype), draft ADRs A–D | **Open — proposals only** |
 
 ## Revision 2 (owner review)
 

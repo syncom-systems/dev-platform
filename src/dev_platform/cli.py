@@ -15,6 +15,7 @@ from pathlib import Path
 from dev_platform import (
     __version__,
     appverify,
+    assurance,
     bundle,
     depsubmit,
     engine,
@@ -252,6 +253,15 @@ def build_parser() -> argparse.ArgumentParser:
     ebv = esub.add_parser("bundle-verify", help="check a bundle against the pinned manifest digest")
     ebv.add_argument("bundle", type=Path)
     ebv.add_argument("--manifest-sha256", required=True)
+    asr = sub.add_parser(
+        "assurance", help="evaluate claims and evidence (read-only, informational prototype)"
+    )
+    asub = asr.add_subparsers(dest="acmd", required=True)
+    aev = asub.add_parser(
+        "evaluate", help="recompute claim states and closure from an assurance projection; runs nothing"
+    )
+    aev.add_argument("--projection", type=Path, required=True, help=f"a {assurance.PROJECTION} document")
+    aev.add_argument("--json", action="store_true")
     ds = sub.add_parser(
         "dependency-snapshot",
         help="GitHub dependency-submission snapshot of the toolchain manifest's tool components",
@@ -817,6 +827,20 @@ def cmd_validate(args) -> int:
     return EXIT_USAGE if bad else EXIT_OK
 
 
+def cmd_assurance(args) -> int:
+    """Read-only and informational: the verdict satisfies no admission, certification, release or
+    acceptance obligation."""
+    doc, problems = assurance.load(args.projection)
+    if problems:
+        print(f"{args.projection}: INVALID", file=sys.stderr)
+        for p in problems:
+            print(f"  {p}", file=sys.stderr)
+        return EXIT_USAGE
+    rec = assurance.evaluate(doc)
+    _emit(args, rec, assurance.render(rec))
+    return EXIT_OK if rec["closure"]["verdict"] == "PASS" else EXIT_UNSATISFIED
+
+
 def cmd_affected(args) -> int:
     adv = json.loads(args.advisory.read_text())
     problems = records.validate_advisory(adv)
@@ -1309,6 +1333,7 @@ _COMMANDS = {
     "workflow": infra_cli.workflow,
     "validate": cmd_validate,
     "affected": cmd_affected,
+    "assurance": cmd_assurance,
 }
 
 
