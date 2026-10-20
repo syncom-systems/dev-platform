@@ -63,13 +63,21 @@ _VERDICTS = (set(), {"claims", "closure"})
 
 
 def _keys(d: object, spec: tuple[set, set], where: str, errs: list[str]) -> TypeGuard[dict]:
+    """Reports missing and unknown fields. True only if `d` is an object holding every required field, so a
+    caller may index required fields only after a True result."""
     if not isinstance(d, dict):
         errs.append(f"{where}: object required")
         return False
     required, optional = spec
-    errs.extend(f"{where}.{k}: required" for k in sorted(required - set(d)))
+    missing = sorted(required - set(d))
+    errs.extend(f"{where}.{k}: required" for k in missing)
     errs.extend(f"{where}.{k}: unknown field" for k in sorted(set(d) - required - optional))
-    return True
+    for k in ("statement", "extensions"):  # optional fields the schema types
+        if k in d and k in optional:
+            ok = isinstance(d[k], str) if k == "statement" else isinstance(d[k], dict)
+            if not ok:
+                errs.append(f"{where}.{k}: {'string' if k == 'statement' else 'object'} required")
+    return not missing
 
 
 def _str(v: object, where: str, errs: list[str], values: tuple[str, ...] | None = None) -> None:
@@ -113,9 +121,8 @@ def validate(doc: object) -> list[str]:
         e.append("producer: object required")
     else:  # producer metadata is carried, not interpreted; only its name is required
         _str(doc["producer"].get("name"), "producer.name", e)
-    for k in ("subject", "extensions"):
-        if k in doc and not isinstance(doc[k], dict):
-            e.append(f"{k}: object required")
+    if "subject" in doc and not isinstance(doc["subject"], dict):
+        e.append("subject: object required")
     if "scope" in doc and _keys(doc["scope"], _SCOPE, "scope", e):
         _str(doc["scope"].get("closure"), "scope.closure", e, CLOSURE_SCOPES)
         if "roots" in doc["scope"]:
@@ -201,7 +208,9 @@ def _premise(p: object, where: str, e: list[str]) -> None:
 
 def argument_digest(claim: dict) -> str:
     """What a claim review is bound to besides the statement: argument marker, support, premises and
-    prerequisites. List order is not significant."""
+    prerequisites. List order is not significant. Only the referenced IDs are bound, not their contents:
+    a unit whose evidence changes under the same ID leaves the review current (docs/assurance-evaluation.md,
+    Limits)."""
     s = dict(claim["support"])
     if s.get("form") == "all":
         s["units"] = sorted(s["units"])

@@ -370,6 +370,87 @@ class ContractTest(unittest.TestCase):
             with self.subTest(name):
                 self.assertTrue(A.validate(doc))
 
+    def test_all_support_without_units_is_a_validation_error_not_an_exception(self):
+        doc = projection()
+        doc["claims"][0]["support"] = {"form": "all"}
+        self.assertEqual(A.validate(doc), ["claims[0].support.units: required"])
+
+    def test_every_missing_required_field_is_reported_never_raised(self):
+        full = projection(
+            claims=[claim(premises=["P1"])],
+            units=[{"id": "U1", "premises": ["P1"], "evidence": [item()]}],
+            premises=[premise()],
+            producer_verdicts={"claims": {"C1": "established"}, "closure": "PASS"},
+        )
+        paths = {(): A._TOP, ("scope",): A._SCOPE, ("claims", 0): A._CLAIM,
+                 ("claims", 0, "support"): ({"form", "units"}, set()), ("claims", 0, "review"): A._REVIEW,
+                 ("units", 0): A._UNIT, ("units", 0, "evidence", 0): A._ITEM, ("premises", 0): A._PREMISE,
+                 ("premises", 0, "review"): A._PREMISE_REVIEW}  # fmt: skip
+        n = 0
+        for path, (required, _) in paths.items():
+            obj = full
+            for k in path:
+                obj = obj[k]
+            for key in list(obj):
+                doc = copy.deepcopy(full)
+                target = doc
+                for k in path:
+                    target = target[k]
+                del target[key]
+                with self.subTest(path=path, key=key):
+                    try:
+                        problems = A.validate(doc)
+                    except Exception as ex:  # the regression: validation must not raise
+                        self.fail(f"validate raised {ex!r}")
+                    if key in required:
+                        self.assertTrue(problems)
+                    elif key not in (
+                        "scope",
+                        "producer_verdicts",
+                    ):  # removing these changes the verdict, not validity
+                        self.assertEqual(problems, [])
+                n += 1
+        self.assertGreaterEqual(n, 35)  # every field of every object kind above
+
+    def test_optional_fields_have_the_schema_types(self):
+        def with_(where, key, value):
+            doc = projection(premises=[premise()])
+            target = {
+                "claim": doc["claims"][0],
+                "claim review": doc["claims"][0]["review"],
+                "unit": doc["units"][0],
+                "evidence": doc["units"][0]["evidence"][0],
+                "premise": doc["premises"][0],
+                "premise review": doc["premises"][0]["review"],
+            }[where]
+            target[key] = value
+            return doc
+
+        for where in ("claim", "premise"):
+            for bad in (7, None, ["text"], {"text": 1}):
+                with self.subTest(where=where, statement=bad):
+                    self.assertEqual(A.validate(with_(where, "statement", bad)), [
+                        f"{'claims' if where == 'claim' else 'premises'}[0].statement: string required"])  # fmt: skip
+            self.assertEqual(A.validate(with_(where, "statement", "")), [])  # the schema allows empty text
+        for where in ("claim", "claim review", "unit", "evidence", "premise", "premise review"):
+            for bad in ("x", [], None, 1):
+                with self.subTest(where=where, extensions=bad):
+                    problems = A.validate(with_(where, "extensions", bad))
+                    self.assertEqual(len(problems), 1)
+                    self.assertTrue(problems[0].endswith(".extensions: object required"), problems)
+            self.assertEqual(A.validate(with_(where, "extensions", {"any": ["thing"]})), [])
+
+    def test_unsupported_form_contents_stay_uninterpreted(self):
+        for support in (
+            {"form": "any-of", "groups": "not even a list"},
+            {"form": "any-of"},
+            {"form": "x", "y": 1},
+        ):
+            with self.subTest(support=support):
+                doc = projection(claims=[claim(support=support)])
+                self.assertEqual(A.validate(doc), [])
+                self.assertEqual(codes(run(doc)), ["unsupported-form"])
+
     def test_extensions_never_influence_the_verdict(self):
         plain = run(projection())
         doc = projection(extensions={"x": {"verdict": "FAILED"}})
@@ -464,3 +545,12 @@ class SchemaTest(unittest.TestCase):
             set(p["units"]["items"]["properties"]["evidence"]["items"]["required"]),
         )
         self.assertEqual(set(rec["premises"][0]), set(p["premises"]["items"]["required"]))
+
+
+class KnownLimitTest(unittest.TestCase):
+    def test_review_binds_unit_ids_not_unit_contents(self):
+        """Documented limitation (docs/assurance-evaluation.md, Limits): not a guarantee to rely on."""
+        before = projection()
+        after = projection(units=[{"id": "U1", "premises": [], "evidence": [item("other", kind="analysis")]}])
+        self.assertEqual(before["claims"][0]["review"], after["claims"][0]["review"])
+        self.assertEqual(run(after)["claims"][0]["review"], {"state": "current"})

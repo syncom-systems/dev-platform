@@ -43,7 +43,8 @@ apply), a claim's **establishment**, and the scope's **closure**.
   review is current, and every `depends_on` claim is established (least fixpoint; a cycle is never established).
 - The review is **current** iff its `encoding` is `dev-platform.assurance-argument/1`, its `statement_digest` equals the
   claim's, and its `argument_digest` equals `assurance.argument_digest(claim)`: a digest of the argument marker,
-  support, premises and `depends_on`. Changing any of them stales the review.
+  support, premises and `depends_on`. Changing any of them stales the review. The digest binds the *IDs* of the
+  supporting units, premises and prerequisite claims, not their contents (see Limits).
 - A claim with a counterevidence unit is **failed**; a missing tool (`unavailable`) never fails a claim.
 - `any-of` and every other form are `unsupported-form`: never established, never failed, never treated as `all`.
 - Closure: `UNDECLARED` without a scope, without claims, or with empty roots; `FAILED` if a claim in scope is failed;
@@ -55,6 +56,13 @@ apply), a claim's **establishment**, and the scope's **closure**.
 Every blocker names its claim and, where relevant, the unit or premise and a reason code.
 
 ## Limits
+
+**Review binding stops at IDs.** A claim review's `argument_digest` covers the IDs of the units, premises and
+prerequisite claims the argument names, not what those units contain: not their evidence items, kinds, premises or
+definitions. Replacing a unit's evidence (for example a proof with a weaker test) while keeping its ID leaves the
+claim review `current`. A changed premise statement does stale that premise's own review, and a changed prerequisite
+claim is re-evaluated on its own, but neither stales the reviews of claims that name it. Unit fingerprints and
+reviewer authorization (draft ADR A item 8, R-9) are not implemented; this is one reason the verdict is informational.
 
 The producer's outcomes, applicability and boundaries are taken as reported: the evaluator does not authenticate the
 producer or show that a `declared` boundary contains everything a check reads; a `PASS` resting on `declared`
