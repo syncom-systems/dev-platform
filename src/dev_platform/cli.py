@@ -738,6 +738,11 @@ def render(doc: dict) -> str:
         out.append(f"  {mark:7} {c['id']} [{c['obligation']}, {c['cost']}] -> {c['state']}")
         for r in c["reasons"]:
             out.append(f"            why: {r}")
+        if c.get("reuse"):
+            u = c["reuse"]
+            cause = f" ({u['cause']})" if u["cause"] else ""
+            carried = f", carried on a {u['boundary']} boundary" if u["carried"] else ""
+            out.append(f"            previous: {u['previous_state']} is {u['applicability']}{cause}{carried}")
         if "runner" in c:
             r = c["runner"]
             out.append(f"            runner: {r['id'] or 'UNROUTABLE'} ({r['reason']})")

@@ -8,7 +8,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from dev_platform import __version__, isolation
+from dev_platform import __version__, identity, isolation
 from dev_platform.adapters import PYTHON, Command, command_for
 from dev_platform.config import Config
 from dev_platform.impact import select
@@ -110,7 +110,19 @@ def build(
     exec_env: dict[str, str] | None = None,
     execution: dict | None = None,
 ) -> dict:
-    prev_state = {c["id"]: EvidenceState(c["state"]) for c in (previous or {}).get("checks", [])}
+    # A previous record is history; an entry becomes current evidence only if its identity still applies.
+    prev_summary, prev_entries = (
+        identity.validate_previous(previous, cfg) if previous is not None else (None, {})
+    )
+    files = identity.FileDigests(root)
+    env_rec = environment or {"profile": None, "conformant": None, "tools": []}
+    platform_id = {
+        "running_version": __version__,
+        "mode": resolution.mode,
+        "pinned_version": resolution.version,
+        "digest": resolution.digest,
+        "source_digest": _release_identity(resolution)["source_digest"],
+    }
     if infra is not None:
         offered = load_profile(infra.profile_path if infra.profile is not None else None)
     else:
@@ -163,14 +175,52 @@ def build(
                     )
             else:
                 outcome = Outcome.NOT_RUN
-        before = prev_state.get(c.id)
+        ident = identity.compute(
+            cfg,
+            c,
+            files,
+            platform=platform_id,
+            environment=env_rec,
+            execution=execution or isolation.INHERITED,
+            exec_env=exec_env,
+            runner=entry.get("runner"),
+        )
+        reuse, before = None, None
+        if previous is not None:
+            pe = prev_entries.get(c.id)
+            applies, cause = (
+                identity.applicability(pe, ident)
+                if prev_summary["valid"]
+                else ("unknown", "previous record invalid")
+            )
+            historical = EvidenceState(pe["state"]) if pe is not None and identity.supported(pe) else None
+            if historical is EvidenceState.VERIFIED and outcome is Outcome.FAILED:
+                regressions.append(c.id)
+            # Certification never carries (ADR 0006 §6); elsewhere only current evidence carries, and
+            # stale evidence is carried only as far as `advance` lets a reached check keep a failure.
+            if stage is not Stage.FULL and applies == "current":
+                before = historical
+            elif stage is not Stage.FULL and applies == "stale":
+                before, impacted = historical, True
+            reuse = {
+                "previous_state": pe.get("state") if pe is not None else None,
+                "applicability": applies,
+                "cause": cause,
+                "carried": False,
+                "boundary": ident["boundary"],
+                "origin": identity.ORIGIN,
+            }
         after = advance(before, impacted=impacted, outcome=outcome)
-        if before is EvidenceState.VERIFIED and after is EvidenceState.FAILED:
-            regressions.append(c.id)
-        entry |= {"outcome": outcome.value, "state": after.value}
+        if reuse is not None:
+            reuse["carried"] = (
+                applies == "current"
+                and before is not None
+                and outcome is not Outcome.PASSED
+                and after is before
+            )
+        entry |= {"outcome": outcome.value, "state": after.value, "identity": ident, "reuse": reuse}
         checks.append(entry)
 
-    env_rec = environment or {"profile": None, "conformant": None, "tools": []}
     owed = [e for e in checks if e["selected"]]
     unsatisfied = [e["id"] for e in owed if e["outcome"] != Outcome.PASSED.value]
     # A non-conformant environment makes every admission claim false (no silent substitution).
@@ -227,6 +277,7 @@ def build(
         "change_set": {"known": changed is not None, "paths": list(changed) if changed else []},
         "executed": execute,
         "execution": execution or isolation.INHERITED,
+        "previous": prev_summary,
         "checks": checks,
         "unsatisfied_obligations": unsatisfied,
         "regressions": regressions,

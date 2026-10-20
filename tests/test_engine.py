@@ -83,7 +83,8 @@ class EnginePolicyTest(unittest.TestCase):
     def test_edit_and_pre_commit_are_not_admission_stages(self):
         self.assertIsNone(build(Stage.PRE_COMMIT, ("src/a.py",))["admission"])
 
-    def test_carry_invalidation_and_regression(self):
+    def test_unbound_previous_record_carries_nothing(self):
+        # Identity-bound carry and regressions: tests/test_evidence_identity.py.
         prev = {
             "checks": [
                 {"id": "unit", "state": "verified"},
@@ -93,10 +94,12 @@ class EnginePolicyTest(unittest.TestCase):
         }
         doc = build(Stage.PRE_MERGE, ("src/a.py",), execute=False, previous=prev)
         c = by_id(doc)
-        self.assertEqual(c["unit"]["state"], "invalidated")  # reached, not re-run
-        self.assertEqual(c["proofs"]["state"], "verified")  # carried: provably unreached
+        self.assertEqual(c["unit"]["state"], "pending")  # reached, not re-run, no applicable evidence
+        self.assertEqual(c["proofs"]["state"], "pending")  # unreached, but the record proves nothing
+        self.assertEqual(c["proofs"]["reuse"]["applicability"], "unknown")
+        self.assertFalse(doc["previous"]["valid"])
         doc = build(Stage.PRE_MERGE, ("src/a.py",), {"rc": 1}, previous=prev)
-        self.assertEqual(doc["regressions"], ["unit"])
+        self.assertEqual(doc["regressions"], [])
 
     def test_certification_needs_full_stage_pinned_platform_and_all_verified(self):
         full = build(Stage.FULL, (), revision="abc")
@@ -183,7 +186,7 @@ class CertificationRequiresPassInRunTest(unittest.TestCase):
 
     def test_carry_at_pre_merge_is_unchanged(self):
         doc = build(Stage.PRE_MERGE, ("docs/x.md",), cfg=PRE_MERGE_ONLY_CFG, previous=CARRIED)
-        self.assertEqual(by_id(doc)["lint"]["state"], "verified")  # unreached: carried as before
+        self.assertEqual(by_id(doc)["lint"]["state"], "verified")  # ran: an unmapped path selects it
         self.assertEqual(doc["admission"], "admitted")
 
     def test_downstream_release_assembly_rejects_the_uncertified_result(self):

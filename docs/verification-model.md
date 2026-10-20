@@ -44,6 +44,36 @@ Tested invariants: `verified` requires a pass or an un-impacted carry; an impact
 not pass is never `verified`; `failed` persists until a pass; a never-run slow check is `pending`,
 never realized. A `verified -> failed` transition is reported as a **regression**.
 
+## Evidence identity and reuse (`--previous`)
+
+`prev` above comes from a caller-supplied previous result only through its evidence identity
+([identity.py](../src/dev_platform/identity.py); R-5(i), draft ADR B). Every check entry records
+`identity`: digests of `definition` (the check entry and its runner spec), `platform` (running and pinned
+release), `environment` (toolchain identity, execution mode, runtime env, runner route, infra pin),
+`global` (files matching `impact.global`) and `inputs` (files matching the check's `inputs`, tracked or
+untracked-not-ignored, by content), under encoding `dev-platform.evidence-identity/1`. The revision is
+not a component: a commit that does not touch a check's inputs leaves its evidence applicable.
+
+Each entry also records a **boundary class**: `declared` for a `change` check (its globs are a
+declaration; nothing verifies they cover what the check reads), `unknown` for `always`/`periodic`
+checks (their outcome is not bounded by inputs). `complete` is reserved for a measuring or
+conservative mechanism; nothing produces it today. Against the previous record's entry, `reuse` says:
+
+- `current`: every component equal and the boundary not `unknown`. Carried (`carried: true`), at
+  development and `pre-merge` only, labelled with its boundary. A change outside a `declared` boundary
+  is not detected; that is the boundary's limitation, already shared by impact selection.
+- `stale` (`cause` = first differing component): history only; a `verified` previous state becomes
+  `invalidated`, a `failed` one stays `failed`.
+- `unknown`: invalid record (schema, project, malformed entries), no entry, no identity, other encoding,
+  a component that cannot be computed now, an `unknown` boundary, or a `verified` entry the record
+  itself does not explain (no pass, no current carry). Nothing is carried.
+
+At `full` nothing carries. Reuse changes only the reported `state` and `regressions` (against any
+valid entry's previous state): admission is decided from the checks selected and run, exactly as
+without `--previous`, and certification from in-run outcomes. The record's origin is not
+authenticated (`origin: unauthenticated`): matching digests show the included inputs match, not
+that the record is genuine.
+
 ## Admission, certification, release
 
 - **Admitted** (`pre-merge`/`full`): the run executed and every selected check passed. A dry run is
