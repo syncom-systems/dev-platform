@@ -163,6 +163,36 @@ PRE_MERGE_ONLY_CFG = parse(tomllib.loads(cfg_text(PRE_MERGE_ONLY)))
 CARRIED = {"checks": [{"id": "lint", "state": "verified"}]}
 
 
+# The PR's own configuration no longer maps src/** to `unit` and ignores the source and configuration paths.
+SELF_NARROWED_CFG = parse(
+    tomllib.loads(
+        cfg_text(
+            [("unit", '["pre-merge", "full"]', "change", '["tests/**"]')],
+            extra='[impact]\nignore = ["*.toml", "src/**"]\n',
+        )
+    )
+)
+
+
+class ConfigurationChangeAdmissionTest(unittest.TestCase):
+    """A change to dev-platform.toml owes every non-periodic check at admission (ADR 0006 §3)."""
+
+    def test_configuration_change_runs_the_check_its_own_rules_would_skip(self):
+        changed = ("dev-platform.toml", "src/x.py")
+        doc = build(Stage.PRE_MERGE, changed, {"rc": 1}, cfg=SELF_NARROWED_CFG)
+        unit = by_id(doc)["unit"]
+        self.assertTrue(unit["selected"])
+        self.assertEqual(unit["outcome"], "failed")
+        self.assertEqual(doc["admission"], "blocked")
+        self.assertEqual(doc["unsatisfied_obligations"], ["unit"])
+        self.assertEqual(build(Stage.PRE_MERGE, changed, cfg=SELF_NARROWED_CFG)["admission"], "admitted")
+
+    def test_without_the_configuration_change_the_declared_rules_still_apply(self):
+        doc = build(Stage.PRE_MERGE, ("src/x.py",), {"rc": 1}, cfg=SELF_NARROWED_CFG)
+        self.assertFalse(by_id(doc)["unit"]["selected"])
+        self.assertEqual(doc["admission"], "admitted")
+
+
 class CertificationRequiresPassInRunTest(unittest.TestCase):
     """ADR 0006 §6: certification needs every configured check to pass in the certifying run."""
 

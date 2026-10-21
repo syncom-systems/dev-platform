@@ -1,15 +1,17 @@
 """Change impact and check selection. Fails closed.
 
-Unknown impact selects every owed check; it is never read as "nothing to do".
+Unknown impact selects every owed check; it is never read as "nothing to do". A change to the project's
+`dev-platform.toml` is unknown impact too: it would otherwise be judged by the selection rules it rewrites.
 """
 
 from __future__ import annotations
 
+import posixpath
 import re
 from dataclasses import dataclass
 from functools import cache
 
-from dev_platform.config import Check, Config
+from dev_platform.config import CONFIG_FILENAME, Check, Config
 from dev_platform.model import Obligation, Stage
 
 
@@ -45,6 +47,11 @@ class Selected:
     reasons: tuple[str, ...]
 
 
+def is_config(path: str) -> bool:
+    """The project's root configuration, also when written `./dev-platform.toml`; never a nested namesake."""
+    return posixpath.normpath(path) == CONFIG_FILENAME
+
+
 def select(cfg: Config, stage: Stage, changed: tuple[str, ...] | None) -> list[Selected]:
     """Decide, for every check defined at `stage`, whether it is owed and why."""
     candidates = [c for c in cfg.checks if stage in c.stages]
@@ -65,6 +72,14 @@ def select(cfg: Config, stage: Stage, changed: tuple[str, ...] | None) -> list[S
                 if owed_by_change(c):
                     reasons[c.id].append("change set unknown: fail closed, owed")
         else:
+            # Ahead of impact.global, impact.ignore and inputs: the changed configuration declares all three.
+            for path in (p for p in changed if is_config(p)):
+                for c in candidates:
+                    if owed_by_change(c):
+                        reasons[c.id].append(
+                            f"selection configuration {path} changed: its own impact rules cannot narrow "
+                            "this change, fail closed, owed"
+                        )
             for path in changed:
                 g = matches(path, cfg.impact_global)
                 if g:

@@ -72,3 +72,79 @@ class ImpactTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def cfg(checks, ignore=(), global_=()):
+    extra = f"[impact]\nglobal = {list(global_)!r}\nignore = {list(ignore)!r}\n".replace("'", '"')
+    return parse(tomllib.loads(cfg_text(checks, extra=extra)))
+
+
+LINT = ("lint", '["pre-commit", "pre-merge"]', "always", "[]")
+DRIFT = ("drift", '["pre-merge", "full"]', "periodic", "[]")
+# The demonstrated escape: before, `unit` reads src/**; the PR's own configuration drops it and ignores
+# both the source path and the configuration file.
+BEFORE = cfg([LINT, ("unit", '["pre-merge", "full"]', "change", '["src/**", "tests/**"]')], ignore=["*.toml"])
+AFTER = cfg(
+    [LINT, ("unit", '["pre-merge", "full"]', "change", '["tests/**"]'), DRIFT], ignore=["*.toml", "src/**"]
+)
+
+
+AFTER_UNIT = ("unit", '["pre-merge", "full"]', "change", '["tests/**"]')
+
+
+def chosen(c, changed, stage=Stage.PRE_MERGE):
+    return {s.check.id: s for s in select(c, stage, changed)}
+
+
+class ConfigurationChangeTest(unittest.TestCase):
+    """A change to the project's dev-platform.toml is unknown impact (ADR 0006 §3 clarification)."""
+
+    def assert_config_owed(self, s, path="dev-platform.toml"):
+        self.assertTrue(s["unit"].selected)
+        self.assertIn(f"selection configuration {path} changed", s["unit"].reasons[0])
+
+    def test_a_change_cannot_narrow_its_own_selection_through_the_configuration(self):
+        changed = ("dev-platform.toml", "src/x.py")
+        self.assertTrue(chosen(BEFORE, changed)["unit"].selected)
+        self.assert_config_owed(chosen(AFTER, changed))
+
+    def test_ignored_configuration_file_still_selects_every_owed_check(self):
+        self.assert_config_owed(chosen(AFTER, ("dev-platform.toml",)))
+
+    def test_configuration_file_mapped_to_one_check_selects_every_owed_check(self):
+        c = cfg([("cfg-lint", '["pre-merge"]', "change", '["dev-platform.toml"]'), AFTER_UNIT])
+        s = chosen(c, ("dev-platform.toml",))
+        self.assertTrue(s["cfg-lint"].selected)
+        self.assert_config_owed(s)
+
+    def test_otherwise_unmapped_configuration_file_names_the_configuration(self):
+        c = cfg([AFTER_UNIT])
+        self.assert_config_owed(chosen(c, ("dev-platform.toml",)))
+
+    def test_configuration_change_alone_and_with_source_changes(self):
+        for changed in (("dev-platform.toml",), ("dev-platform.toml", "src/x.py", "docs/a.md")):
+            with self.subTest(changed=changed):
+                self.assert_config_owed(chosen(AFTER, changed))
+
+    def test_dot_slash_prefix_is_the_same_file(self):
+        self.assert_config_owed(chosen(AFTER, ("./dev-platform.toml",)), "./dev-platform.toml")
+
+    def test_a_nested_namesake_is_not_the_project_configuration(self):
+        for path in ("src/dev-platform.toml", "docs/dev-platform.toml", "dev-platform.toml.bak"):
+            with self.subTest(path=path):
+                c = cfg([AFTER_UNIT], ignore=["src/**", "docs/**", "*.bak"])
+                s = chosen(c, (path,))
+                self.assertFalse(s["unit"].selected)
+
+    def test_obligations_keep_their_meaning(self):
+        s = chosen(AFTER, ("dev-platform.toml",))
+        self.assertEqual(s["lint"].reasons[0], "always-obligation")
+        self.assertFalse(s["drift"].selected)  # periodic is never owed by a change
+        self.assertNotIn("drift", chosen(AFTER, ("dev-platform.toml",), Stage.PRE_COMMIT))
+        self.assertTrue(chosen(AFTER, ("dev-platform.toml",), Stage.PRE_COMMIT)["lint"].selected)
+
+    def test_full_stage_and_unknown_change_sets_are_unchanged(self):
+        s = chosen(AFTER, ("dev-platform.toml",), Stage.FULL)
+        self.assertTrue(all(v.selected for v in s.values()))
+        self.assertEqual({v.reasons for v in s.values()}, {("full validation runs every check",)})
+        self.assertIn("change set unknown", chosen(AFTER, None)["unit"].reasons[0])

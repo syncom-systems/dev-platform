@@ -19,6 +19,7 @@ For stage `S`, candidates are checks whose `stages` include `S`. At `full`, all 
 | Situation | Effect |
 |---|---|
 | `always` obligation | selected |
+| project's root `dev-platform.toml` changed (also as `./dev-platform.toml`) | every owed (non-periodic) check selected, ahead of `impact.global`, `impact.ignore` and check `inputs`; reason names the file |
 | changed path matches a check's `inputs` | that check selected, reason names path and pattern |
 | path matches `impact.global` | every owed (non-periodic) check selected |
 | path matches `impact.ignore` | nothing selected for it |
@@ -26,6 +27,19 @@ For stage `S`, candidates are checks whose `stages` include `S`. At `full`, all 
 | change set unknown (no git, bad ref, nothing supplied) | every owed check selected |
 
 A check that is not selected says why: "no changed input reaches this check".
+
+The changed configuration declares the very rules that would select its checks, so a change to it is unknown
+impact (ADR 0006 §3 clarification): it cannot narrow its own selection through `impact.ignore`, `impact.global` or
+check `inputs`. Only the project's root file counts; a `dev-platform.toml` elsewhere in the tree is an ordinary
+path. The selection is of the checks the changed, validated configuration defines: a change that deletes a check or
+weakens an obligation in that file is not detected here; that is configuration governance (for example code owners
+on the file), not selection.
+
+**Declared inputs bound selection.** Change-based selection is fail-closed for unknown and unmapped paths, but its
+completeness is conditional on declared check inputs covering the check's actual dependencies. An incorrectly
+mapped path can allow an affected check to remain unselected, even without evidence carry: a path the check reads
+but does not declare, matched by another check's `inputs` or by `impact.ignore`, does not select it.
+Nothing measures the read set; `full` runs every check regardless.
 
 ## Evidence transitions
 
