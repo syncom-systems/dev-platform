@@ -48,6 +48,7 @@ citations (`6c0e7b4`, `8262c5fa`) are historical and unchanged.
 | R-15 / E0 log archival | **Open, optional** (owner, 2026-10-20) — not a prerequisite for other work; earliest MCP-RE logs expire ~2026-11-09 |
 | R-1 placement, R-3 projection, R-4 `all` only | **Applied to the evaluator prototype only** — PR #149 ([assurance evaluation](../assurance-evaluation.md)); not ratification of draft ADR A |
 | E2 projection equivalence | **Run, informational** — [report](e2-projection-equivalence.md) (draft PR): not reproducible from committed MCP-RE records (no per-unit evidence is committed); identities and review bookkeeping agree; R-16 not met |
+| E2 follow-up: evidence artifacts | **Run, informational** — [report](e2-evidence-artifacts.md) (draft PR): two run artifacts bind 585/585 declared lane results at the recorded unit fingerprints; evidence axis agrees 133/133 on that basis; verdict still `INCOMPLETE`, blocked only by the review binding (L2) |
 | ADR A `any-of` semantics | **Reserved** (rev. 3): reported `unsupported-form`; the rev. 2 cross-group counterevidence rule is withdrawn |
 | All other register entries (R-2, R-7…R-18; R-1, R-3, R-4 beyond the prototype), draft ADRs A–D | **Open — proposals only** |
 
