@@ -79,6 +79,11 @@ dev-platform infra doctor --project .                              # identities 
 dev-platform check --stage full --event-trust trusted \
   --infra-resolver "dev-platform infra resolve --root $RUNNER_TEMP/dev-platform/infra"   # the job-local store
 ```
+`fetch` and `sync` read with the caller's own `gh` identity. A consumer repository's `GITHUB_TOKEN` cannot read another
+private repository; a job that fetches needs a credential issued for the configuration repository only (for example a GitHub
+App token with `contents: read`), given to that step alone, in a job only trusted events reach
+([installation](installation.md#private-infrastructure-mode-optional)).
+
 The store (`<data root>/infra`: `DEV_PLATFORM_HOME`, a job-local `$RUNNER_TEMP/dev-platform` in CI, else
 `~/.local/share/dev-platform`) holds releases side by side, read-only and write-once. `brew upgrade` never touches it,
 and a newer CLI resolves every older release unchanged. Rolling back is pinning the previous release and digest; the

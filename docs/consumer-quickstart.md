@@ -12,13 +12,14 @@ These steps are exactly what `tools/pilot.py` runs against a real public consume
    `tools/install_release.py` (`releases/<version>/identity.json`). Re-derive them yourself.
 2. **Install with the trusted installer** (verifies provenance, SBOM and build-environment attestations first):
    ```
-   python3 install_release.py --version 0.2.0 --store ./store --verifier-sha256 <pin> --policy policy.json \
+   python3 install_release.py --version <v> --store ./store --verifier-sha256 <pin> --policy policy.json \
      --policy-sha256 <pin> --archive-sha256 <pin> --tree-sha256 <consumer pin> [--allow-unaccepted]
    ```
    An unaccepted release is refused unless you pass `--allow-unaccepted`; accepted-ness is never inferred.
 3. **Realize the toolchain profile** the release ships for your project (for Rust/Cargo: `rust-cargo-1.99` for
-   current dependency sets, `rust-cargo` for rustc 1.85) with `tools/setup_env.py <profile>`, then put its
-   directories on `PATH`. Tool identity is verified, not trusted.
+   current dependency sets, `rust-cargo` for rustc 1.85) with the pinned release's own
+   `dev-platform toolchain provision --pinned --verify --project . --profile <profile> --dest <dir>`, then put its
+   directories on `PATH`. Tool identity is verified, not trusted. (`dev-platform setup` does steps 2 and 3 for you.)
 4. **Write the pin**: `dev-platform init --platform-version <v> --sha256 <tree digest> --profile <profile>`.
    `init` derives starter checks from build-system markers and a real `tests/` layout, never from stray files.
 5. **Check**: `dev-platform doctor`, then `dev-platform check --stage full --result result.json`. Admission,

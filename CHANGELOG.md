@@ -24,6 +24,23 @@ Declared incompatibility (0.x minor):
   the run withdraw the identity (`identity.unstable`). A record without identities (any record from 0.10.0 or earlier),
   of another project, or malformed carries nothing; it no longer crashes the run. Stale evidence is reported
   with its cause. Nothing carries at `full`. `always`/`periodic` checks never carry. Admission is unchanged.
+- A change to the root `dev-platform.toml` selects every non-periodic check: the selection configuration cannot
+  narrow the change that edits it (#152, ADR 0006 §3 clarification).
+- Change sets have one coordinate system (#153): `--base`/`--staged` give a known set only for a project at its
+  git worktree root (a nested project, or a project outside a worktree, is unknown impact: every owed check runs),
+  and `--changed` paths are project-relative (`./` is normalized; an absolute, `.`, `..` or escaping path makes
+  the whole set unknown).
+
+Fixed:
+- `setup` refuses a host the pinned release has no toolchain sources for (Linux arm64, an Intel Mac) by name,
+  before provisioning, instead of provisioning nothing and failing verification without saying why. In releases
+  after 0.10.0, `toolchain provision` also refuses a tool sourced only for other platforms instead of skipping it.
+
+Documentation:
+- [Installation runbook](docs/installation.md): fresh install, upgrade (including from 0.9.0), consumer pins,
+  explicit unaccepted opt-in, diagnosis, CLI and release rollback, job-local CI, hosted-only and private
+  infrastructure modes, the configuration-repository access boundary. Stale statements corrected in README,
+  distribution and consumer quickstart (`check.yml` is an unfinished placeholder; use `consumer-pilot.yml`).
 
 ## 0.10.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 One public product with optional, explicitly configured infrastructure capabilities (ADR 0023). Nothing is activated

@@ -79,3 +79,43 @@ The private repository is not modified from this workspace. After a platform rel
 
 Owner decisions: when to pin the new platform release privately, whether the organization adopts the public
 configuration schema, and when the private CLI is retired.
+
+## Interface for the private infrastructure workspace (2026-10-21)
+Public-safe summary of what an organization's configuration repository and its operators can rely on. Nothing here
+requires a change in the private repository; nothing here was done there.
+
+- **CLI.** The published CLI is 0.10.0 (tag `v0.10.0`, commit `59ac8a3c752de106a8f1d3df1c31a559fe0fd824`, archive
+  sha256 `a3473a0260b16d571c2832228e2e02e9d07c8b535da2439cc4f2f69ccd74099b`, tree `a8d7a5004a2f56109d1c3b6c1cb2623ab6d8eb185bd445dc345834250af894aa`,
+  verified-unaccepted). The `infra` modules, `dev-platform.infra/v1`, the resolver protocol and the conformance kit are
+  unchanged on `main` since 0.10.0; the next release (proposed 0.11.0) carries them unchanged.
+- **Install and upgrade:** `brew install syncom-systems/dev-platform/dev-platform`, `brew update && brew upgrade
+  dev-platform`; rollback by `brew extract` ([installation](installation.md#5-rollback)). No private package and no second
+  CLI is needed for any command below.
+- **Configuration release:** `releases/index.v1.json` (`{"schema_version": 1, "releases": [{"version", "digest" (bare
+  hex), "contract"}]}`, append-only), immutable `releases/<YYYY.MM.N>/`, `authorization/current.v1.json` (exactly the
+  eight documented keys; `revoked_releases` entries are `{version, reason?}`). Identity is the release-tree digest
+  `sha256:` + `tree_digest(releases/<version>)` (`dev-platform infra digest releases/<version>`), which is what a consumer
+  pins with `config_digest_kind = "release-tree"`. The profile-file digest is only for vendored profiles and the reported
+  `effective_profile_digest`. `dev-platform infra release verify --root . --base-index <protected index>` is the
+  immutability check for the configuration repository's CI.
+- **Store and resolver:** `<data root>/infra` (`DEV_PLATFORM_HOME`; `$RUNNER_TEMP/dev-platform` in CI; else
+  `~/.local/share/dev-platform`), or `--store`. Fill it with `infra store fetch --project . --source <owner>/<repo>`
+  (exactly the pinned release plus the current policy, GET only) or `infra store import`; refresh the policy with
+  `infra store sync` (forward only: an older revision is refused). Trusted jobs name the resolver explicitly:
+  `--infra-resolver "dev-platform infra resolve --root <store>"`. Untrusted events always get `public-default`.
+- **Authentication and trust:** `fetch`/`sync` use the caller's `gh` identity. A consumer repository's `GITHUB_TOKEN`
+  cannot read the configuration repository; a job that fetches needs a credential issued for that repository only
+  (for example a GitHub App token with `contents: read`), given to that step alone, in a job only trusted events reach.
+  Without access `fetch` fails `access-denied` and writes nothing.
+- **Verified end to end (2026-10-21, read-only, scratch store, no private data committed):** the current code (its `infra`
+  modules are identical to 0.10.0's) fetched the organization's current configuration release by its pin with the public CLI alone;
+  `store list` showed it `ok`; `infra doctor` resolved it for an enabled repository; `infra resolve` resolved the exact pin
+  with complete authorization facts and denied a wrong digest (`digest-mismatch`), an unknown release
+  (`version-unknown`) and a repository not enabled (`repo-not-enabled`), and returned `public-default` for an untrusted
+  event.
+- **Compatibility and rollback:** formats are only added; a newer CLI resolves every older release unchanged, and a CLI
+  upgrade leaves the store and every `[infra]` pin byte for byte unchanged. Consumer rollback is pinning the previous
+  release and digest; the current policy still applies. Do not publish a release in `dev-platform.infra-config-release/v1`
+  while the private CLI is still in use: it cannot read that format.
+- **Open on the private side (owner decisions):** retiring the private CLI and its Homebrew distribution (qualification
+  gate 3); re-running the recorded qualification gates against the next platform release once it exists.

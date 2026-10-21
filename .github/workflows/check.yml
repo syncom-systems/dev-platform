@@ -1,5 +1,5 @@
-# Reusable workflow for consumers. Reference it by commit SHA:
-#   uses: syncom-systems/dev-platform/.github/workflows/check.yml@<full-commit-sha>
+# UNFINISHED PLACEHOLDER: it has no bootstrap step, so it fails closed (exit 3: not installed). Consumers use
+# consumer-pilot.yml at the pinned release's commit (docs/consumer-integration.md, docs/installation.md).
 # The consumer's dev-platform.toml pins the platform version and digest; the runner is chosen by
 # the caller (public hosted by default). No private infrastructure is required.
 name: dev-platform check
