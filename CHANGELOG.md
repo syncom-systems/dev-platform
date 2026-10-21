@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.11.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
+Evidence correctness: certification needs a pass in the certifying run, carried evidence is bound to its identity,
+and change sets cannot be narrowed by the configuration they change. Infrastructure modules, `dev-platform.infra/v1`,
+the resolver protocol and the toolchain manifest are unchanged from 0.10.0.
+
 Added (prototype, informational):
 - `dev-platform assurance evaluate --projection FILE [--json]` evaluates claims, units, premises, reviews and closure
   from a `dev-platform.assurance-projection/v1` document (new schemas `assurance-projection-v1` and
@@ -10,7 +15,7 @@ Added (prototype, informational):
   writes nothing, and its verdict satisfies no admission, certification, release or acceptance obligation. Draft ADR A
   is not ratified ([details](docs/assurance-evaluation.md)).
 
-Declared incompatibility (0.x minor):
+Declared incompatibilities (0.x minor; consumers reach them only by pinning 0.11.0):
 - Certification requires every configured check to have **passed in the certifying run** (ADR 0006 §6,
   clarified). Previously a `verified` state carried via `--previous` satisfied certification for a check
   not defined for `full`, so a hand-supplied file could certify a check that never ran. Such a check is
@@ -33,8 +38,8 @@ Declared incompatibility (0.x minor):
 
 Fixed:
 - `setup` refuses a host the pinned release has no toolchain sources for (Linux arm64, an Intel Mac) by name,
-  before provisioning, instead of provisioning nothing and failing verification without saying why. In releases
-  after 0.10.0, `toolchain provision` also refuses a tool sourced only for other platforms instead of skipping it.
+  before provisioning, instead of provisioning nothing and failing verification without saying why. From 0.11.0,
+  `toolchain provision` also refuses a tool sourced only for other platforms instead of skipping it.
 
 Documentation:
 - [Installation runbook](docs/installation.md): fresh install, upgrade (including from 0.9.0), consumer pins,
