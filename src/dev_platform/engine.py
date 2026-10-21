@@ -58,15 +58,22 @@ def git_dirty(root: Path) -> bool:
 
 
 def git_changed(root: Path, *, base: str | None = None, staged: bool = False) -> tuple[str, ...] | None:
-    """Changed paths from git, or None (unknown) on any failure."""
+    """Changed paths from git, or None (unknown) on any failure.
+
+    Only for a project at its worktree root: git reports tracked paths relative to the worktree and untracked
+    ones relative to (and only below) the project, so for a nested project the set mixes coordinates and can
+    omit changes. That relationship is not translated; it is unknown impact (ADR 0006 §3).
+    """
 
     def run(*args: str) -> list[str] | None:
         try:
             r = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
-        except FileNotFoundError:
+        except (FileNotFoundError, NotADirectoryError):
             return None
         return r.stdout.splitlines() if r.returncode == 0 else None
 
+    if run("rev-parse", "--show-prefix") != [""]:
+        return None  # not a worktree, or a project below its root
     if staged:
         out = run("diff", "--cached", "--name-only", "--no-renames")
         return tuple(sorted(out)) if out is not None else None

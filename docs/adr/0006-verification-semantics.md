@@ -33,3 +33,11 @@ because the changed file declares the rules that would otherwise select. It does
 previous configuration: deleting a check or weakening an obligation remains a configuration-governance concern.
 It does not make declared inputs complete. Unknown change sets, `full`, admission, certification and carry are
 unchanged.
+
+## Clarification (2026-10-21, owner-authorized): change-set path coordinates
+
+Decision 3's unknown impact also covers a change set that cannot be read in project coordinates: a git-derived set
+for a project that is not at its git worktree root, and explicit `--changed` paths that are absolute or leave the
+project. Patterns and explicit paths are project-relative. Nested projects therefore select every owed check; no
+repository-to-project path translation is made. Selection, obligations, `full`, admission, certification and carry
+are otherwise unchanged.

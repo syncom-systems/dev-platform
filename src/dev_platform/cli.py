@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import posixpath
 import shlex
 import shutil
 import subprocess
@@ -62,7 +63,12 @@ def _common() -> argparse.ArgumentParser:
 def _plan_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--stage", choices=[s.value for s in Stage], default=Stage.PRE_MERGE.value)
     g = p.add_mutually_exclusive_group()
-    g.add_argument("--changed", nargs="+", metavar="PATH", help="explicit changed paths")
+    g.add_argument(
+        "--changed",
+        nargs="+",
+        metavar="PATH",
+        help="explicit changed paths, project-relative (absolute or outside the project: impact unknown)",
+    )
     g.add_argument("--base", metavar="REF", help="diff against merge-base with REF")
     g.add_argument("--staged", action="store_true", help="use the staged change")
     p.add_argument("--previous", type=Path, help="previous result record to carry evidence from")
@@ -474,9 +480,21 @@ def _emit(args, doc: dict, text: str) -> None:
     print(json.dumps(doc, indent=2, sort_keys=True) if args.json else text)
 
 
+def explicit_changed(paths: list[str]) -> tuple[str, ...] | None:
+    """Explicit `--changed` paths are project-relative. `./` is harmless; an absolute path or one that leaves
+    the project makes the whole set unknown rather than being dropped."""
+    out = []
+    for p in paths:
+        n = posixpath.normpath(p)
+        if posixpath.isabs(n) or n == ".." or n.startswith("../") or n == ".":
+            return None
+        out.append(n)
+    return tuple(sorted(out))
+
+
 def _changed(args, root: Path):
     if args.changed is not None:
-        return tuple(sorted(args.changed))
+        return explicit_changed(args.changed)
     if args.staged or args.base:
         return engine.git_changed(root, base=args.base, staged=args.staged)
     return None  # unknown: fail closed
