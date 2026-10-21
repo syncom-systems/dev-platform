@@ -24,7 +24,7 @@ For stage `S`, candidates are checks whose `stages` include `S`. At `full`, all 
 | path matches `impact.global` | every owed (non-periodic) check selected |
 | path matches `impact.ignore` | nothing selected for it |
 | path matches no input, no ignore, no global (unmapped) | every owed check selected |
-| change set unknown (no git, bad ref, nothing supplied) | every owed check selected |
+| change set unknown (no git, bad ref, nothing supplied, project not at its git worktree root, or an explicit path that is absolute or outside the project) | every owed check selected |
 
 A check that is not selected says why: "no changed input reaches this check".
 
@@ -40,6 +40,15 @@ completeness is conditional on declared check inputs covering the check's actual
 mapped path can allow an affected check to remain unselected, even without evidence carry: a path the check reads
 but does not declare, matched by another check's `inputs` or by `impact.ignore`, does not select it.
 Nothing measures the read set; `full` runs every check regardless.
+
+**Path coordinates.** Configuration patterns (`impact.global`, `impact.ignore`, check `inputs`) and explicit
+`--changed` paths are relative to the project (the directory holding `dev-platform.toml`); `./` segments are
+normalized, and an absolute path or one that leaves the project makes the whole change set unknown, never dropped.
+Git-derived change sets (`--base`, `--staged`) are used only when the project is at its git worktree root. For a
+project below the root, git reports tracked paths relative to the worktree and untracked ones relative to (and only
+below) the project, so the set cannot be read in project coordinates: it is unknown impact and every owed check is
+selected, even when the diff is empty. Precise incremental selection for nested projects is unsupported, not
+approximated; this does not track dependencies outside the project or validate shared read sets.
 
 ## Evidence transitions
 
