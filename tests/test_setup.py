@@ -466,6 +466,48 @@ class Setup(unittest.TestCase):
         self.assertIn("ready", S.render(rec))
 
 
+class UnsupportedHost(unittest.TestCase):
+    """A host the release has no toolchain sources for (Linux arm64, an Intel Mac) is refused by name, before
+    provisioning, instead of provisioning nothing and failing verification without saying why."""
+
+    MANIFEST = {
+        "profiles": {
+            "rust-bazel-9": {
+                "tools": {
+                    "bazelisk": {"version": "1.29.0", "source": {"darwin-arm64": {}, "linux-x86_64": {}}},
+                    "bazel": {"version": "9.2.0", "bazel_managed": True},
+                }
+            }
+        }
+    }
+
+    def test_refused_with_the_host_and_the_supported_platforms(self):
+        from types import SimpleNamespace
+        from unittest import mock
+
+        res = SimpleNamespace(
+            release={"toolchains": self.MANIFEST}, version="0.10.0", cleanup=str(tmpdir(self))
+        )
+        loc = L.locate({}, home=tmpdir(self))
+        with (
+            mock.patch.object(S, "platform_key", return_value="linux-aarch64"),
+            self.assertRaises(S.Refused) as e,
+        ):
+            S.ensure_toolchain(res, "rust-bazel-9", tmpdir(self), loc, {}, run=S.run_process)
+        msg = str(e.exception)
+        self.assertIn(
+            "no pinned source of bazelisk (profile 'rust-bazel-9') for this host (linux-aarch64)", msg
+        )
+        self.assertIn("darwin-arm64, linux-x86_64", msg)
+        self.assertEqual(e.exception.exit_code, 1)
+        self.assertFalse(loc.toolchains.exists())
+
+    def test_supported_hosts_and_unsourced_tools_pass(self):
+        for key in ("darwin-arm64", "linux-x86_64"):
+            self.assertEqual(S.unsupported_tools(self.MANIFEST, "rust-bazel-9", key), [])
+        self.assertEqual(S.unsupported_tools(self.MANIFEST, "rust-bazel-9", "darwin-x86_64"), ["bazelisk"])
+
+
 class Cli(unittest.TestCase):
     def test_setup_reports_a_missing_project_with_usage_status(self):
         d = tmpdir(self)

@@ -107,7 +107,8 @@ def activate(link: Path, target: Path) -> None:
 
 def provision(manifest: dict, profile: str, dev: Path, *, key: str | None = None) -> list[str]:
     """Realize every tool of `profile` that has a pinned source for this platform; returns the names
-    installed. Tools without a source here (for example a venv-installed wheel) are left to the caller."""
+    installed. Tools without any source (for example a venv-installed wheel) are left to the caller; a tool
+    sourced only for other platforms means this host is unsupported (ConfigError)."""
     key = key or platform_key()
     if profile not in manifest["profiles"]:
         raise ConfigError([f"profile {profile!r} not in manifest (have {sorted(manifest['profiles'])})"])
@@ -116,10 +117,12 @@ def provision(manifest: dict, profile: str, dev: Path, *, key: str | None = None
     (dev / "dl").mkdir(exist_ok=True)
     done = []
     for name, spec in sorted(tools.items()):
-        src = (spec.get("source") or {}).get(key)
+        sources = spec.get("source") or {}
+        src = sources.get(key)
         if not src:
-            if name == "python":
-                raise ConfigError([f"no pinned python source for {key}"])
+            if name == "python" or sources:  # sourced elsewhere only: this host is unsupported, never skipped
+                have = ", ".join(sorted(sources))
+                raise ConfigError([f"no pinned {name} source for {key} (sources: {have})"])
             continue
         vdir = version_dir(dev, name, spec["version"])
         if src.get("type") == "binary":

@@ -44,7 +44,7 @@ from dev_platform.errors import (
     DevPlatformError,
 )
 from dev_platform.locations import STORE_ENV, Locations
-from dev_platform.provision import tool_dirs
+from dev_platform.provision import platform_key, tool_dirs
 from dev_platform.resolve import OVERRIDE_ENV, PACKAGE_ROOT, PYTHON_ENV, REEXEC_ENV, reexec_env, resolve
 from dev_platform.toolchain import PYTHON_TOKEN
 
@@ -315,6 +315,14 @@ def first_json(text: str) -> dict:
     return {}
 
 
+def unsupported_tools(manifest: dict, profile: str, key: str) -> list[str]:
+    """The profile's provisioned tools (those with pinned sources) that have no source for host `key`.
+    Releases up to 0.10.0 skip them when provisioning, so an unsupported host would only fail verification
+    later, without saying why."""
+    tools = manifest["profiles"][profile]["tools"]
+    return sorted(n for n, t in tools.items() if t.get("source") and key not in t["source"])
+
+
 def ensure_toolchain(res, profile: str, project: Path, loc: Locations, cenv: dict, run: Run) -> dict:
     """Verify the profile's directory with the pinned release; provision it (bytes only) and verify again if
     that fails. Verification (`toolchain verify --require-certifiable`: closure identity against the release's
@@ -324,6 +332,15 @@ def ensure_toolchain(res, profile: str, project: Path, loc: Locations, cenv: dic
         raise Refused(
             f"profile {profile!r} is not in release {res.version} (has {sorted(manifest['profiles'])})",
             EXIT_USAGE,
+        )
+    unsourced = unsupported_tools(manifest, profile, platform_key())
+    if unsourced:
+        tools = manifest["profiles"][profile]["tools"].values()
+        hosts = ", ".join(sorted({k for t in tools for k in t.get("source") or {}}))
+        raise Refused(
+            f"release {res.version} has no pinned source of {', '.join(unsourced)} (profile {profile!r}) for "
+            f"this host ({platform_key()}); its sources are for {hosts}: run on one of those, or pin a "
+            "release that supports this host"
         )
     dest = loc.toolchain_dir(res.version, profile)
     out = {"profile": profile, "path": str(dest)}
