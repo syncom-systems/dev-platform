@@ -3,17 +3,19 @@
 A reusable, deterministic development control plane: explicit policy, reproducible execution,
 interchangeable language and infrastructure adapters. Not a bag of CI scripts.
 
-**Status: pre-release (0.1.0 foundation).** Contracts are proposed and have one end-to-end
-demonstration; do not treat the platform as production-ready.
+**Status: pre-production.** Releases are published as verified, not owner-accepted, candidates and are used only by
+explicit opt-in (`--allow-unaccepted`); many contracts are still proposed. Do not treat the platform as production-ready.
 
 ## Install (macOS, Linux)
 
 ```sh
 brew install syncom-systems/dev-platform/dev-platform
-cd my-project && dev-platform setup   # the project's pinned release, verified; its toolchains; doctor
+gh auth login                                             # once: release attestations are verified with gh
+cd my-project && dev-platform setup --allow-unaccepted    # the project's pinned release, verified; its toolchains; doctor
 ```
 
-The CLI is a launcher; each project's committed pins select its release. See [Homebrew and setup](docs/homebrew.md).
+The CLI is a launcher; each project's committed pins select its release. No private infrastructure is needed. Runbook
+(install, upgrade, rollback, diagnosis, CI, optional private infrastructure): [installation](docs/installation.md).
 
 ## Try it
 
@@ -34,6 +36,6 @@ Exit codes: 0 ok, 1 unsatisfied, 2 config/usage, 3 platform resolution/integrity
 ## Documents
 
 [Architecture](docs/architecture.md) · [Verification model](docs/verification-model.md) ·
-[Distribution](docs/distribution.md) · [Homebrew and setup](docs/homebrew.md) · [ADRs](docs/adr/README.md) ·
+[Installation](docs/installation.md) · [Distribution](docs/distribution.md) · [Homebrew and setup](docs/homebrew.md) · [ADRs](docs/adr/README.md) ·
 [Supply chain](docs/supply-chain.md) · [Provenance & governance](docs/provenance-and-governance.md) ·
 [Release trust](docs/release-trust.md) · [Infrastructure](docs/infrastructure.md) · [Consumer compatibility](docs/consumer-compatibility.md) · [Investigation](docs/investigation.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

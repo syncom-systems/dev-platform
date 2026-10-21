@@ -7,9 +7,9 @@ Everything marked *(planned)* is design only.
 
 | Artifact | Form | Integrity |
 |---|---|---|
-| Platform release | immutable directory: `src/`, `release.json` (toolchain profiles), `sbom.cdx.json`; built by `dev-platform release build` | sha256 tree digest pinned by consumers; *(planned)* Sigstore/SLSA attestations from `release.yml` |
-| Launcher | the same package; entry point `dev-platform` | Homebrew tap `syncom-systems/homebrew-dev-platform` (0.9.0, [homebrew.md](homebrew.md)): formula sha256 = archive digest, test = tree digest; `dev-platform setup` installs a project's pinned release with the trusted installer |
-| Reusable GitHub workflow | `.github/workflows/check.yml` (`workflow_call`) | consumers reference it by full commit SHA, never a branch or floating tag |
+| Platform release | immutable directory: `src/`, `release.json` (toolchain profiles), `sbom.cdx.json`; built by `dev-platform release build` | sha256 tree digest pinned by consumers; provenance, SBOM and build-environment attestations from `release.yml`, verified by the trusted installer ([release trust](release-trust.md)) |
+| Launcher | the same package; entry point `dev-platform` | Homebrew tap `syncom-systems/homebrew-dev-platform` (since 0.9.0, [homebrew.md](homebrew.md), [installation](installation.md)): formula sha256 = archive digest, test = tree digest; `dev-platform setup` installs a project's pinned release with the trusted installer |
+| Reusable GitHub workflow | `.github/workflows/consumer-pilot.yml` (`workflow_call`; [consumer integration](consumer-integration.md)). `check.yml` is an unfinished placeholder that fails closed (no bootstrap): do not use it | consumers reference it by full commit SHA, never a branch or floating tag |
 | Skills / Claude Code plugin | *(planned)* `integrations/` directory in the same release | covered by the same release digest |
 
 ## Store
@@ -23,8 +23,9 @@ symlinks rejected.
 ## Consumer flow
 
 1. `dev-platform init --platform-version X --profile P --sha256 D` writes the pin (version, digest, toolchain profile).
-2. CI uses the reusable workflow, which installs version X, checks D, then runs
-   `dev-platform check --stage pre-merge --base origin/<default>`.
+2. CI uses the reusable `consumer-pilot.yml` at the pinned release's commit: it installs version X with the trusted
+   installer into a job-local store, checks D, provisions the toolchain and runs `dev-platform check --stage full`
+   ([installation](installation.md#7-ci-job-local-installation-no-homebrew)).
 3. Upgrading = editing version + digest in a reviewed PR.
 
 ## Release discipline

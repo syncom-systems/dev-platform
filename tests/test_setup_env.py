@@ -150,7 +150,16 @@ class Provision(unittest.TestCase):
             P.fetch("https://example.invalid/x", hashlib.sha256(data).hexdigest(), dest)
             self.assertEqual(dest.read_bytes(), data)
 
-    def test_tools_without_a_source_for_the_platform_are_left_to_the_caller(self):
+    def test_tools_without_any_source_are_left_to_the_caller(self):
         from dev_platform.provision import provision
 
-        self.assertEqual(provision(self.manifest(), "p", tmpdir(self), key="other"), [])
+        unsourced = {"profiles": {"p": {"tools": {"t": {"version": "1.0"}}}}}
+        self.assertEqual(provision(unsourced, "p", tmpdir(self), key="other"), [])
+
+    def test_a_tool_sourced_only_for_other_platforms_is_refused_never_skipped(self):
+        from dev_platform.errors import ConfigError
+        from dev_platform.provision import provision
+
+        with self.assertRaises(ConfigError) as e:
+            provision(self.manifest(), "p", tmpdir(self), key="linux-aarch64")
+        self.assertIn("no pinned t source for linux-aarch64 (sources: k)", str(e.exception.problems))
