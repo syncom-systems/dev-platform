@@ -54,7 +54,11 @@ PREREQUISITE_KINDS = ("PROOF_DEPENDENCY", "CONTRACT_CONSUMES", "COMPILE_DEPENDEN
 
 
 def read_artifact(directory: Path) -> dict:
-    """The bundle, every lane record and every file's digest. Malformed records are dropped and listed."""
+    """The bundle, every lane record and every file's digest. Malformed records are dropped and listed.
+
+    Malformed: not a JSON object, a required key absent or not a non-empty string, or a lane or unit id that
+    disagrees with the record's path. Dropping is fail-closed: the unit is refused, as for a missing record.
+    """
     files, records, dropped = [], {}, []
     for p in sorted(x for x in directory.rglob("*") if x.is_file()):
         rel = p.relative_to(directory).as_posix()
@@ -70,6 +74,7 @@ def read_artifact(directory: Path) -> dict:
         if (
             not isinstance(raw, dict)
             or not set(raw) >= RECORD_KEYS
+            or not all(isinstance(raw[k], str) and raw[k] for k in RECORD_KEYS)
             or raw["lane"] != parts[0]
             or f"{raw['unit_id']}.json" != parts[1]
         ):
@@ -365,7 +370,12 @@ def attach(
             unknown_lane,
         )
     if art["dropped"]:
-        loss("malformed record", "dropped, as MCP-RE `load_records` drops it", art["dropped"])
+        loss(
+            "malformed record",
+            "dropped and its unit refused; MCP-RE `load_records` drops unparseable records but keeps mistyped "
+            "values (a non-string result it would issue as a failure, which v1 does not mint)",
+            art["dropped"],
+        )
     return doc, losses
 
 

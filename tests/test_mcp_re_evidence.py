@@ -205,6 +205,44 @@ class RequiredLaneTest(Base):
         self.assert_refused(rec, doc, "malformed(mutation)")
         self.assertIn("malformed/-", E.bind(self.inp, art)["counts"])
 
+    def test_mistyped_record_fields_are_dropped_as_malformed_without_raising(self):
+        bad = {
+            "fingerprint": [7, None, ["x"], {"sha256": PARSE}, ""],
+            "result": [["pass"], {"pass": True}, 1, None, ""],
+            "unit_id": [["core.parse"], None],
+            "lane": [5, None],
+        }
+        for field, values in bad.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    art_dir = write_artifact(self.base, records=PASSING[:2])
+                    body = {
+                        "unit_id": "core.parse",
+                        "lane": "mutation",
+                        "result": "pass",
+                        "fingerprint": PARSE,
+                    }
+                    (art_dir / "mutation").mkdir()
+                    (art_dir / "mutation" / "core.parse.json").write_text(json.dumps(body | {field: value}))
+                    art = E.read_artifact(art_dir)
+                    self.assertEqual(art["dropped"], ["mutation/core.parse.json"])
+                    doc, losses = E.attach(self.inp, art, "record-bound", "1", "1")
+                    self.assertEqual(A.validate(doc), [])
+                    rec = A.evaluate(doc)
+                    self.assert_refused(rec, doc, "malformed(mutation)")
+                    self.assertNotIn("mutation:core.parse", items(rec))
+                    self.assertIn("malformed record", {x["concept"] for x in losses})
+
+    def test_a_failure_with_a_mistyped_fingerprint_mints_no_counterevidence(self):
+        art_dir = write_artifact(self.base, records=PASSING[:2])
+        (art_dir / "mutation").mkdir()
+        body = {"unit_id": "core.parse", "lane": "mutation", "result": "fail", "fingerprint": 0}
+        (art_dir / "mutation" / "core.parse.json").write_text(json.dumps(body))
+        doc, _ = E.attach(self.inp, E.read_artifact(art_dir), "record-bound", "1", "1")
+        rec = A.evaluate(doc)
+        self.assert_refused(rec, doc, "malformed(mutation)")
+        self.assertNotEqual(rec["closure"]["verdict"], "FAILED")
+
     def test_an_unmappable_result_is_unavailable_never_failed_or_passed(self):
         _, doc, losses, rec = self.run_(records=[*PASSING[:2], ("mutation", "core.parse", "flaky", PARSE)])
         self.assert_refused(rec, doc, "unmappable-result(mutation)")

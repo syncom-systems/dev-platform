@@ -100,12 +100,23 @@ Two fail-closed rules decide whether a passing item may be `current` (revision 2
   and attempt, and the bundle must carry the record's policy revision. Absent linkage refuses.
 
 A refusal never removes or upgrades an item. It withholds currency from passing items only, so the unit cannot be
-established. A failed record at the unit fingerprint stays current counterevidence, which is stricter than MCP-RE:
-there, a refusal leaves no attestation at all. Two v1-only refusals are also fail-closed:
+established. A record is malformed, dropped and its unit refused when it is not a JSON object, or when `unit_id`,
+`lane`, `result` or `fingerprint` is absent or not a non-empty string, or disagrees with the record's path.
 
-- A result other than `pass`/`fail` is carried as `unavailable`. MCP-RE issues it as a failure, and v1 mints no
-  counterevidence for it.
-- A lane with no v1 kind is not attached. MCP-RE would accept it.
+Where v1 and MCP-RE decide differently, the difference is one of two kinds. None occurs in the real data.
+
+- **Stronger refusal** (v1 refuses where MCP-RE issues a pass). A passing lane with no v1 kind refuses its unit, and
+  its item is not attached. A passing record whose body `unit_id` or `lane` is mistyped or disagrees with its path is
+  dropped; MCP-RE keys records by path and would issue it.
+- **Weaker counterevidence** (v1 reports no failure where MCP-RE issues one, so the verdict is `INCOMPLETE`, not
+  `FAILED`). A string result other than `pass`/`fail` is carried as `unavailable`; a non-string result is dropped;
+  a failing record on a lane with no v1 kind is not attached. MCP-RE issues each as `ISSUE_FAIL`. The unit is still
+  refused, so nothing is established, but v1 does not mint a failure the record does not state in its terms.
+- **Stronger counterevidence** (the reverse of the above). A failed record at the unit fingerprint stays current
+  counterevidence even when the unit is refused for another lane or by the run, so v1 reports `failed`. MCP-RE's
+  refusal writes no attestation, so it reports no failure for that unit.
+
+A non-string fingerprint is refused by both (MCP-RE as a fingerprint mismatch).
 
 Each unit's decision is in `extensions.mcp-re.issuance`, and the run refusals are in
 `extensions.mcp-re.evidence_artifact.run_refusals` and `binding.json`.
@@ -128,7 +139,7 @@ projection equals `convert`'s apart from the evidence.
 | new: applicability basis | `current` rests on the closure record's assertion of each unit fingerprint |
 | new: evidence kind | mutation and structural map to `control` approximately |
 | new: undeclared record | `generated-model/core.time_civil_from_days`, not attached |
-| new: issuance divergences | a refused unit with a current failure is `failed` in v1 (MCP-RE: no attestation). An unmappable result or lane refuses the unit (MCP-RE: failure or pass). All three are stricter than MCP-RE; none occurs in the real data |
+| new: issuance divergences | stronger refusal: a passing lane with no v1 kind, or a passing record with a mistyped or mismatched `unit_id`/`lane`, refuses the unit (MCP-RE: pass). Weaker counterevidence: an unmappable or non-string result, or a failure on a lane with no v1 kind, refuses the unit without a failure (MCP-RE: `ISSUE_FAIL`). Stronger counterevidence: a refused unit with a current failure is `failed` in v1 (MCP-RE: no attestation). None occurs in the real data |
 
 Missing review bindings: none of the 133 v1 claims can carry a v1-compatible review. MCP-RE's reviews bind its theorem
 fingerprint and semantic review digest, not a v1 `argument_digest`. That is L2, and no review was minted.
@@ -157,12 +168,14 @@ Evaluator: Dev Platform `main` `4d5272a` (unchanged). MCP-RE semantics: baseline
 `run-id-mismatch` and 308 `REFUSE`.
 The binding discriminates: the earlier run's evidence does not establish the later target.
 
-Synthetic controls (`tests/test_mcp_re_evidence.py`, 22 tests) cover the following:
+Synthetic controls (`tests/test_mcp_re_evidence.py`, 24 tests) cover the following:
 
 - A `fail` record gives `counterevidence` and `FAILED`.
 - A missing record gives no item and a listed loss.
 - A record at another fingerprint gives `stale`.
-- Undeclared records are not attached, and malformed ones are dropped.
+- Undeclared records are not attached, and malformed ones are dropped. That includes a non-string, empty or
+  unhashable `unit_id`, `lane`, `result` or `fingerprint`, which is dropped without an exception or an item; a
+  mistyped failure mints no counterevidence.
 - A unit requiring test and mutation, with only the test passing, is not established. The same holds when the
   required record is missing, malformed or unmappable, when its lane has no v1 kind, and when a prerequisite is
   refused.
