@@ -24,3 +24,12 @@ with decision 4, is that the certifying run is itself the evidence: the engine h
 `verified` state for a check that did not run at `full`, and self mode was never certifiable in code.
 The wording now states that intent; no other semantics change. Development-stage carry and `pre-merge`
 admission (decisions 2-4) are unchanged.
+
+## Clarification (2026-10-21, owner-authorized): selection-configuration changes
+
+Decision 3 covers a change to the project's root `dev-platform.toml`: at every non-`full` stage it selects every
+owed (non-periodic) check defined for the stage, ahead of `impact.global`, `impact.ignore` and check `inputs`,
+because the changed file declares the rules that would otherwise select. It does not compare against the
+previous configuration: deleting a check or weakening an obligation remains a configuration-governance concern.
+It does not make declared inputs complete. Unknown change sets, `full`, admission, certification and carry are
+unchanged.
