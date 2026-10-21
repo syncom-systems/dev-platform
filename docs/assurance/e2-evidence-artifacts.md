@@ -84,10 +84,31 @@ references collapse to 585 pairs.
 | `outcome` | `result`: `pass` → `passed`, `fail` → `failed`; anything else is not attached | yes |
 | `provenance` | `observed` (`measured` for the measured lane) | yes; producer-reported |
 | `identity` | the record's fingerprint (the input identity measured at) | yes |
-| `applicability` | `current` iff the fingerprint equals the record's unit fingerprint, else `stale`; `unknown` mode withholds it | **conditional**: this is `attest`'s own refusal test, but against the record's asserted fingerprint |
+| `applicability` | `current` iff the fingerprint equals the record's unit fingerprint **and** MCP-RE would issue the unit a pass from this run (below); a differing fingerprint is `stale`; otherwise a passing item is withheld as `unknown`, with the reasons in `extensions.withheld`. `unknown` mode withholds every item | **conditional**: `attest`'s own tests, applied against the record's asserted fingerprint |
 | `boundary` | `declared` | yes (declared inputs, not shown complete) |
 | `kind` | test → test; verus, lean → proof; measured → measurement; mutation, structural → `control` | **approximate** for mutation/structural; kind never changes a verdict |
 | `extensions` | lane, detail, prover, record path and sha256, applicability basis | kept |
+
+Two fail-closed rules decide whether a passing item may be `current` (revision 2, after owner review):
+
+- **Issuance** (MCP-RE `_evidence.decide_issuance`). A unit is issued a pass only if **every** declared lane has a
+  record at the unit fingerprint and all of them pass. A missing, malformed or stale required lane refuses the unit.
+  So does a refused or failed producer over a `PROOF_DEPENDENCY`, `CONTRACT_CONSUMES` or `COMPILE_DEPENDENCY` edge
+  (fixpoint).
+- **Run linkage** (MCP-RE `assurance-closure.run_refusals`, plus this converter's linkage). The run must be
+  `workflow_dispatch` or `schedule`, and the bundle present, unscoped and `PASS`. The record must name this run id
+  and attempt, and the bundle must carry the record's policy revision. Absent linkage refuses.
+
+A refusal never removes or upgrades an item. It withholds currency from passing items only, so the unit cannot be
+established. A failed record at the unit fingerprint stays current counterevidence, which is stricter than MCP-RE:
+there, a refusal leaves no attestation at all. Two v1-only refusals are also fail-closed:
+
+- A result other than `pass`/`fail` is carried as `unavailable`. MCP-RE issues it as a failure, and v1 mints no
+  counterevidence for it.
+- A lane with no v1 kind is not attached. MCP-RE would accept it.
+
+Each unit's decision is in `extensions.mcp-re.issuance`, and the run refusals are in
+`extensions.mcp-re.evidence_artifact.run_refusals` and `binding.json`.
 
 Reviews, premises, arguments, scope and producer verdict are `convert`'s and unchanged. A test pins that the
 projection equals `convert`'s apart from the evidence.
@@ -100,13 +121,14 @@ projection equals `convert`'s apart from the evidence.
 | L2 specification review binding | **unchanged**: 133/133 reviews `incompatible`. This is now the sole cause of non-establishment |
 | L3 semantic review components | unchanged |
 | L4 ledger backing | unchanged (applied in conversion) |
-| L5 unit fingerprints, run identity and completeness | **narrowed**: run completeness (no `scope`, aggregate `PASS`, `workflow_dispatch`) is now observed, but it is kept in `extensions` and upgrades nothing. Fingerprint components and their recomputation remain unrepresented |
-| L6 unit edges | unchanged; prerequisite propagation (`decide_issuance`) is vacuous here because every pair passes |
+| L5 unit fingerprints, run identity and completeness | **narrowed**: run completeness and linkage are now observed and **applied** as a withholding rule. They still have no v1 field, and they never upgrade an item. Fingerprint components and their recomputation remain unrepresented |
+| L6 unit edges | **applied** in conversion: prerequisite refusal is propagated by withholding. v1 still has no unit edge. On the real data it is vacuous, because every unit is issued |
 | L7 premise closure | unchanged |
 | L8 binary vs four-valued verdict | unchanged |
 | new: applicability basis | `current` rests on the closure record's assertion of each unit fingerprint |
 | new: evidence kind | mutation and structural map to `control` approximately |
 | new: undeclared record | `generated-model/core.time_civil_from_days`, not attached |
+| new: issuance divergences | a refused unit with a current failure is `failed` in v1 (MCP-RE: no attestation). An unmappable result or lane refuses the unit (MCP-RE: failure or pass). All three are stricter than MCP-RE; none occurs in the real data |
 
 Missing review bindings: none of the 133 v1 claims can carry a v1-compatible review. MCP-RE's reviews bind its theorem
 fingerprint and semantic review digest, not a v1 `argument_digest`. That is L2, and no review was minted.
@@ -119,6 +141,7 @@ Evaluator: Dev Platform `main` `4d5272a` (unchanged). MCP-RE semantics: baseline
 |---|---|---|---|
 | Artifact | run 39060691189 | run 38672416934 | run 38672416934 |
 | Declared pairs bound at the record fingerprint | 585/585 `pass` | 585/585 `pass` | 585/585 `pass` |
+| Run refusals / unit issuance | none / 308 `ISSUE_PASS` | same | same |
 | Items `supports` / units established (record-bound) | 585 / 308 of 308 | same | same |
 | Claims whose supporting units are all established | 133/133 | 133/133 | 133/133 |
 | Claim reasons (E2 → now) | `unit-no-evidence` 286 → **0**; `review-incompatible` 133; `dependency-not-established` 165 | same | same |
@@ -127,19 +150,25 @@ Evaluator: Dev Platform `main` `4d5272a` (unchanged). MCP-RE semantics: baseline
 | Evidence axis comparison | **agrees** (133/133) on the record-bound basis | agrees | agrees |
 | Verdict comparison | unscorable as equivalence: blocked by L2 | same | same |
 | `unknown` applicability | 0 supports; `unit-not-established` 286; `INCOMPLETE` | same | same |
-| Projection sha256 (record-bound) | `e55ed54b…` | `f46e71b5…` | `9406743a…` |
+| Projection sha256 (record-bound, rev. 2) | `b8cee494…` | `e08d17d3…` | `be5de735…` |
 
 **Cross-binding control** (real data). Projecting 4e3ffbb6 against run 38672416934's artifact gives 585/585
-`fingerprint-differs`, every item `stale`, `unit-not-established` 286, and `INCOMPLETE`, with run-id match `false`.
+`fingerprint-differs`, every item `stale`, `unit-not-established` 286, and `INCOMPLETE`. It also gives run refusal
+`run-id-mismatch` and 308 `REFUSE`.
 The binding discriminates: the earlier run's evidence does not establish the later target.
 
-Synthetic controls (`tests/test_mcp_re_evidence.py`, 9 tests) cover the following:
+Synthetic controls (`tests/test_mcp_re_evidence.py`, 22 tests) cover the following:
 
 - A `fail` record gives `counterevidence` and `FAILED`.
 - A missing record gives no item and a listed loss.
 - A record at another fingerprint gives `stale`.
 - Undeclared records are not attached, and malformed ones are dropped.
-- A scoped or `INCOMPLETE` bundle upgrades nothing.
+- A unit requiring test and mutation, with only the test passing, is not established. The same holds when the
+  required record is missing, malformed or unmappable, when its lane has no v1 kind, and when a prerequisite is
+  refused.
+- A current failure stays counterevidence when another lane is missing or the bundle is `INCOMPLETE`.
+- A scoped, `INCOMPLETE` or absent bundle establishes nothing, even with every record passing at a matching
+  fingerprint. So does a mismatched or absent run id, attempt or policy revision, or a non-complete event.
 - The CLI writes only its three outputs and leaves the artifact unchanged.
 
 Control status changes from E2 §6:
@@ -151,7 +180,7 @@ Control status changes from E2 §6:
   with no per-probe attribution.
 - The other controls are unchanged.
 
-Processing: 1.9 CPU-seconds for all seven projections and evaluations, 44 MB peak. The full suite took about 53 s.
+Processing (rev. 2 rerun): 2.1 CPU-seconds for all seven projections and evaluations, 44 MB peak. The full suite took about 53 s.
 Network: two artifact zips, run and artifact metadata, three `verification.yml` reads and one compare call, all
 read-only GETs.
 
@@ -190,6 +219,7 @@ read-only GETs.
 
 - The verdict equivalence (L2).
 - Independent applicability (fingerprint recomputation).
-- MCP-RE's prerequisite-edge refusals (L6). They are vacuous here but untested on real failures.
+- MCP-RE's issuance and prerequisite-edge refusals on real failures. They are now applied and tested
+  synthetically, but no real artifact contains a failure or refusal.
 - Selection and mutation attribution (N10, N13, N14).
 - Producer authentication.

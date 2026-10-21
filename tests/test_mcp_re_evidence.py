@@ -21,7 +21,7 @@ LOAD, PARSE = "sha256:" + "1" * 64, "sha256:" + "2" * 64  # the unit fingerprint
 
 def write_artifact(base, records=None, bundle=None):
     """An extracted verification-evidence artifact: bundle.json and <lane>/<unit>.json records."""
-    art = base / "artifact"
+    art = base / f"artifact-{len(list(base.glob('artifact-*')))}"  # a fresh directory per call
     art.mkdir()
     if records is None:
         records = [
@@ -47,9 +47,9 @@ class Base(unittest.TestCase):
         self.base = tmpdir(self)
         self.inp = write_tree(self.base)
 
-    def run_(self, applicability="record-bound", **kw):
+    def run_(self, applicability="record-bound", run=("1", "1"), **kw):
         art = E.read_artifact(write_artifact(self.base, **kw))
-        doc, losses = E.attach(self.inp, art, applicability)
+        doc, losses = E.attach(self.inp, art, applicability, *run)
         self.assertEqual(A.validate(doc), [])
         return art, doc, losses, A.evaluate(doc)
 
@@ -79,12 +79,13 @@ class AttachTest(Base):
 
     def test_deterministic_and_the_projection_is_convert_plus_evidence_only(self):
         art = E.read_artifact(write_artifact(self.base))
-        doc, losses = E.attach(self.inp, art, "record-bound")
-        self.assertEqual((doc, losses), E.attach(copy.deepcopy(self.inp), art, "record-bound"))
+        doc, losses = E.attach(self.inp, art, "record-bound", "1", "1")
+        self.assertEqual((doc, losses), E.attach(copy.deepcopy(self.inp), art, "record-bound", "1", "1"))
         base, _ = E.M.convert(self.inp)
         for d in (doc, base):
             for u in d["units"]:
                 u["evidence"] = []
+                u["extensions"]["mcp-re"].pop("issuance", None)
             d["producer"].pop("converter")
             d["extensions"]["mcp-re"].pop("evidence_artifact", None)
         self.assertEqual(doc, base)
@@ -143,7 +144,7 @@ class AttachTest(Base):
         art = E.read_artifact(art_dir)
         self.assertEqual(art["dropped"], ["test/core.other.json"])
         self.assertEqual(E.bind(self.inp, art)["unclaimed_records"], ["lean/core.parse"])
-        doc, losses = E.attach(self.inp, art, "record-bound")
+        doc, losses = E.attach(self.inp, art, "record-bound", "1", "1")
         self.assertNotIn("lean:core.parse", {i["id"] for u in doc["units"] for i in u["evidence"]})
         self.assertEqual(
             {"record no unit declares", "malformed record"} - {x["concept"] for x in losses}, set()
@@ -158,6 +159,140 @@ class AttachTest(Base):
         self.assertTrue(link["bundle_scoped"] and link["record_run_id_matches"])
         self.assertFalse(E.run_link(self.inp, art, "2", "1")["record_run_id_matches"])
         self.assertNotEqual(rec["closure"]["verdict"], "PASS")
+
+
+PASSING = [
+    ("test", "core.load", "pass", LOAD),
+    ("test", "core.parse", "pass", PARSE),
+    ("mutation", "core.parse", "pass", PARSE),
+]
+
+
+def unit(rec, uid):
+    return next(u for u in rec["units"] if u["id"] == uid)
+
+
+def withheld(doc, item_id):
+    return next(i for u in doc["units"] for i in u["evidence"] if i["id"] == item_id)["extensions"]["mcp-re"][
+        "withheld"
+    ]
+
+
+class RequiredLaneTest(Base):
+    """MCP-RE `decide_issuance`: a unit is issued a pass only if every declared lane passed at its fingerprint."""
+
+    def assert_refused(self, rec, doc, reason):
+        self.assertEqual(unit(rec, "core.parse")["state"], "not-established")
+        self.assertEqual(items(rec)["test:core.parse"]["applicability"], "unknown")
+        self.assertEqual(withheld(doc, "test:core.parse"), [reason])
+        self.assertEqual(unit(rec, "core.load")["state"], "established")
+        self.assertIn("unit-not-established", reasons(rec, "THM-0001"))
+        self.assertNotEqual(rec["closure"]["verdict"], "PASS")
+
+    def test_a_passing_subset_with_a_missing_required_lane_is_not_established(self):
+        _, doc, losses, rec = self.run_(records=PASSING[:2])
+        self.assert_refused(rec, doc, "missing(mutation)")
+        issued = next(x for x in losses if x["concept"] == "unit issuance and prerequisite propagation")
+        self.assertEqual(issued["subjects"], ["core.parse: missing(mutation)"])
+
+    def test_a_malformed_required_lane_record_is_not_established(self):
+        art_dir = write_artifact(self.base, records=PASSING[:2])
+        (art_dir / "mutation").mkdir()
+        (art_dir / "mutation" / "core.parse.json").write_text('{"unit_id": "core.parse", "lane": "mutation"')
+        art = E.read_artifact(art_dir)
+        doc, _ = E.attach(self.inp, art, "record-bound", "1", "1")
+        rec = A.evaluate(doc)
+        self.assert_refused(rec, doc, "malformed(mutation)")
+        self.assertIn("malformed/-", E.bind(self.inp, art)["counts"])
+
+    def test_an_unmappable_result_is_unavailable_never_failed_or_passed(self):
+        _, doc, losses, rec = self.run_(records=[*PASSING[:2], ("mutation", "core.parse", "flaky", PARSE)])
+        self.assert_refused(rec, doc, "unmappable-result(mutation)")
+        self.assertEqual(items(rec)["mutation:core.parse"]["outcome"], "unavailable")
+        self.assertNotEqual(rec["closure"]["verdict"], "FAILED")  # no counterevidence is minted
+        self.assertIn("unmappable result", {x["concept"] for x in losses})
+
+    def test_a_required_lane_with_no_v1_kind_refuses_its_unit(self):
+        self.inp["policy"]["unit"][1]["evidence"].append("fuzz://core/parse")
+        _, doc, _, rec = self.run_(records=[*PASSING, ("fuzz", "core.parse", "pass", PARSE)])
+        self.assert_refused(rec, doc, "unmappable-lane(fuzz)")
+        self.assertNotIn("fuzz:core.parse", items(rec))
+
+    def test_a_current_failure_stays_counterevidence_when_another_lane_is_missing(self):
+        _, doc, _, rec = self.run_(records=[PASSING[0], ("test", "core.parse", "fail", PARSE)])
+        self.assertEqual(items(rec)["test:core.parse"]["state"], "counterevidence")
+        self.assertIsNone(withheld(doc, "test:core.parse"))
+        self.assertEqual(rec["closure"]["verdict"], "FAILED")
+
+    def test_a_refused_prerequisite_refuses_its_consumer(self):
+        edge = {"kind": "PROOF_DEPENDENCY", "from": "core.parse", "to": "core.load"}
+        self.inp["policy"]["edge"] = [edge]
+        _, doc, _, rec = self.run_(records=PASSING[:2])
+        self.assertEqual(unit(rec, "core.load")["state"], "not-established")
+        self.assertEqual(withheld(doc, "test:core.load"), ["prerequisite(core.parse)"])
+        self.inp["policy"]["edge"] = [edge | {"kind": "SEMANTIC_NEIGHBOUR"}]
+        _, _, _, rec = self.run_(records=PASSING[:2])
+        self.assertEqual(unit(rec, "core.load")["state"], "established")  # only prerequisite kinds propagate
+
+
+class RunLinkTest(Base):
+    """A pass record at a matching fingerprint is current only from a complete, linked run."""
+
+    def assert_withheld(self, why, **kw):
+        _, doc, _, rec = self.run_(**kw)
+        self.assertEqual({u["state"] for u in rec["units"]}, {"not-established"})
+        self.assertEqual({i["applicability"] for i in items(rec).values()}, {"unknown"})
+        self.assertIn(why, withheld(doc, "test:core.load"))
+        self.assertIn(why, doc["extensions"]["mcp-re"]["evidence_artifact"]["run_refusals"])
+        self.assertNotEqual(rec["closure"]["verdict"], "PASS")
+        return rec
+
+    def test_a_scoped_bundle_cannot_establish_full_run_evidence(self):
+        scoped = {
+            "aggregate": "PASS",
+            "scope": ["core.load", "core.parse"],
+            "lanes": {},
+            "policy_revision": "p-1",
+        }
+        self.assert_withheld("bundle-scoped", bundle=scoped)
+
+    def test_an_incomplete_bundle_cannot_establish_but_keeps_a_current_failure(self):
+        bundle = {"aggregate": "INCOMPLETE", "lanes": {}, "policy_revision": "p-1"}
+        self.assert_withheld("bundle-aggregate(INCOMPLETE)", bundle=bundle)
+        _, _, _, rec = self.run_(
+            bundle=bundle, records=[*PASSING[:2], ("mutation", "core.parse", "fail", PARSE)]
+        )
+        self.assertEqual(items(rec)["mutation:core.parse"]["state"], "counterevidence")
+        self.assertEqual(rec["closure"]["verdict"], "FAILED")
+
+    def test_an_absent_bundle_cannot_establish(self):
+        art_dir = write_artifact(self.base)
+        (art_dir / "bundle.json").unlink()
+        doc, _ = E.attach(self.inp, E.read_artifact(art_dir), "record-bound", "1", "1")
+        self.assertIn("bundle-absent", doc["extensions"]["mcp-re"]["evidence_artifact"]["run_refusals"])
+        self.assertEqual({u["state"] for u in A.evaluate(doc)["units"]}, {"not-established"})
+
+    def test_a_mismatched_or_absent_run_identity_cannot_establish(self):
+        self.assert_withheld("run-id-mismatch", run=("2", "1"))
+        self.assert_withheld("run-attempt-mismatch", run=("1", "2"))
+        self.assert_withheld("run-id-mismatch", run=(None, None))
+
+    def test_a_mismatched_or_absent_policy_revision_cannot_establish(self):
+        self.assert_withheld(
+            "policy-revision-mismatch", bundle={"aggregate": "PASS", "lanes": {}, "policy_revision": "p-2"}
+        )
+        self.assert_withheld("policy-revision-mismatch", bundle={"aggregate": "PASS", "lanes": {}})
+
+    def test_a_run_that_was_not_asked_for_as_complete_cannot_establish(self):
+        self.inp["record"]["run"]["event"] = "push"
+        self.assert_withheld("event-not-complete(push)")
+
+    def test_a_complete_linked_run_issues_every_unit(self):
+        art, doc, _, _ = self.run_()
+        self.assertEqual(E.run_refusals(self.inp, art, "1", "1"), [])
+        self.assertEqual(
+            {u["extensions"]["mcp-re"]["issuance"]["decision"] for u in doc["units"]}, {"ISSUE_PASS"}
+        )
 
 
 class CliTest(Base):
@@ -197,6 +332,7 @@ class CliTest(Base):
         binding = json.loads((out / "binding.json").read_text())
         self.assertEqual(binding["artifact"]["records"], 3)
         self.assertTrue(binding["run"]["record_run_id_matches"])
+        self.assertEqual((binding["run_refusals"], binding["issuance"]), ([], {"ISSUE_PASS": 2}))
 
 
 if __name__ == "__main__":
