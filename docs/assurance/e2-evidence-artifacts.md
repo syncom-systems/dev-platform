@@ -81,7 +81,7 @@ references collapse to 585 pairs.
 | v1 field | From | Faithful? |
 |---|---|---|
 | `id` | `<lane>:<unit>` | yes (MCP-RE keys records by lane and unit) |
-| `outcome` | `result`: `pass` → `passed`, `fail` → `failed`; anything else is not attached | yes |
+| `outcome` | `result`: `pass` → `passed`, `fail` → `failed`; another string → `unavailable` (unit refused); a non-string result makes the record malformed, so it is not attached | yes, except the divergences below |
 | `provenance` | `observed` (`measured` for the measured lane) | yes; producer-reported |
 | `identity` | the record's fingerprint (the input identity measured at) | yes |
 | `applicability` | `current` iff the fingerprint equals the record's unit fingerprint **and** MCP-RE would issue the unit a pass from this run (below); a differing fingerprint is `stale`; otherwise a passing item is withheld as `unknown`, with the reasons in `extensions.withheld`. `unknown` mode withholds every item | **conditional**: `attest`'s own tests, applied against the record's asserted fingerprint |
@@ -101,7 +101,8 @@ Two fail-closed rules decide whether a passing item may be `current` (revision 2
 
 A refusal never removes or upgrades an item. It withholds currency from passing items only, so the unit cannot be
 established. A record is malformed, dropped and its unit refused when it is not a JSON object, or when `unit_id`,
-`lane`, `result` or `fingerprint` is absent or not a non-empty string, or disagrees with the record's path.
+`lane`, `result` or `fingerprint` is absent or not a non-empty string, when the fingerprint is not
+`sha256:` plus 64 lowercase hex characters, or when the lane or unit id disagrees with the record's path.
 
 Where v1 and MCP-RE decide differently, the difference is one of two kinds. None occurs in the real data.
 
@@ -116,7 +117,7 @@ Where v1 and MCP-RE decide differently, the difference is one of two kinds. None
   counterevidence even when the unit is refused for another lane or by the run, so v1 reports `failed`. MCP-RE's
   refusal writes no attestation, so it reports no failure for that unit.
 
-A non-string fingerprint is refused by both (MCP-RE as a fingerprint mismatch).
+A non-string or ill-formed fingerprint is refused by both (MCP-RE as a fingerprint mismatch).
 
 Each unit's decision is in `extensions.mcp-re.issuance`, and the run refusals are in
 `extensions.mcp-re.evidence_artifact.run_refusals` and `binding.json`.
@@ -168,13 +169,14 @@ Evaluator: Dev Platform `main` `4d5272a` (unchanged). MCP-RE semantics: baseline
 `run-id-mismatch` and 308 `REFUSE`.
 The binding discriminates: the earlier run's evidence does not establish the later target.
 
-Synthetic controls (`tests/test_mcp_re_evidence.py`, 24 tests) cover the following:
+Synthetic controls (`tests/test_mcp_re_evidence.py`, 25 tests) cover the following:
 
 - A `fail` record gives `counterevidence` and `FAILED`.
 - A missing record gives no item and a listed loss.
 - A record at another fingerprint gives `stale`.
 - Undeclared records are not attached, and malformed ones are dropped. That includes a non-string, empty or
-  unhashable `unit_id`, `lane`, `result` or `fingerprint`, which is dropped without an exception or an item; a
+  unhashable `unit_id`, `lane`, `result` or `fingerprint`, or an ill-formed fingerprint string, which is dropped
+  without an exception or an item; a corrupt `bundle.json` is `bundle-absent`; a
   mistyped failure mints no counterevidence.
 - A unit requiring test and mutation, with only the test passing, is not established. The same holds when the
   required record is missing, malformed or unmappable, when its lane has no v1 kind, and when a prerequisite is

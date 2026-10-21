@@ -207,7 +207,17 @@ class RequiredLaneTest(Base):
 
     def test_mistyped_record_fields_are_dropped_as_malformed_without_raising(self):
         bad = {
-            "fingerprint": [7, None, ["x"], {"sha256": PARSE}, ""],
+            "fingerprint": [
+                7,
+                None,
+                ["x"],
+                {"sha256": PARSE},
+                "",
+                "abc",
+                "sha256:" + "A" * 64,
+                "2" * 64,
+                PARSE + "0",
+            ],
             "result": [["pass"], {"pass": True}, 1, None, ""],
             "unit_id": [["core.parse"], None],
             "lane": [5, None],
@@ -307,6 +317,15 @@ class RunLinkTest(Base):
         art_dir = write_artifact(self.base)
         (art_dir / "bundle.json").unlink()
         doc, _ = E.attach(self.inp, E.read_artifact(art_dir), "record-bound", "1", "1")
+        self.assertIn("bundle-absent", doc["extensions"]["mcp-re"]["evidence_artifact"]["run_refusals"])
+        self.assertEqual({u["state"] for u in A.evaluate(doc)["units"]}, {"not-established"})
+
+    def test_an_undecodable_bundle_is_absent_without_raising(self):
+        art_dir = write_artifact(self.base)
+        (art_dir / "bundle.json").write_bytes(b"\x80\x81{")
+        art = E.read_artifact(art_dir)
+        self.assertIsNone(art["bundle"])
+        doc, _ = E.attach(self.inp, art, "record-bound", "1", "1")
         self.assertIn("bundle-absent", doc["extensions"]["mcp-re"]["evidence_artifact"]["run_refusals"])
         self.assertEqual({u["state"] for u in A.evaluate(doc)["units"]}, {"not-established"})
 

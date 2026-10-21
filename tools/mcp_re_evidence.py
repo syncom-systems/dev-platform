@@ -26,6 +26,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -48,6 +49,7 @@ KIND = {
 APPROXIMATE_KIND = ("mutation", "structural")
 OUTCOME = {"pass": "passed", "fail": "failed"}
 RECORD_KEYS = {"unit_id", "lane", "result", "fingerprint"}
+FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}")  # MCP-RE `canonical_digest` form
 # MCP-RE `assurance-closure.COMPLETE_EVENTS` and `_evidence.PREREQUISITE_KINDS` at the baseline.
 COMPLETE_EVENTS = ("workflow_dispatch", "schedule")
 PREREQUISITE_KINDS = ("PROOF_DEPENDENCY", "CONTRACT_CONSUMES", "COMPILE_DEPENDENCY")
@@ -56,7 +58,8 @@ PREREQUISITE_KINDS = ("PROOF_DEPENDENCY", "CONTRACT_CONSUMES", "COMPILE_DEPENDEN
 def read_artifact(directory: Path) -> dict:
     """The bundle, every lane record and every file's digest. Malformed records are dropped and listed.
 
-    Malformed: not a JSON object, a required key absent or not a non-empty string, or a lane or unit id that
+    Malformed: not a JSON object, a required key absent or not a non-empty string, a fingerprint
+    not of the form `sha256:<64 lowercase hex>`, or a lane or unit id that
     disagrees with the record's path. Dropping is fail-closed: the unit is refused, as for a missing record.
     """
     files, records, dropped = [], {}, []
@@ -75,6 +78,7 @@ def read_artifact(directory: Path) -> dict:
             not isinstance(raw, dict)
             or not set(raw) >= RECORD_KEYS
             or not all(isinstance(raw[k], str) and raw[k] for k in RECORD_KEYS)
+            or not FINGERPRINT.fullmatch(raw["fingerprint"])
             or raw["lane"] != parts[0]
             or f"{raw['unit_id']}.json" != parts[1]
         ):
@@ -85,7 +89,7 @@ def read_artifact(directory: Path) -> dict:
     if (directory / "bundle.json").is_file():
         try:
             bundle = json.loads((directory / "bundle.json").read_bytes())
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             bundle = None
     return {
         "bundle": bundle if isinstance(bundle, dict) else None,
