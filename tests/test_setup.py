@@ -12,6 +12,8 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 from dev_platform import locations as L
 from dev_platform import projectsetup as S
@@ -482,9 +484,6 @@ class UnsupportedHost(unittest.TestCase):
     }
 
     def test_refused_with_the_host_and_the_supported_platforms(self):
-        from types import SimpleNamespace
-        from unittest import mock
-
         res = SimpleNamespace(
             release={"toolchains": self.MANIFEST}, version="0.10.0", cleanup=str(tmpdir(self))
         )
@@ -498,9 +497,21 @@ class UnsupportedHost(unittest.TestCase):
         self.assertIn(
             "no pinned source of bazelisk (profile 'rust-bazel-9') for this host (linux-aarch64)", msg
         )
-        self.assertIn("darwin-arm64, linux-x86_64", msg)
+        self.assertIn("it supports darwin-arm64, linux-x86_64", msg)
         self.assertEqual(e.exception.exit_code, 1)
         self.assertFalse(loc.toolchains.exists())
+
+    def test_only_hosts_with_every_tool_are_named(self):
+        manifest = {
+            "profiles": {"p": {"tools": {"a": {"source": {"darwin-arm64": {}}}, "b": {"source": {"x": {}}}}}}
+        }
+        res = SimpleNamespace(release={"toolchains": manifest}, version="0.10.0", cleanup=str(tmpdir(self)))
+        with (
+            mock.patch.object(S, "platform_key", return_value="darwin-arm64"),
+            self.assertRaises(S.Refused) as e,
+        ):
+            S.ensure_toolchain(res, "p", tmpdir(self), L.locate({}, home=tmpdir(self)), {}, run=S.run_process)
+        self.assertIn("no host has a source for every tool", str(e.exception))
 
     def test_supported_hosts_and_unsourced_tools_pass(self):
         for key in ("darwin-arm64", "linux-x86_64"):

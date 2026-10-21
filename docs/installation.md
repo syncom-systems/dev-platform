@@ -43,16 +43,18 @@ A consumer commits two files. Take the values from the release's published ident
 - `dev-platform.toml` `[platform]`: `version`, `sha256` = `tree_digest_pin`, `profile` (a toolchain profile of that release).
   `dev-platform init --platform-version <v> --sha256 <tree digest> --profile <profile>` writes a starter file.
 
-Then, in the project (or any subdirectory):
+Then, in the project root (`setup` also finds the project from a subdirectory; `doctor` and `check` default to the
+current directory, so run them from the root or pass `--project <root>`):
 ```sh
-dev-platform setup --dry-run                # what it would do: no network, no writes
-dev-platform setup                          # installs exactly the pinned release, provisions its toolchains, runs its doctor
-eval "$(dev-platform setup --print-env)"    # this shell: DEV_PLATFORM_STORE, DEV_PLATFORM_PYTHON, PATH
-dev-platform doctor                         # platform resolved: mode=pinned version=<pinned>
+dev-platform setup --dry-run                                  # what it would do: no network, no writes
+dev-platform setup --allow-unaccepted                         # installs exactly the pinned release, provisions, runs its doctor
+eval "$(dev-platform setup --allow-unaccepted --print-env)"   # this shell: DEV_PLATFORM_STORE, DEV_PLATFORM_PYTHON, PATH
+dev-platform doctor                                           # platform resolved: mode=pinned version=<pinned>
 dev-platform check --stage pre-merge --base origin/main
 ```
 Every published release so far is **verified-unaccepted**. Using one is the project's explicit decision and needs
-`--allow-unaccepted` on `setup` (without it `setup` refuses and installs nothing). Acceptance is never inferred.
+`--allow-unaccepted` on every `setup` (without it `setup` refuses, installs nothing and `--print-env` prints no exports);
+for an accepted release, drop the flag. Acceptance is never inferred.
 
 `setup` is idempotent: a second run reverifies and downloads nothing (`release: present`, `toolchain: reused`). Several
 releases coexist; each project gets exactly its own.
@@ -68,8 +70,8 @@ An upgrade leaves every project's pins, every installed release and toolchain, t
 current CLI.
 
 ## 4. Upgrading a project's release
-Edit both pin files to the new release's identity in one reviewed change, then `dev-platform setup` (it installs the new
-release beside the old one). A toolchain change is always a new release. A release that adds a configuration key (for example
+Edit both pin files to the new release's identity in one reviewed change, then `dev-platform setup --allow-unaccepted`
+(it installs the new release beside the old one). A toolchain change is always a new release. A release that adds a configuration key (for example
 `[infra] config_digest_kind`, 0.10.0) is required before the project may use that key.
 
 ## 5. Rollback

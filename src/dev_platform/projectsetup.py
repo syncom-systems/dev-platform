@@ -335,12 +335,15 @@ def ensure_toolchain(res, profile: str, project: Path, loc: Locations, cenv: dic
         )
     unsourced = unsupported_tools(manifest, profile, platform_key())
     if unsourced:
-        tools = manifest["profiles"][profile]["tools"].values()
-        hosts = ", ".join(sorted({k for t in tools for k in t.get("source") or {}}))
+        sourced = [
+            set(t["source"]) for t in manifest["profiles"][profile]["tools"].values() if t.get("source")
+        ]
+        complete = sorted(set.intersection(*sourced))  # hosts with a source for every tool of the profile
+        where = f"it supports {', '.join(complete)}" if complete else "no host has a source for every tool"
         raise Refused(
             f"release {res.version} has no pinned source of {', '.join(unsourced)} (profile {profile!r}) for "
-            f"this host ({platform_key()}); its sources are for {hosts}: run on one of those, or pin a "
-            "release that supports this host"
+            f"this host ({platform_key()}); {where}: run on a supported host, or pin a release that supports "
+            "this one"
         )
     dest = loc.toolchain_dir(res.version, profile)
     out = {"profile": profile, "path": str(dest)}
