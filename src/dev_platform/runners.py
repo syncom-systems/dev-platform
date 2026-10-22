@@ -85,8 +85,20 @@ def event_trust(
     return "untrusted"
 
 
-_RUNNER_KEYS = {"id", "labels", "os", "arch", "isolation", "trust", "credentials", "capabilities", "cache"}
+_RUNNER_KEYS = {
+    "id",
+    "kind",
+    "labels",
+    "os",
+    "arch",
+    "isolation",
+    "trust",
+    "credentials",
+    "capabilities",
+    "cache",
+}
 CACHE_MODES = ("none", "read-only", "read-write")
+RUNNER_KINDS = ("hosted", "self-hosted")  # absent means self-hosted
 
 
 def validate_profile(doc: object) -> list[str]:
@@ -119,6 +131,13 @@ def validate_profile(doc: object) -> list[str]:
         if not isinstance(r, dict):
             errs.append(f"{w}: must be an object")
             continue
+        if "kind" in r:
+            if r["kind"] not in RUNNER_KINDS:
+                errs.append(f"{w}.kind: one of {list(RUNNER_KINDS)}")
+            elif r["kind"] == "hosted" and (
+                r.get("isolation") != "ephemeral" or r.get("trust") != "public" or r.get("credentials")
+            ):
+                errs.append(f"{w}: a hosted runner must be ephemeral, public-trust and offer no credentials")
         if extra := set(r) - _RUNNER_KEYS:
             errs.append(f"{w}: unknown keys {sorted(extra)}")
         if missing := {"id", "labels", "os", "arch", "isolation", "trust"} - set(r):

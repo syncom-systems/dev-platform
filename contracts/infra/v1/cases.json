@@ -71,6 +71,30 @@
       "file": "invalid-public-writable-cache.json",
       "valid": false,
       "error": "read-write shared cache"
+    },
+    {
+      "file": "valid-hosted.json",
+      "valid": true
+    },
+    {
+      "file": "invalid-kind.json",
+      "valid": false,
+      "error": "kind: one of"
+    },
+    {
+      "file": "invalid-hosted-persistent.json",
+      "valid": false,
+      "error": "a hosted runner must be ephemeral"
+    },
+    {
+      "file": "invalid-hosted-trusted.json",
+      "valid": false,
+      "error": "a hosted runner must be ephemeral"
+    },
+    {
+      "file": "invalid-hosted-credentials.json",
+      "valid": false,
+      "error": "a hosted runner must be ephemeral"
     }
   ],
   "routing": [
@@ -190,6 +214,48 @@
       "event": "trusted",
       "ok": false,
       "runner": null
+    },
+    {
+      "profile": "valid-hosted.json",
+      "spec": {
+        "os": "linux",
+        "fallback": "none"
+      },
+      "event": "trusted",
+      "ok": true,
+      "runner": "example-self"
+    },
+    {
+      "profile": "valid-hosted.json",
+      "spec": {
+        "os": "linux",
+        "fallback": "none"
+      },
+      "event": "untrusted",
+      "ok": false,
+      "runner": null
+    },
+    {
+      "profile": "valid-hosted.json",
+      "spec": {
+        "capabilities": [
+          "docker"
+        ]
+      },
+      "event": "trusted",
+      "ok": true,
+      "runner": "example-hosted"
+    },
+    {
+      "profile": "valid-hosted.json",
+      "spec": {
+        "capabilities": [
+          "docker"
+        ]
+      },
+      "event": "untrusted",
+      "ok": true,
+      "runner": "example-hosted"
     }
   ],
   "event_trust": [
