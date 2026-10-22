@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 0.12.0
 Single-owner release authority ([ADR 0024](docs/adr/0024-single-owner-release-authority.md)): a release that passes every
 check of the independent verifier is `verified`, is published as a normal (latest) GitHub release and installs without
 extra flags. Pushing a protected version tag is the release decision; no approval record exists or is read. Releases
