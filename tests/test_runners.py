@@ -129,10 +129,12 @@ class ProviderRunnerKind(unittest.TestCase):
         def bad(r):
             return validate_profile({"schema": INFRA_SCHEMA, "runners": [r]})
 
-        self.assertTrue(bad({**HOSTED, "kind": "cloud"}))
-        self.assertTrue(bad({**HOSTED, "isolation": "persistent"}))
-        self.assertTrue(bad({**HOSTED, "trust": "trusted"}))
-        self.assertTrue(bad({**HOSTED, "trust": "trusted", "credentials": ["example-credential"]}))
+        rule = "a hosted runner must be ephemeral"
+        self.assertTrue(any("kind: one of" in e for e in bad({**HOSTED, "kind": "cloud"})))
+        self.assertTrue(any(rule in e for e in bad({**HOSTED, "isolation": "persistent"})))
+        self.assertTrue(any(rule in e for e in bad({**HOSTED, "trust": "trusted"})))
+        # credentials alone (ephemeral, public) must trip the hosted rule, not only the generic credentials rule
+        self.assertTrue(any(rule in e for e in bad({**HOSTED, "credentials": ["example-credential"]})))
         self.assertEqual(bad(HOSTED), [])
         self.assertEqual(bad({**SELF, "kind": "self-hosted"}), [])
 
