@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 import shutil
 import subprocess
 import unittest
@@ -55,6 +56,16 @@ class Prepare(unittest.TestCase):
         for p in ("src/dev_platform/__init__.py", "trust/policy.json"):
             (d / p).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT / p, d / p)
+        # the repository's own version and predecessor move with every release; the fixture must not
+        init = d / "src/dev_platform/__init__.py"
+        init.write_text(re.sub(r'__version__ = "[^"]*"', '__version__ = "0.11.0"', init.read_text()))
+        pol = json.loads((d / "trust/policy.json").read_text())
+        pol["continuity"]["predecessor"] = {
+            "version": "0.10.0",
+            "archive_sha256": "c" * 64,
+            "tree_digest": "d" * 64,
+        }
+        (d / "trust/policy.json").write_text(json.dumps(pol, indent=2) + "\n")
         (d / "CHANGELOG.md").write_text(changelog)
         return d
 
