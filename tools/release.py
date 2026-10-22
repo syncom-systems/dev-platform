@@ -62,8 +62,12 @@ class Stop(Exception):
     """A blocker or failure: reported, never worked around."""
 
 
-def sh(argv, *, cwd=ROOT, check=True, capture=True, **kw) -> str:
-    p = subprocess.run(argv, cwd=cwd, capture_output=capture, text=True, **kw)
+def sh(argv, *, cwd=ROOT, check=True, capture=True, timeout: float | None = 600, **kw) -> str:
+    """Run a command; `timeout=None` only for the long steps (tests, builds, continuity)."""
+    try:
+        p = subprocess.run(argv, cwd=cwd, capture_output=capture, text=True, timeout=timeout, **kw)
+    except subprocess.TimeoutExpired:
+        raise Stop(f"{' '.join(map(str, argv[:4]))} did not finish within {timeout:.0f}s") from None
     if check and p.returncode:
         raise Stop(
             f"{' '.join(map(str, argv[:4]))} failed ({p.returncode}): {(p.stderr or p.stdout or '').strip()[-600:]}"
@@ -230,9 +234,9 @@ def build_twice(src: Path, version: str, rev: str) -> dict:
         env = {**os.environ, "PYTHONPATH": str(src / "src")}
         py = [sys.executable, "-m", "dev_platform"]
         sh([*py, "release", "build", "--version", version, "--out", str(out), "--source-uri",
-            f"https://github.com/{REPO}", "--source-revision", rev], cwd=src, env=env)  # fmt: skip
+            f"https://github.com/{REPO}", "--source-revision", rev], cwd=src, env=env, timeout=None)  # fmt: skip
         arc = out / f"dev-platform-{version}.tar.gz"
-        sh([*py, "release", "pack", str(out / version), "--out", str(arc)], cwd=src, env=env)
+        sh([*py, "release", "pack", str(out / version), "--out", str(arc)], cwd=src, env=env, timeout=None)
         digests.append((sha256(arc), sh([*py, "digest", str(out / version)], cwd=src, env=env)))
     if digests[0] != digests[1]:
         raise Stop(f"the build is not deterministic: {digests}")
@@ -275,7 +279,7 @@ def ready(a) -> dict:
     if tag_commit(version) or version in published_versions():
         problems.append(f"v{version} already exists")
     check("unit tests", lambda: sh([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."],
-                                    env={**os.environ, "PYTHONPATH": str(ROOT / "src")}))  # fmt: skip
+                                    env={**os.environ, "PYTHONPATH": str(ROOT / "src")}, timeout=None))  # fmt: skip
     check("lint", lambda: (sh(["uvx", "--from", "ruff==0.17.0", "ruff", "check", "."]),
                            sh(["uvx", "--from", "ruff==0.17.0", "ruff", "format", "--check", "."])))  # fmt: skip
     check("docs", lambda: sh([sys.executable, "tools/check_docs.py"]))
@@ -299,7 +303,7 @@ def continuity(td: Path, prepared: Path, rev: str, version: str, archive_sha: st
     pol, out = td / "policy.json", td / "continuity.json"
     pol.write_text((prepared / "trust/policy.json").read_text())
     sh([sys.executable, "tools/run_continuity.py", "--policy", str(pol), "--source", ".", "--source-revision", rev,
-        "--version", version, "--archive-sha256", archive_sha or "0" * 64, "--out", str(out)])  # fmt: skip
+        "--version", version, "--archive-sha256", archive_sha or "0" * 64, "--out", str(out)], timeout=None)  # fmt: skip
     doc = json.loads(out.read_text())
     v, s = doc["predecessor"]["verification"], doc["stage"]
     if not v["all_checks_passed"] or s["exit"] != 0 or s["admission"] != "admitted":
@@ -405,7 +409,11 @@ def tag_and_publish(version: str, rev: str) -> dict:
         raise Stop(f"v{version} exists on {at}, not on {rev}")
     if not at:
         sh(["git", "merge-base", "--is-ancestor", rev, "origin/main"])
-        sh(["git", "tag", "-a", f"v{version}", "-m", f"dev-platform {version}", rev])
+        local = sh(["git", "rev-parse", "-q", "--verify", f"refs/tags/v{version}^{{commit}}"], check=False)
+        if local and local != rev:
+            raise Stop(f"a local tag v{version} points to {local}, not {rev}: remove it and run again")
+        if not local:
+            sh(["git", "tag", "-a", f"v{version}", "-m", f"dev-platform {version}", rev])
         sh(["git", "push", "-q", "origin", f"v{version}"])
         say(f"pushed v{version} on {rev}; release.yml publishes it")
     run = None
@@ -490,8 +498,10 @@ def records(a) -> dict:
         if not (out / "identity.json").is_file():
             runs = gh_json("run", "list", "--repo", REPO, "--workflow", "release.yml", "--limit", "50", "--json",
                            "headBranch,headSha,conclusion,url")  # fmt: skip
-            run = next(r["url"] for r in runs if r["headBranch"] == f"v{version}" and r["headSha"] == rev
-                       and r["conclusion"] == "success")  # fmt: skip
+            run = next((r["url"] for r in runs if r["headBranch"] == f"v{version}" and r["headSha"] == rev
+                        and r["conclusion"] == "success"), None)  # fmt: skip
+            if not run:
+                raise Stop(f"no successful release.yml run for v{version} on {rev}")
             pins = verifier_pins(lambda p: subprocess.run(["git", "show", f"{rev}:{p}"], cwd=ROOT,
                                                          capture_output=True, check=True).stdout)  # fmt: skip
             ident = identity(version, rev, ci, cont, meta, run, pins)
