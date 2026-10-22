@@ -13,11 +13,20 @@ resolver protocol with a valid profile. Nothing here requires access to the priv
 ## What the provider supplies
 ```json
 {"schema": "dev-platform.infra/v1",
- "runners": [{"id": "...", "labels": ["..."], "os": "linux", "arch": "x86_64",
+ "runners": [{"id": "...", "kind": "<optional: hosted|self-hosted>", "labels": ["..."], "os": "linux", "arch": "x86_64",
               "isolation": "ephemeral", "trust": "public|trusted", "credentials": ["<class names only>"],
               "capabilities": ["<optional, e.g. tmux, qemu-aarch64>"], "cache": "none|read-only|read-write"}],
  "admission": {"forbidden_triggers": ["pull_request_target"], "protected_environments": ["<names>"]}}
 ```
+`kind` is optional and absent means `self-hosted`, so every existing profile and immutable provider release is unchanged. A
+provider that lists a GitHub-hosted runner (for example to attach capabilities such as `docker`) declares `kind: "hosted"`; it must
+then be `isolation: ephemeral`, `trust: public` and offer no credentials (anything else is invalid, so a persistent runner cannot be
+hidden from `fallback: "none"` or from the untrusted-event rules). A project's `fallback = "none"` excludes every hosted runner,
+built in or supplied by the provider. Provider order is a preference only: the first runner that satisfies the project's
+requirements and the event's trust is chosen, and an explicit requirement or restriction is never overridden by order. A provider
+that emits `kind` is incompatible with platform releases before the one that introduced it (unknown key), so the consumer pins a
+release that understands it first.
+
 `admission` is optional and organization-owned. Event trust is never configurable: it is derived by the
 platform (`runners.event_trust`).
 
