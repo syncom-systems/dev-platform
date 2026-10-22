@@ -7,6 +7,12 @@ extra flags. Pushing a protected version tag is the release decision; no approva
 up to 0.11.0 keep their policies, records and states (`verified-unaccepted`; 0.2.1 `accepted`) and still need
 `--allow-unaccepted`.
 
+Security and toolchains:
+- uv 0.12.3 -> 0.13.4 (GHSA-hq85-5cpj-mr62: versions before 0.13.4 trust an emSign root whose intermediate CA keys are
+  compromised) in the `dev-platform` profile and the `setup-uv` steps of both workflows.
+- Rust 1.97.1 / 1.99.0 -> 1.99.1 in the `rust-bazel-9` and `rust-cargo-1.99` profiles (as mcp-re); new closure digests
+  measured on darwin-arm64 and linux-x86_64.
+
 Added:
 - `tools/release.py`: `ready` gives one verdict (READY TO RELEASE or BLOCKED: predecessor identity, version policy
   with derived change kinds, tests, lint, docs, two identical builds from an export of the tracked files, predecessor
