@@ -1,6 +1,43 @@
 # Changelog
 
 ## Unreleased
+Single-owner release authority ([ADR 0024](docs/adr/0024-single-owner-release-authority.md)): a release that passes every
+check of the independent verifier is `verified`, is published as a normal (latest) GitHub release and installs without
+extra flags. Pushing a protected version tag is the release decision; no approval record exists or is read. Releases
+up to 0.11.0 keep their policies, records and states (`verified-unaccepted`; 0.2.1 `accepted`) and still need
+`--allow-unaccepted`.
+
+Security and toolchains:
+- uv 0.12.3 -> 0.13.4 (GHSA-hq85-5cpj-mr62: versions before 0.13.4 trust an emSign root whose intermediate CA keys are
+  compromised) in the `dev-platform` profile and the `setup-uv` steps of both workflows.
+- Rust 1.97.1 / 1.99.0 -> 1.99.1 in the `rust-bazel-9` and `rust-cargo-1.99` profiles (as mcp-re); new closure digests
+  measured on darwin-arm64 and linux-x86_64.
+
+Added:
+- `tools/release.py`: `ready` gives one verdict (READY TO RELEASE or BLOCKED: predecessor identity, version policy
+  with derived change kinds, tests, lint, docs, two identical builds from an export of the tracked files, predecessor
+  continuity); `publish` performs the whole routine release (version and notes pull request, tag, release workflow,
+  verification of the published release outside CI, `releases/<version>/` records, Homebrew tap), each pull request
+  merged when its required checks pass, resumable and stopping at the first failure; `records` runs the follow-up only.
+- Schema `trust-v2` (`dev-platform.trust/v2`: signers, runner and evidence requirements, continuity predecessor).
+
+Declared incompatibilities (0.x minor; consumers reach them only by pinning this release):
+- `trust/policy.json` is `dev-platform.trust/v2`; `tools/verify_release.py` refuses a `trust/v1` policy (exit 2, check
+  `policy-schema`) and has no `--authorization`. Stable releases are `verified` instead of `verified-unaccepted` or
+  `accepted`; the verification record's `acceptance` holds `state`, `reasons` and `not_conferred` only (`verification/v1`
+  now allows `verified` and no longer requires `authorization`).
+- `tools/install_release.py` admits `verified`; `install()` has no `authorizations` or `allow_unaccepted` parameters and
+  `--authorization` is gone. `--allow-unaccepted` is still accepted and has no effect.
+- `release.yml` publishes `verified` as a normal release titled `dev-platform <version>`; `.github/workflows/accept.yml`
+  is removed. Lifecycle: `independently-verified -> released` for these releases. The 1.0.0 criterion
+  `owner-accepted-baseline` is now `stable-baseline-released`.
+- An application policy with `require_acceptance` accepts a `verified` platform release (application verifier of this
+  release or later), and no platform authorization state is read for it; `tools/verify_platform_current.py` reports
+  `verified` (exit 0) for such a release.
+- A CLI up to 0.11.0 refuses to reuse an installed release of this version or later from the store ("the pinned
+  release is verified; it is not admitted") unless run with `--reverify`; upgrade the CLI.
+- The Homebrew formula's caveat no longer mentions `--allow-unaccepted` from this version on (formulas of earlier
+  releases render unchanged).
 
 ## 0.11.0 (stable candidate; verified-unaccepted until an authenticated owner authorization exists)
 Evidence correctness: certification needs a pass in the certifying run, carried evidence is bound to its identity,

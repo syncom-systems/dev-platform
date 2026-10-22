@@ -12,6 +12,7 @@ import unittest
 from datetime import UTC, datetime, timedelta
 
 from dev_platform import provenance, records
+from tests import legacy_platform
 from tests.gh_repo import Repo
 from tests.helpers import ROOT, tmpdir
 from tests.test_provenance import SHA, result
@@ -930,25 +931,87 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class RequiredPlatformRelease(Case):
+    """`require_acceptance` against a platform release verified under trust/v2: its `verified` state is the platform
+    baseline (ADR 0024); there are no platform authorization records to read or keep current."""
+
+    def setUp(self):
+        from tests import test_verify_release as TV
+
+        super().setUp()
+        self.TV = TV
+        self.arc, self.psha = TV.build_candidate(self, "1.0.0")
+        self.pexp = {"version": "1.0.0", "source_revision": "c" * 40, "archive_sha256": self.psha,
+                     "ref": "refs/tags/v1.0.0"}  # fmt: skip
+        tree = self.platform_doc()["subject"]["tree_digest"]
+        self.res = result(rev=REV, tree=tree)
+        self.res["platform"].update(running_version="1.0.0", pinned_version="1.0.0")
+        self.res["environment"]["release"]["version"] = "1.0.0"
+        self.rel = provenance.assemble(
+            self.res, name="app", version="1.0.0", source_uri="https://example.invalid/app",
+            artifacts=[{"name": "app.tar", "sha256": hashlib.sha256(b"artifact").hexdigest()}],
+            resolution=provenance.resolution_digest([self.d / "app.lock"], self.d))  # fmt: skip
+        self.policy["platform_releases"] = [{"version": "1.0.0", "tree_digest": tree, "require_acceptance": True,
+                                             "archive_sha256": self.psha, "source_revision": "c" * 40}]  # fmt: skip
+
+    def platform_doc(self, gh=None):
+        return V.verify(self.arc, self.pexp, self.TV.POLICY, gh=gh or self.TV.fake_gh(self.psha, "1.0.0"))
+
+    def test_verified_platform_and_authentic_application_approval(self):
+        pdoc = self.platform_doc()
+        self.assertEqual(pdoc["acceptance"]["state"], "verified")
+        doc = self.run_v([self.good_auth()], platform_acceptance=pdoc)
+        self.assertEqual(self.state(doc), "approved", doc["checks"])
+
+    def test_failed_platform_verification_blocks(self):
+        pdoc = self.platform_doc(gh=self.TV.fake_gh(self.psha, "1.0.0", code=1))
+        self.assertEqual(pdoc["acceptance"]["state"], "failed")
+        doc = self.run_v([self.good_auth()], platform_acceptance=pdoc)
+        self.assertIn("platform-acceptance", self.failed(doc))
+
+    def test_verified_platform_does_not_approve_the_application(self):
+        self.assertEqual(self.state(self.run_v([], platform_acceptance=self.platform_doc())), "unapproved")
+
+    def test_no_platform_authorization_state_is_read(self):
+        import types
+
+        att = self.TV.fake_gh(self.psha, "1.0.0")
+        calls = []
+
+        def gh(argv):
+            calls.append(argv[:2])
+            return att(argv)
+
+        ns = types.SimpleNamespace(platform_authorization=[], platform_archive=self.arc, platform_bundle=None,
+                                   platform_sbom_bundle=None, platform_environment=None, platform_continuity=None,
+                                   historical=False)  # fmt: skip
+        pdoc, checks, cur = A.platform_verification(
+            V, self.policy["platform_releases"][0], self.psha, ns, self.TV.POLICY, gh, now=NOW
+        )
+        self.assertEqual((pdoc["acceptance"]["state"], checks, cur), ("verified", [], None))
+        self.assertNotIn(["gh", "api"], calls)
+
+
+@legacy_platform.needs_tag
 class RequiredPlatformAcceptance(Case):
-    """An application policy may require its Dev Platform release to be owner-ACCEPTED. That is an extra
-    eligibility condition established by re-running the platform verifier; it never approves the application,
-    and platform authority never carries over to application approval (or the reverse)."""
+    """An application policy may require its Dev Platform release to be owner-ACCEPTED. For a release verified under
+    trust/v1 (before 0.12.0, judged here by the v0.11.0 verifier) that is an extra eligibility condition established
+    by re-running the platform verifier; it never approves the application, and platform authority never carries
+    over to application approval (or the reverse)."""
 
     PLATFORM_OWNER = "platform-owner"
 
     def setUp(self):
-        from tests import test_authorization as TA
         from tests import test_verify_release as TV
 
         super().setUp()
-        self.TA, self.TV = TA, TV
+        self.TA, self.TV, self.PV = legacy_platform, TV, legacy_platform.V1
         self.arc, self.psha = TV.build_candidate(self, "1.0.0")
         self.pgh = Repo()
         self.pgh.commit({"README.md": b"platform evidence"}, author="bot", committer="bot")
         self.pexp = {"version": "1.0.0", "source_revision": "c" * 40, "archive_sha256": self.psha,
                      "ref": "refs/tags/v1.0.0"}  # fmt: skip
-        self.ppolicy = TA.POLICY
+        self.ppolicy = legacy_platform.POLICY
         tree = self.platform_doc([])["subject"]["tree_digest"]
         v = "1.0.0"
         self.res = result(rev=REV, tree=tree)
@@ -968,7 +1031,7 @@ class RequiredPlatformAcceptance(Case):
         def both(argv):
             return (gh or self.pgh)(argv) if argv[:2] == ["gh", "api"] else att(argv)
 
-        return self.TV.V.verify(self.arc, self.pexp, self.ppolicy, gh=both, authorizations=files, now=NOW)
+        return self.PV.verify(self.arc, self.pexp, self.ppolicy, gh=both, authorizations=files, now=NOW)
 
     def platform_record(self, **kw):
         rec = self.TA.record(self.psha)
@@ -1048,7 +1111,7 @@ class RequiredPlatformAcceptance(Case):
                                    platform_bundle=None, platform_sbom_bundle=None, platform_environment=None,
                                    platform_continuity=None, historical=historical)  # fmt: skip
         return A.platform_verification(
-            V, self.policy["platform_releases"][0], self.psha, ns, self.ppolicy, both, now=NOW
+            self.PV, self.policy["platform_releases"][0], self.psha, ns, self.ppolicy, both, now=NOW
         )
 
     def platform_revocation(self):

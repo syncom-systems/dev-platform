@@ -1,7 +1,9 @@
 """Trusted installation: verify first, execute nothing from the archive, write-once store."""
 
+import contextlib
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import stat
@@ -96,20 +98,26 @@ class InstallTest(unittest.TestCase):
         self.assertIn("not admitted", str(cm.exception))
         self.assertEqual(list(self.store.iterdir()), [])
 
-    def test_stable_needs_acceptance_unless_explicitly_allowed(self):
+    def test_verified_stable_is_admitted_without_any_flag(self):
         arc, sha, exp = self.candidate("1.0.0")
-        gh = fake_gh(sha, "1.0.0")
-        with self.assertRaises(IR.Refused):
-            IR.install(arc, self.store, exp, self.verifier, POLICY, gh=gh, allow_prerelease=True)
-        self.assertEqual(list(self.store.iterdir()), [])
-        # acceptance itself is exercised in tests/test_authorization.py
+        _dest, rec = IR.install(arc, self.store, exp, self.verifier, POLICY, gh=fake_gh(sha, "1.0.0"))
+        self.assertEqual(rec["installation"]["admitted_state"], "verified")
 
-    def test_unaccepted_stable_can_be_installed_only_with_the_explicit_flag(self):
-        arc, sha, exp = self.candidate("1.0.0")
-        _dest, rec = IR.install(
-            arc, self.store, exp, self.verifier, POLICY, gh=fake_gh(sha, "1.0.0"), allow_unaccepted=True
-        )
-        self.assertEqual(rec["installation"]["admitted_state"], "verified-unaccepted")
+    def test_only_verified_or_an_allowed_prerelease_is_admitted(self):
+        IR.admit("verified", allow_prerelease=False)
+        IR.admit("pre-release", allow_prerelease=True)
+        for state in ("pre-release", "verified-unaccepted", "accepted", "failed", ""):
+            with self.assertRaises(IR.Refused, msg=state):
+                IR.admit(state, allow_prerelease=False)
+
+    def test_allow_unaccepted_is_still_accepted_by_the_cli(self):
+        # existing callers (setup, consumer_run.py, the tap's formula check) may still pass it; it has no effect
+        argv = ["--version", "1.0.0", "--store", str(self.store), "--verifier-sha256", "0" * 64,
+                "--policy-sha256", "0" * 64, "--allow-unaccepted"]  # fmt: skip
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(
+                IR.main(argv), 3
+            )  # parsed; refused at the trust-base self-check, not a usage error
 
     def test_failed_verification_installs_nothing(self):
         arc, sha, exp = self.candidate()

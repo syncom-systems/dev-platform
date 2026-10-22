@@ -104,7 +104,7 @@ def main(argv=None) -> int:
         "predecessor": {**pred, "verification": {"state": state, "all_checks_passed": passed}},
         "stage": stage,
         "limitations": [
-            "evidence, not authority: the predecessor may itself be unaccepted",
+            "evidence, not authority",
             "predecessor code ran in the CI runner environment (not hermetic) with its own toolchain bootstrap",
         ],
     }

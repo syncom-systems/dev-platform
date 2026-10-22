@@ -22,7 +22,8 @@ override rules there stand) and the TOCTOU limitation recorded in the architectu
   as such. This is **not yet performed**; no release has been signed.
 
 ## Owner ratifications (2026-10-10)
-1. The first release may be accepted through an explicit owner authorization record, but only after
+1. (Superseded by ADR 0024 from 0.12.0: a release is `verified` from its checks, with no authorization record.)
+   The first release may be accepted through an explicit owner authorization record, but only after
    independent verification of source revision, artifact digest, toolchain manifest, build
    provenance, signing identity and release process. The authorization is the initial trust anchor and
    never replaces technical verification (`tools/verify_release.py` computes acceptance in that order).

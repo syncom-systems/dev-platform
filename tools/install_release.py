@@ -9,8 +9,9 @@ Nothing from the archive is imported or executed here. The order is fixed:
   2. obtain the archive (a local file, or `gh release download` into a private directory).
   3. independent verification (verify_release.verify): archive digest, structure, version binding,
      source revision, SBOM correspondence, provenance and SBOM attestations against the signer policy.
-  4. admission by acceptance state: `accepted`, or an explicitly allowed weaker state. A pre-release
-     needs --allow-prerelease; a verified-but-unaccepted stable release needs --allow-unaccepted.
+  4. admission by state: a `verified` stable release is admitted; a pre-release needs --allow-prerelease.
+     (--allow-unaccepted is accepted and has no effect: a trust/v2 verifier never reports `verified-unaccepted`,
+     and releases verified under trust/v1 are installed by their own pinned installer, ADR 0024.)
   5. only then: extract the *verified bytes* into staging, require the tree digest to equal the one
      verification computed (and the consumer's pin when given), freeze read-only and rename into the
      write-once store. The verification record is stored beside it.
@@ -36,7 +37,6 @@ import types
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STATES_ORDER = ("accepted", "verified-unaccepted", "pre-release")
 
 
 def sha256_file(path: Path) -> str:
@@ -144,14 +144,15 @@ def freeze(root: Path) -> None:
     root.chmod(root.stat().st_mode & ~(stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
 
 
-def admit(state: str, *, allow_prerelease: bool, allow_unaccepted: bool) -> None:
-    if state == "accepted":
+def admit(state: str, *, allow_prerelease: bool) -> None:
+    if state == "verified":
         return
     if state == "pre-release" and allow_prerelease:
         return
-    if state == "verified-unaccepted" and allow_unaccepted:
-        return
-    raise Refused(f"acceptance state {state!r} is not admitted (see --allow-prerelease/--allow-unaccepted)")
+    raise Refused(
+        f"release state {state!r} is not admitted"
+        + (" (see --allow-prerelease)" if state == "pre-release" else "")
+    )
 
 
 def install(
@@ -162,11 +163,9 @@ def install(
     policy: dict,
     *,
     gh=None,
-    authorizations=(),
     bundle=None,
     sbom_bundle=None,
     allow_prerelease=False,
-    allow_unaccepted=False,
     environment=None,
     continuity_record=None,
     expect_tree: str | None = None,
@@ -179,7 +178,6 @@ def install(
         archive,
         exp,
         policy,
-        authorizations=list(authorizations),
         bundle=bundle,
         sbom_bundle=sbom_bundle,
         environment=environment,
@@ -189,7 +187,7 @@ def install(
     if state == "failed":
         bad = [c["id"] for c in record["checks"] if c["status"] == "failed"]
         raise Refused(f"verification failed: {', '.join(bad)}")
-    admit(state, allow_prerelease=allow_prerelease, allow_unaccepted=allow_unaccepted)
+    admit(state, allow_prerelease=allow_prerelease)
     tree = record["subject"]["tree_digest"]
     if expect_tree and tree != expect_tree:
         raise Refused(f"tree digest {tree} != the consumer's pin {expect_tree}")
@@ -249,7 +247,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--source-revision", help="expected commit; default: resolved from the git tag")
     ap.add_argument("--archive-sha256", help="expected archive sha256 (recommended: from your pin record)")
     ap.add_argument("--tree-sha256", help="expected tree digest (your consumer pin)")
-    ap.add_argument("--authorization", type=Path, action="append", default=[])
     ap.add_argument(
         "--previous-record", type=Path, help="verification record of a previously installed release"
     )
@@ -260,7 +257,7 @@ def main(argv: list[str] | None = None) -> int:
         "--continuity", type=Path, help="predecessor-continuity record (default: next to the archive)"
     )
     ap.add_argument("--allow-prerelease", action="store_true")
-    ap.add_argument("--allow-unaccepted", action="store_true")
+    ap.add_argument("--allow-unaccepted", action="store_true", help="no effect (kept for existing callers)")
     a = ap.parse_args(argv)
     try:
         verifier = load_verifier(HERE / "verify_release.py", a.verifier_sha256)
@@ -287,9 +284,7 @@ def main(argv: list[str] | None = None) -> int:
                 exp,
                 verifier,
                 policy,
-                authorizations=a.authorization,
                 allow_prerelease=a.allow_prerelease,
-                allow_unaccepted=a.allow_unaccepted,
                 environment=env_file if env_file.is_file() else None,
                 continuity_record=cont_file if cont_file.is_file() else None,
                 expect_tree=a.tree_sha256,

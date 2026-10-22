@@ -39,7 +39,8 @@ An application that wants more may say so in its own policy: a `platform_release
 true`, `archive_sha256` and `source_revision` adds the check `platform-acceptance`, for which the verifier re-runs
 `tools/verify_release.py` over the named archive (`--platform-archive --platform-policy P --platform-policy-sha256 PIN
 --platform-authorization ..`). The platform policy stays a separate trust anchor; the application approval still has to
-come from the application's own approvers.
+come from the application's own approvers. A platform release verified under `trust/v2` (0.12.0 on) satisfies the check
+when it is `verified`; there is no platform authorization to read (ADR 0024).
 
 ## Current versus historical authorization (freshness)
 A bundle is a past: it holds the records that existed when it was written. A decision to deploy, to treat a release as

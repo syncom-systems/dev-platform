@@ -78,7 +78,10 @@ def render(
             "linux-x86_64 and macos-arm64 only, provisioning will fail"
         )
     if allow_unaccepted:
-        notes.append("allow_unaccepted: the pinned release may be verified but not accepted (your decision)")
+        notes.append(
+            "allow_unaccepted: the pinned release was published before 0.12.0 as verified-unaccepted "
+            "(your decision)"
+        )
     rev, version = pins["source_revision"], pins["version"]
     text = f"""\
 # Proposed by `dev-platform workflow`: review it, then commit it yourself. Nothing is active until it is

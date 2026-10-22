@@ -1,8 +1,8 @@
 # Release workflow. Triggered by a version tag. Produces a deterministic archive, attests its build
 # provenance (Sigstore, SLSA v1) and SBOM, verifies it with the independent verifier, then publishes.
-# Tags containing '-' (e.g. v0.1.0-rc.1) are pre-releases: verified artifacts, never "accepted".
-# Stable acceptance additionally requires an owner authorization record (docs/release-trust.md);
-# this workflow never grants it. Third-party actions are pinned by commit SHA.
+# Tags containing '-' (e.g. v0.1.0-rc.1) are published as pre-releases; a stable tag whose archive passes
+# every check is published as a normal release (state `verified`). Pushing a protected version tag is the
+# release decision (ADR 0024); nothing else is required or read. Third-party actions are pinned by commit SHA.
 name: release
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: {python-version: "3.14"}  # bootstrap only
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with: {version: "0.12.3"}
+        with: {version: "0.13.4"}
       - id: meta
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       - name: Tag must be on main
@@ -86,7 +86,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: {python-version: "3.14"}
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
-        with: {version: "0.12.3"}
+        with: {version: "0.13.4"}
       - name: Predecessor verifies this source (full stage)
         run: |
           mkdir out
@@ -166,30 +166,29 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with: {name: continuity, path: out}
         continue-on-error: true
-      - name: Publish (state is taken from the verification record; publishing never implies acceptance)
+      - name: Publish (the state is taken from the verification record)
         run: |
           state=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["acceptance"]["state"])' \
             "out/dev-platform-$VERSION.verification.json")
           case "$state" in
-            accepted) flag="--latest"; title="dev-platform $VERSION" ;;
-            pre-release) flag="--prerelease"; title="dev-platform $VERSION (pre-release, not accepted)" ;;
-            verified-unaccepted) flag="--prerelease"; title="dev-platform $VERSION (verified, NOT accepted)" ;;
-            *) echo "::error::unexpected acceptance state $state"; exit 1 ;;
+            verified) flag="--latest"; title="dev-platform $VERSION" ;;
+            pre-release) flag="--prerelease"; title="dev-platform $VERSION (pre-release)" ;;
+            *) echo "::error::unexpected release state $state"; exit 1 ;;
           esac
-          notes="Acceptance state: $state. Verified by the release workflow's independent verification job;
-          this is not owner acceptance and not certification of the release.
+          notes="Release state: $state. Every check of the release workflow's independent verification job passed
+          (provenance, SBOM, build environment and predecessor continuity attestations; archive, revision and
+          tree digests). It does not certify any consumer's results.
           Archive sha256: ${{ needs.build.outputs.archive_sha256 }}
           Tree digest (consumer pin): ${{ needs.build.outputs.tree_digest }}
           Source revision: $GITHUB_SHA
-          Record: dev-platform-$VERSION.verification.json. Stable acceptance requires an owner authorization
-          record bound to the archive digest; this workflow never creates one."
+          Record: dev-platform-$VERSION.verification.json."
           gh release create "$GITHUB_REF_NAME" out/* --repo "$GITHUB_REPOSITORY" --verify-tag $flag \
             --title "$title" --notes "$notes"
       - name: Verify the published release is immutable and its assets match
         run: |
           imm=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" --jq .immutable)
           if [ "$imm" != "true" ]; then
-            echo "::error::release is not immutable (repository setting missing); do not use or accept it"
+            echo "::error::release is not immutable (repository setting missing); do not use it"
             exit 1
           fi
           # GitHub creates the release attestation asynchronously after publication (v0.1.1 hit "no

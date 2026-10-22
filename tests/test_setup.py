@@ -362,6 +362,18 @@ class Setup(unittest.TestCase):
         self.assertEqual(run.ran("install_release.py"), 0)
         self.assertEqual(run.ran("provision"), 0)
 
+    def test_a_verified_release_needs_no_flag_and_older_states_keep_theirs(self):
+        S.admit("verified", allow_unaccepted=False, allow_prerelease=False)
+        S.admit("accepted", allow_unaccepted=False, allow_prerelease=False)
+        for state, flag in (
+            ("verified-unaccepted", "--allow-unaccepted"),
+            ("pre-release", "--allow-prerelease"),
+        ):
+            with self.assertRaisesRegex(S.Refused, flag):
+                S.admit(state, allow_unaccepted=False, allow_prerelease=False)
+        with self.assertRaisesRegex(S.Refused, "not admitted"):
+            S.admit("failed", allow_unaccepted=True, allow_prerelease=True)
+
     def test_an_unaccepted_release_needs_the_consumers_explicit_admission(self):
         rec, code, _ = self.setup(allow_unaccepted=False)
         self.assertEqual(code, 1)

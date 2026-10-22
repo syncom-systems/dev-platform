@@ -47,14 +47,15 @@ Then, in the project root (`setup` also finds the project from a subdirectory; `
 current directory, so run them from the root or pass `--project <root>`):
 ```sh
 dev-platform setup --dry-run                                  # what it would do: no network, no writes
-dev-platform setup --allow-unaccepted                         # installs exactly the pinned release, provisions, runs its doctor
-eval "$(dev-platform setup --allow-unaccepted --print-env)"   # this shell: DEV_PLATFORM_STORE, DEV_PLATFORM_PYTHON, PATH
+dev-platform setup                                           # installs exactly the pinned release, provisions, runs its doctor
+eval "$(dev-platform setup --print-env)"                     # this shell: DEV_PLATFORM_STORE, DEV_PLATFORM_PYTHON, PATH
 dev-platform doctor                                           # platform resolved: mode=pinned version=<pinned>
 dev-platform check --stage pre-merge --base origin/main
 ```
-Every published release so far is **verified-unaccepted**. Using one is the project's explicit decision and needs
-`--allow-unaccepted` on every `setup` (without it `setup` refuses, installs nothing and `--print-env` prints no exports);
-for an accepted release, drop the flag. Acceptance is never inferred.
+From 0.12.0 a published release is **verified** (every check of the independent verifier passed) and needs no flag.
+Releases up to 0.11.0 are **verified-unaccepted**: pinning one needs `--allow-unaccepted` on every `setup` (without it
+`setup` refuses, installs nothing and `--print-env` prints no exports). A pre-release needs `--allow-prerelease`.
+Reusing an installed 0.12.0+ release needs a CLI of 0.12.0 or later (older CLIs refuse it unless `--reverify`).
 
 `setup` is idempotent: a second run reverifies and downloads nothing (`release: present`, `toolchain: reused`). Several
 releases coexist; each project gets exactly its own.
@@ -63,14 +64,14 @@ releases coexist; each project gets exactly its own.
 ```sh
 brew update && brew upgrade dev-platform    # CLI only
 dev-platform --version
-dev-platform setup --allow-unaccepted       # in a project: release present, toolchain reused, nothing downloaded
+dev-platform setup                          # in a project: release present, toolchain reused, nothing downloaded
 ```
 An upgrade leaves every project's pins, every installed release and toolchain, the infrastructure store and every
 `[infra]` selection byte for byte unchanged, and the newer CLI runs and resolves all of them. `brew pin dev-platform` holds the
 current CLI.
 
 ## 4. Upgrading a project's release
-Edit both pin files to the new release's identity in one reviewed change, then `dev-platform setup --allow-unaccepted`
+Edit both pin files to the new release's identity in one reviewed change, then `dev-platform setup`
 (it installs the new release beside the old one). A toolchain change is always a new release. A release that adds a configuration key (for example
 `[infra] config_digest_kind`, 0.10.0) is required before the project may use that key.
 
@@ -95,7 +96,7 @@ unsatisfied, 2 configuration or usage, 3 integrity.
 |---|---|---|
 | exit 2, `tree_digest_pin != ... platform.sha256` or a version mismatch | the two pin files disagree | fix the pins (copy the identity record again) |
 | exit 3, `does not equal` a pinned digest | the installer, verifier or policy at the pinned revision is not what the pins name | the pins are wrong or tampered with; nothing was installed |
-| exit 1, `trusted installer refused` | archive digest, attestations or admission failed | read the installer's reason; `acceptance state 'verified-unaccepted' is not admitted` means `--allow-unaccepted` is missing |
+| exit 1, `trusted installer refused` | archive digest, attestations or admission failed | read the installer's reason; `acceptance state 'verified-unaccepted' is not admitted` (a release up to 0.11.0) means `--allow-unaccepted` is missing |
 | exit 1, mentions `gh auth login` | `gh` is missing or not authenticated | `gh auth login` |
 | exit 3, `not the pinned` tree digest | the store entry was altered (it is left untouched for inspection) | remove `<store>/<version>` (`chmod -R u+w` first) and run `setup` again |
 | exit 3, `integrity failure` from `check`/`doctor` | the launcher refused to run an altered release | as above |
@@ -111,7 +112,8 @@ Remove all installed releases and toolchains:
 CI runs a job-local verified release, never a user's Homebrew installation or a shared home:
 - the reusable workflow [`consumer-pilot.yml`](consumer-integration.md) at the pinned release's commit, or
 - `python3 platform/tools/consumer_run.py --consumer-dir consumer --work "$RUNNER_TEMP/dp" --evidence-dir evidence
-  --dev-platform-checkout platform [--allow-unaccepted]` with the platform checked out at the pinned revision.
+  --dev-platform-checkout platform [--allow-unaccepted]` (the flag only for releases up to 0.11.0) with the platform
+  checked out at the pinned revision.
 
 Either one checks the pins against each other, refuses the installer, verifier and policy unless they equal the pinned digests,
 installs the release with the trusted installer into a job-local store, provisions the toolchain twice (identical identity

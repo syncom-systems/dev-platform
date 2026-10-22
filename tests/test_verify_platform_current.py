@@ -1,4 +1,7 @@
-"""tools/verify_platform_current.py: platform acceptance as a CURRENT decision (discovery is not optional)."""
+"""tools/verify_platform_current.py: platform acceptance as a CURRENT decision (discovery is not optional).
+
+Acceptance exists only for releases verified under trust/v1 (before 0.12.0), so those cases run the v0.11.0 verifier;
+a trust/v2 release is `verified` with nothing to keep current (ADR 0024)."""
 
 import hashlib
 import importlib.util
@@ -6,9 +9,11 @@ import json
 import unittest
 from datetime import UTC, datetime
 
-from tests import test_authorization as TA
+from tests import legacy_platform as TA
 from tests.gh_repo import Repo
 from tests.helpers import ROOT
+from tests.test_verify_release import POLICY as V2_POLICY
+from tests.test_verify_release import V as V2
 from tests.test_verify_release import build_candidate, fake_gh
 
 
@@ -21,10 +26,33 @@ def load(name, path):
 
 C = load("verify_platform_current", ROOT / "tools" / "verify_platform_current.py")
 A = load("verify_app_release_for_platform", ROOT / "tools" / "verify_app_release.py")
-V = TA.V
+V = TA.V1
 NOW = datetime(2026, 10, 12, 12, 0, tzinfo=UTC)
 
 
+class TrustV2(unittest.TestCase):
+    def test_a_verified_release_is_the_decision_and_no_authorization_state_is_read(self):
+        arc, sha = build_candidate(self, "1.0.0")
+        exp = {
+            "version": "1.0.0",
+            "source_revision": "c" * 40,
+            "archive_sha256": sha,
+            "ref": "refs/tags/v1.0.0",
+        }
+        att = fake_gh(sha, "1.0.0")
+        calls = []
+
+        def gh(argv):
+            calls.append(argv[:2])
+            return att(argv)
+
+        doc = C.current_acceptance(V2, A, arc, exp, V2_POLICY, gh=gh, now=NOW)
+        self.assertEqual(doc["current_decision"]["state"], "verified")
+        self.assertEqual(doc["currency"]["status"], "not-applicable")
+        self.assertNotIn(["gh", "api"], calls)
+
+
+@TA.needs_tag
 class Current(unittest.TestCase):
     def setUp(self):
         self.arc, self.sha = build_candidate(self, "1.0.0")

@@ -17,8 +17,8 @@ refuses a different release, a different configuration digest, or a provider tha
 1. checks the pin files agree with each other;
 2. takes the trusted installer, verifier and policy from the public platform repository **at the pinned revision** and refuses
    them unless they equal the pinned digests;
-3. installs the pinned release (verifies provenance, SBOM and build-environment attestations first; an unaccepted release is
-   used only with `--allow-unaccepted`, a consumer decision);
+3. installs the pinned release (verifies provenance, SBOM and build-environment attestations first; a release up to 0.11.0
+   is verified-unaccepted and used only with `--allow-unaccepted`, a consumer decision);
 4. `toolchain provision --pinned --verify` twice into clean directories: the realized environment is verified against the
    release's manifest (closure-verified tools) and the two verifications must be identical (deterministic provisioning);
 5. `doctor` and `check --stage full --result` through the pinned platform, with the vendored infra profile and the event

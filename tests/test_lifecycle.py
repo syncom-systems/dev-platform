@@ -206,6 +206,38 @@ class States(unittest.TestCase):
         self.assertIn("isinstance(v, VerifierResult)", before[-600:])
 
 
+class TrustV2(unittest.TestCase):
+    """Releases verified under trust/v2 end in `released` (ADR 0024); trust/v1 end states are not reachable from them."""
+
+    def v2(self, **kw):
+        return facts(
+            **{"ci_verification": rec("verified"), "independent_verification": rec("verified"), **kw}
+        )
+
+    def test_verified_and_published_immutable_is_released(self):
+        d = lifecycle.derive(self.v2())
+        self.assertEqual((d.state, d.usable), ("released", True))
+
+    def test_not_published_immutable_stays_independently_verified(self):
+        self.assertEqual(
+            lifecycle.derive(self.v2(published={"immutable": False})).state, "independently-verified"
+        )
+
+    def test_ci_and_independent_records_must_agree(self):
+        d = lifecycle.derive(self.v2(ci_verification=rec("verified-unaccepted")))
+        self.assertEqual(d.state, "independently-verified")
+        self.assertIn("disagree", d.reasons[-1])
+
+    def test_end_states_are_alternatives(self):
+        lifecycle.advance("independently-verified", "released", self.v2())
+        with self.assertRaises(ConfigError):
+            lifecycle.advance("independently-verified", "released", facts())  # a trust/v1 record
+        with self.assertRaises(ConfigError):
+            lifecycle.advance("independently-verified", "verified-unaccepted", self.v2())
+        with self.assertRaises(ConfigError):
+            lifecycle.advance("released", "accepted", self.v2())
+
+
 class Versions(unittest.TestCase):
     def check(self, prev, new, kinds, **kw):
         return lifecycle.check_version(prev, new, kinds, POLICY, **kw)

@@ -48,17 +48,18 @@
       "type": "object",
       "required": [
         "state",
-        "reasons",
-        "authorization"
+        "reasons"
       ],
       "properties": {
         "state": {
           "enum": [
             "failed",
             "pre-release",
+            "verified",
             "verified-unaccepted",
             "accepted"
-          ]
+          ],
+          "description": "trust/v2 policies produce failed, pre-release or verified; verified-unaccepted and accepted appear only in records of releases verified under trust/v1 (ADR 0024)."
         }
       }
     }

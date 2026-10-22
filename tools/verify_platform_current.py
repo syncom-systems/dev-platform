@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Is this Dev Platform release CURRENTLY accepted? (current-state wrapper over tools/verify_release.py)
 
+For a release verified under trust/v2 there is no acceptance to keep current: the decision is the verifier's `verified`
+(exit 0) or `pre-release`/`failed` (ADR 0024). The rest of this description applies to trust/v1 releases.
+
 `tools/verify_release.py` (the trust anchor the owner pins; unchanged) judges the authorization records it is handed.
 For a current decision that is not enough: an acceptance revoked after the supplied records were collected would
 still read `accepted`. This wrapper loads the pinned platform verifier and the pinned application verifier (for the
@@ -12,7 +15,7 @@ refuses (`indeterminate`) when the current state cannot be established.
                 over the current state; `verified-unaccepted` when it is not; `indeterminate` when it cannot be established (reasons carry stable codes)
   --historical  supplied records only; an acceptance is reported as `historical-acceptance`, never `accepted`
 
-The platform verifier's own record is included unchanged under `verification`. Exit: 0 accepted, 1 failed,
+The platform verifier's own record is included unchanged under `verification`. Exit: 0 accepted or verified (trust/v2), 1 failed,
 3 verified-unaccepted, 4 historical-acceptance, 5 indeterminate, 2 usage.
 """
 
@@ -50,7 +53,7 @@ def current_acceptance(V, A, archive: Path, exp: dict, policy: dict, *, historic
     problems: list[dict] = []
     with tempfile.TemporaryDirectory(prefix="current-platform-") as td:
         pol = policy
-        if not historical:
+        if not historical and "authorization" in policy:
             snap, pinned, problems = A.current_authorizations(
                 V,
                 gh,
@@ -81,12 +84,16 @@ def current_acceptance(V, A, archive: Path, exp: dict, policy: dict, *, historic
                 "evidence": {k: v for k, v in snap.items() if k not in ("files", "restored")},
                 "reasons": problems,
             }
-        else:
+        elif historical:
             currency["status"] = "historical"
+        else:
+            currency["status"] = "not-applicable"
         doc = V.verify(archive, exp, pol, gh=gh, authorizations=auths, now=now, **verify_kw)
     acc = doc["acceptance"]["state"]
     if problems:
         state, why = "indeterminate", [f"[{r['code']}] {r['detail']}" for r in problems]
+    elif acc == "verified":
+        state, why = "verified", doc["acceptance"]["reasons"]
     elif acc != "accepted":
         state, why = acc, doc["acceptance"]["reasons"]
     elif historical:
@@ -149,6 +156,7 @@ def main(argv=None) -> int:
     print(f"current acceptance: {cd['state']}  {'; '.join(cd['reasons'])}")
     return {
         "accepted": 0,
+        "verified": 0,
         "failed": 1,
         "verified-unaccepted": 3,
         "historical-acceptance": 4,

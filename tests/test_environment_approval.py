@@ -1,6 +1,7 @@
-"""github-environment-approval: a record is authentic only if the pinned acceptance workflow attested exactly its bytes.
+"""github-environment-approval: a record is authentic only if the pinned approval workflow attested exactly its bytes.
 
-`gh` is faked at the attestation boundary; the verifier code under test is the real one.
+The provider remains in the verifier's registry for application-release approvals (ADR 0019); platform releases
+no longer read approval records (ADR 0024). `gh` is faked at the attestation boundary; the provider is the real one.
 """
 
 import hashlib
@@ -8,31 +9,16 @@ import json
 import unittest
 from pathlib import Path
 
-from tests.helpers import tmpdir
-from tests.test_authorization import NOW, OTHER, OWNER, REPO, record
-from tests.test_authorization import POLICY as SIGNED_POLICY
-from tests.test_verify_release import V, build_candidate, fake_gh
+from tests.legacy_platform import OTHER, OWNER, REPO, record
+from tests.test_verify_release import V
 
 PROVIDER = "github-environment-approval"
-WORKFLOW = ".github/workflows/accept.yml"
-POLICY = {
-    **SIGNED_POLICY,
-    "authorization": {
-        "providers": [PROVIDER],
-        "evidence_repo": REPO,
-        "evidence_ref": "main",
-        "environment_approval": {"repo": REPO, "workflow": WORKFLOW, "ref": "refs/heads/main"},
-        "approvers": [
-            {
-                "id": "owner",
-                "provider": PROVIDER,
-                "login": OWNER,
-                "roles": ["owner"],
-                "may_approve": ["platform-release"],
-                "may_confer": ["platform-baseline"],
-            }
-        ],
-    },
+WORKFLOW = ".github/workflows/approve.yml"
+AUTH_POLICY = {
+    "providers": [PROVIDER],
+    "evidence_repo": REPO,
+    "evidence_ref": "main",
+    "environment_approval": {"repo": REPO, "workflow": WORKFLOW, "ref": "refs/heads/main"},
 }
 
 
@@ -53,63 +39,50 @@ def cert(**over):
 
 class EnvironmentApproval(unittest.TestCase):
     def setUp(self):
-        self.arc, self.sha = build_candidate(self, "1.0.0")
-        self.exp = {
-            "version": "1.0.0",
-            "source_revision": "c" * 40,
-            "archive_sha256": self.sha,
-            "ref": "refs/tags/v1.0.0",
-        }
         self.attested: dict[str, dict] = {}  # sha256 of record bytes -> certificate
 
     def put(self, doc=None, *, attest=True, **certover):
         doc = doc or self.rec()
-        f = tmpdir(self) / f"{doc['id']}.json"
         raw = json.dumps(doc, indent=2).encode()
-        f.write_bytes(raw)
         if attest:
             self.attested[hashlib.sha256(raw).hexdigest()] = cert(**certover)
-        return f
+        return doc, raw
 
     def rec(self, **over):
-        doc = record(self.sha, **over)
+        doc = record("a" * 64, **over)
         doc["decided_by"]["identity_assertion"]["provider"] = PROVIDER
         return doc
 
     def gh(self, argv):
-        if argv[:3] == ["gh", "attestation", "verify"] and "record.json" in argv[3]:
-            sha = hashlib.sha256(Path(argv[3]).read_bytes()).hexdigest()
-            c = self.attested.get(sha)
-            if c is None:
-                return 1, "", "no attestations found"
-            stmt = {
-                "predicateType": V.SLSA,
-                "subject": [{"digest": {"sha256": sha}}],
-            }
-            entry = {"verificationResult": {"signature": {"certificate": c}, "statement": stmt}}
-            return 0, json.dumps([entry]), ""
-        return fake_gh(self.sha, "1.0.0")(argv)
+        assert argv[:3] == ["gh", "attestation", "verify"], argv
+        sha = hashlib.sha256(Path(argv[3]).read_bytes()).hexdigest()
+        c = self.attested.get(sha)
+        if c is None:
+            return 1, "", "no attestations found"
+        stmt = {"predicateType": V.SLSA, "subject": [{"digest": {"sha256": sha}}]}
+        return (
+            0,
+            json.dumps([{"verificationResult": {"signature": {"certificate": c}, "statement": stmt}}]),
+            "",
+        )
 
-    def state(self, files, policy=POLICY):
-        doc = V.verify(self.arc, self.exp, policy, gh=self.gh, authorizations=files, now=NOW)
-        return doc["acceptance"]["state"], doc
+    def auth(self, doc, raw, policy=AUTH_POLICY, gh=None):
+        return V.PROVIDERS[PROVIDER](doc, raw, policy, gh or self.gh)
 
-    def test_attested_record_by_the_approver_is_accepted(self):
-        st, doc = self.state([self.put()])
-        self.assertEqual(st, "accepted")
-        self.assertEqual(doc["acceptance"]["confers"], ["platform-baseline"])
+    def test_attested_record_names_the_approver(self):
+        login, ev = self.auth(*self.put())
+        self.assertEqual(login, OWNER)
+        self.assertEqual((ev["workflow"], ev["ref"]), (WORKFLOW, "refs/heads/main"))
 
-    def test_record_without_attestation_is_ignored(self):
-        st, doc = self.state([self.put(attest=False)])
-        self.assertEqual(st, "verified-unaccepted")
-        self.assertIn("no valid attestation", doc["acceptance"]["authorization_evidence"][0]["problems"][0])
+    def test_record_without_attestation_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "no valid attestation"):
+            self.auth(*self.put(attest=False))
 
     def test_edited_record_loses_its_attestation(self):
-        f = self.put()
-        d = json.loads(f.read_text())
-        d["basis"] = {"kind": "x", "reference": "y"}
-        f.write_text(json.dumps(d))
-        self.assertEqual(self.state([f])[0], "verified-unaccepted")
+        doc, _raw = self.put()
+        edited = json.dumps(dict(doc, basis={"kind": "x", "reference": "y"})).encode()
+        with self.assertRaises(ValueError):
+            self.auth(doc, edited)
 
     def test_wrong_workflow_ref_trigger_runner_repo_or_issuer(self):
         for over in (
@@ -121,39 +94,22 @@ class EnvironmentApproval(unittest.TestCase):
             {"issuer": "https://evil.example"},
         ):
             self.setUp()
-            self.assertEqual(self.state([self.put(**over)])[0], "verified-unaccepted", str(over))
+            with self.assertRaisesRegex(ValueError, "does not match", msg=str(over)):
+                self.auth(*self.put(**over))
 
-    def test_approver_must_be_in_the_policy(self):
+    def test_login_is_whatever_the_attested_record_says_authority_is_the_callers(self):
         doc = self.rec()
         doc["decided_by"]["identity_assertion"]["login"] = OTHER
-        st, doc = self.state([self.put(doc)])
-        self.assertEqual(st, "verified-unaccepted")
-        self.assertIn("not an approver", doc["acceptance"]["authorization_evidence"][0]["problems"][0])
+        self.assertEqual(self.auth(*self.put(doc))[0], OTHER)
 
-    def test_policy_without_the_pinned_workflow_or_provider_accepts_nothing(self):
-        pol = {**POLICY, "authorization": {**POLICY["authorization"]}}
-        del pol["authorization"]["environment_approval"]
-        self.assertEqual(self.state([self.put()], pol)[0], "verified-unaccepted")
-        pol = {**POLICY, "authorization": {**POLICY["authorization"], "providers": ["github-signed-commit"]}}
-        self.assertEqual(self.state([self.put()], pol)[0], "verified-unaccepted")
-
-    def test_revocation_is_attested_too_and_a_later_one_wins(self):
-        a = self.rec(id="a")
-        r = self.rec(id="r", decision="revoked", decided_at="2026-10-11T10:00:00Z")
-        self.assertEqual(self.state([self.put(a), self.put(r)])[0], "verified-unaccepted")
+    def test_policy_without_the_pinned_workflow_authenticates_nothing(self):
+        pol = {k: v for k, v in AUTH_POLICY.items() if k != "environment_approval"}
+        with self.assertRaisesRegex(ValueError, "environment_approval"):
+            self.auth(*self.put(), policy=pol)
 
     def test_attestation_service_failure_fails_closed(self):
-        f = self.put()
-        orig = self.gh
-        self.gh = lambda argv: (1, "", "HTTP 502") if "record.json" in argv[3] else orig(argv)
-        self.assertEqual(self.state([f])[0], "verified-unaccepted")
-
-    def test_workflow_file_is_manual_only_and_environment_gated(self):
-        text = (Path(__file__).resolve().parent.parent / ".github/workflows/accept.yml").read_text()
-        self.assertIn("workflow_dispatch:", text)
-        self.assertNotIn("pull_request", text)
-        self.assertNotIn("\n  push:", text)
-        self.assertIn("environment: owner-approval", text)
+        with self.assertRaises(ValueError):
+            self.auth(*self.put(), gh=lambda argv: (1, "", "HTTP 502"))
 
 
 if __name__ == "__main__":

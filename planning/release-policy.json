@@ -1,6 +1,6 @@
 {
   "schema": "dev-platform.release-policy/v1",
-  "_comment": "Planning and versioning policy. It is NOT trust policy: nothing here can confer acceptance, certification or qualification (trust/policy.json and tools/verify_release.py own those).",
+  "_comment": "Planning and versioning policy. It is NOT trust policy: nothing here can make a release verified or confer certification or qualification (trust/policy.json and tools/verify_release.py own verification).",
   "assurance": "open-source",
   "versioning": {
     "phase": "0.x",
@@ -15,7 +15,7 @@
     "prerelease_identifiers": ["alpha", "beta", "rc"],
     "supported_lines": "latest-minor",
     "one_zero_criteria": [
-      "owner-accepted-baseline",
+      "stable-baseline-released",
       "predecessor-continuity-verified",
       "two-consumers-in-production-profile",
       "evidence-schemas-stable-two-minors",

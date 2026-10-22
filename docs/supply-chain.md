@@ -50,8 +50,8 @@ installed version counts as affected). `dev-platform affected --advisory adv.jso
 (`upgrade`), whether a patch release on the supported line is needed (`patch-release`, with the next patch
 version and the change kinds `security-fix`/`toolchain-patch` for `plan version-check`), or that the line is
 unsupported (`no-patch-upgrade`); pre-release versions are ignored; consumers pinned to affected releases are
-listed. Output is a proposal: the patch is built and verified through the normal pipeline and acceptance
-remains the owner's separate act.
+listed. Output is a proposal: the patch is built and verified through the normal pipeline and released by the owner
+like any other release (ADR 0024).
 
 ### Advisory process
 1. **Report** privately (SECURITY.md; private vulnerability reporting is enabled). Do not open public issues.
@@ -60,8 +60,8 @@ remains the owner's separate act.
    (add `--github-draft` for a draft repository-advisory payload built from the same record).
 4. **Plan** the patch on the supported line: open an issue in the patch milestone; `plan version-check` classifies
    the change (`security-fix`, `toolchain-patch`). A toolchain fix is a new release, never an edit of an old one.
-5. **Build and verify** through the normal pipeline (release.yml, independent verification). The patched release
-   is `verified-unaccepted` until the owner's separate authorization.
+5. **Build and verify** through the normal pipeline (`tools/release.py`, release.yml, independent verification).
+   The patched release is `verified` when every check passes.
 6. **Publish the repository advisory** (owner action: it is outward-facing); consumers pinned to affected releases
    are found with `affected` against their configs/results.
 An unauthenticated report may *suspend* use of a release (lifecycle warning) but is not a governance decision

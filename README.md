@@ -3,15 +3,17 @@
 A reusable, deterministic development control plane: explicit policy, reproducible execution,
 interchangeable language and infrastructure adapters. Not a bag of CI scripts.
 
-**Status: pre-production.** Releases are published as verified, not owner-accepted, candidates and are used only by
-explicit opt-in (`--allow-unaccepted`); many contracts are still proposed. Do not treat the platform as production-ready.
+**Status: pre-production.** From 0.12.0 a release that passes every check is published as `verified` and installs
+without extra flags; releases up to 0.11.0 are verified-unaccepted candidates and need `--allow-unaccepted`
+([ADR 0024](docs/adr/0024-single-owner-release-authority.md)). Many contracts are still proposed. Do not treat the
+platform as production-ready.
 
 ## Install (macOS, Linux)
 
 ```sh
 brew install syncom-systems/dev-platform/dev-platform
 gh auth login                                             # once: release attestations are verified with gh
-cd my-project && dev-platform setup --allow-unaccepted    # the project's pinned release, verified; its toolchains; doctor
+cd my-project && dev-platform setup    # the project's pinned release, verified; its toolchains; doctor
 ```
 
 The CLI is a launcher; each project's committed pins select its release. No private infrastructure is needed. Runbook

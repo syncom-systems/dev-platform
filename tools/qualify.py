@@ -108,7 +108,7 @@ NEGATIVE = {
 
 NEGATIVE["rust-cargo-1.99"] = NEGATIVE["rust-cargo"]
 NEGATIVE["rust-bazel"] = _bazel_cases("8.4.1", "1.85.0", "1.84.0", "abseil-cpp", "20250127.1")
-NEGATIVE["rust-bazel-9"] = _bazel_cases("9.1.0", "1.97.1", "1.97.0", "yaml-cpp", "0.8.0")
+NEGATIVE["rust-bazel-9"] = _bazel_cases("9.1.0", "1.99.1", "1.99.0", "yaml-cpp", "0.8.0")
 
 
 def commit_all(consumer: Path, genv: dict, msg: str) -> None:
