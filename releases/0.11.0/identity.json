@@ -1,0 +1,32 @@
+{
+  "version": "0.11.0",
+  "state": "verified-unaccepted",
+  "git_tag": "v0.11.0",
+  "source_revision": "0d388486e679bed5517d5c513a719e47c9290c9d",
+  "archive": "dev-platform-0.11.0.tar.gz",
+  "archive_sha256": "df2a9f58861036b0725143e300c5887fd7c9c4c292d0e752c9696975a2ca2ee0",
+  "tree_digest_pin": "fde7e708bc3e7ee3e62dde83dd3e5209b47c3d22da3f1a84b786b136dcd80372",
+  "release_workflow_run": "https://github.com/syncom-systems/dev-platform/actions/runs/39760925914",
+  "signer": "syncom-systems/dev-platform/.github/workflows/release.yml@refs/tags/v0.11.0",
+  "github_release": {
+    "immutable": true,
+    "prerelease": true,
+    "title": "dev-platform 0.11.0 (verified, NOT accepted)"
+  },
+  "verifier_pins": {
+    "verify_release.py_sha256": "a2d53075b8bf11bb14f4a2dffb0b40fc6e66b04af73801951fcd768ba29f6f2e",
+    "trust_policy_sha256": "adf816dacd3333491046215a3448052e6e47ea9a3d5c31eed4ff04c2480ea83d",
+    "install_release.py_sha256": "473a2c73eb71904ea6ee0e010f2288976126d4560e3efd11c33c11e44f15bb93",
+    "verify_app_release.py_sha256": "c53bf1351e4f87e7871e616b7eeaee8eca9cb999218e8f70519321cd361d8172",
+    "verify_platform_current.py_sha256": "55af0f2e20818b879fa998259e0e4d16da96afdbe48cd187e9203658408398fe",
+    "verify_consumer_evidence.py_sha256": "2c5ee2890925d496025d5193e60a0a56953fdbb301f3335845fbb9c63864bbe7",
+    "consumer_run.py_sha256": "bc502b3741ea5ba7632b1ed2d66d202e677ad91ca4d08ddc1f6b1330080d9a36",
+    "homebrew_formula.py_sha256": "362c4c6b6fe0360ff180753172e46a0a88617c39468355bbce9bdca68b23aefb"
+  },
+  "continuity": {
+    "predecessor": "0.10.0",
+    "predecessor_state": "verified-unaccepted",
+    "stage": "full",
+    "admission": "admitted"
+  }
+}
