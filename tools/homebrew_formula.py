@@ -63,10 +63,7 @@ class DevPlatform < Formula
         dev-platform setup
       installs exactly that release with its own pinned trusted installer (release
       attestations are verified with gh: run `gh auth login` once), provisions its
-      toolchains and runs its doctor. A verified-but-unaccepted release is used only
-      with --allow-unaccepted, a decision for the project. `brew upgrade` changes this
-      CLI only; project pins, installed releases and CI are unaffected.
-    EOS
+{caveat_tail}    EOS
   end
 
   test do
@@ -77,6 +74,18 @@ class DevPlatform < Formula
     assert_match "no dev-platform.toml", output
   end
 end
+"""
+
+
+# Releases before 0.12.0 were published verified-unaccepted (trust/v1); their formulas keep their exact text.
+CAVEAT_TAIL_V1 = """\
+      toolchains and runs its doctor. A verified-but-unaccepted release is used only
+      with --allow-unaccepted, a decision for the project. `brew upgrade` changes this
+      CLI only; project pins, installed releases and CI are unaffected.
+"""
+CAVEAT_TAIL = """\
+      toolchains and runs its doctor. `brew upgrade` changes this CLI only; project
+      pins, installed releases and CI are unaffected.
 """
 
 
@@ -114,7 +123,13 @@ def render(
         tree_sha256=tree_sha256,
         python=PYTHON,
         python_series=PYTHON.split("@")[1],
+        caveat_tail=CAVEAT_TAIL_V1 if _before_0_12(version) else CAVEAT_TAIL,
     )
+
+
+def _before_0_12(version: str) -> bool:
+    major, minor = (int(x) for x in version.split("-")[0].split(".")[:2])
+    return (major, minor) < (0, 12)
 
 
 def from_identity(path: Path) -> str:

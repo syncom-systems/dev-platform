@@ -3,7 +3,6 @@
 import copy
 import json
 import unittest
-from pathlib import Path
 
 from tests.helpers import ROOT, tmpdir
 from tests.test_verify_release import POLICY, REV, V, fake_gh
@@ -84,15 +83,13 @@ class Continuity(unittest.TestCase):
         self.assertEqual(r["continuity"], "passed")
         self.assertIn("failed", r.values())
 
-    def test_continuity_never_confers_acceptance(self):
-        # an accepted predecessor does not make N accepted: continuity has no effect on authorization
-        doc = record()
-        doc["predecessor"]["verification"]["state"] = "accepted"
-        self.assertEqual(self.run_check(doc)["continuity"], "passed")
-        src = Path(V.__file__).read_text()
-        self.assertNotIn(
-            "continuity", src[src.index("def effective_authorization") : src.index("def verify(")]
-        )
+    def test_predecessor_must_itself_have_passed_verification(self):
+        # judged by the current verifier (`verified`); records of trust/v1 predecessors said verified-unaccepted
+        for state, want in (("verified", "passed"), ("verified-unaccepted", "passed"), ("accepted", "passed"),
+                            ("pre-release", "failed"), ("failed", "failed")):  # fmt: skip
+            doc = record()
+            doc["predecessor"]["verification"]["state"] = state
+            self.assertEqual(self.run_check(doc)["continuity"], want, state)
 
     def test_shipped_policy_pins_the_real_predecessor(self):
         from tests.test_verify_release import SHIPPED_POLICY

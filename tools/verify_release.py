@@ -6,13 +6,14 @@ so that a bug or compromise in the code being released cannot vouch for itself. 
 GitHub CLI (`gh attestation verify`) as the independent signature verifier, then re-checks the
 certificate fields against the trust policy itself.
 
-A valid signature is necessary, not sufficient: the signer must match the trust policy, and a
-*stable* release is only `accepted` with an AUTHENTICATED, AUTHORIZED, in-force approval bound to the
-archive digest: the record's identity is verified here by a provider from an explicit registry (unknown
-providers fail closed), the identity must be an approver in the trust policy for this kind of subject and
-claim, and the approval confers only `platform-baseline`. Pre-releases are never `accepted`.
+A valid signature is necessary, not sufficient: the signer must match the trust policy (repository,
+release workflow, protected version tag, GitHub-hosted runner). When every check passes, a stable release
+is `verified` and a pre-release (`-alpha.N`, `-beta.N`, `-rc.N`) is `pre-release`; anything else is `failed`.
+The release authority is whoever may push a protected version tag (ADR 0024); no separate approval record
+is read. Releases published under a `dev-platform.trust/v1` policy keep their own pinned verifier and
+records (`verified-unaccepted`, `accepted`); this verifier refuses such a policy rather than reinterpret it.
 
-Exit status: 0 when every check passed (see `acceptance.state`), 1 otherwise.
+Exit status: 0 when every check passed (see `acceptance.state`), 1 otherwise, 2 for an unusable policy.
 """
 
 from __future__ import annotations
@@ -32,9 +33,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 RECORD_SCHEMA = "dev-platform.verification/v1"
-POLICY_SCHEMA = "dev-platform.trust/v1"
+POLICY_SCHEMA = "dev-platform.trust/v2"
 SLSA = "https://slsa.dev/provenance/v1"
 CYCLONEDX = "https://cyclonedx.org/bom"
+# technical verification passed (trust/v2 `verified`; trust/v1 records said verified-unaccepted or accepted)
+VERIFIED_STATES = ("verified", "verified-unaccepted", "accepted")
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$")
 GhRunner = Callable[[list[str]], tuple[int, str, str]]
 
@@ -290,9 +293,9 @@ def check_continuity(
     rec: Record, path: Path | None, exp: dict, archive_sha: str, policy: dict, gh: GhRunner
 ) -> None:
     """Release N-1 (named and digest-pinned by the policy) verified N's source by running the full stage.
-    This is continuity *evidence*: it never grants authority (N-1 may itself be unaccepted) and the operator's
-    pins remain the root of trust. A policy that names no predecessor key is a legacy policy; an explicit
-    null predecessor declares a first release."""
+    This is continuity *evidence*: it never grants authority and the operator's pins remain the root of trust.
+    A policy that names no predecessor key is a legacy policy; an explicit null predecessor declares a first
+    release."""
     if "continuity" not in policy:
         return
     pred = (policy["continuity"] or {}).get("predecessor")
@@ -321,7 +324,8 @@ def check_continuity(
         if p.get(k) != pred.get(k):
             problems.append(f"predecessor {k} differs from the policy pin")
     v = p.get("verification") or {}
-    if v.get("state") not in ("verified-unaccepted", "accepted") or v.get("all_checks_passed") is not True:
+    # the predecessor is judged by this verifier (`verified`); the trust/v1 states are accepted for older records
+    if v.get("state") not in VERIFIED_STATES or v.get("all_checks_passed") is not True:
         problems.append("predecessor was not itself verified")
     if st.get("name") != "full" or st.get("exit") != 0 or st.get("admission") != "admitted":
         problems.append("predecessor's full stage over this source did not pass")
@@ -330,16 +334,12 @@ def check_continuity(
     check_attestation(rec, path, sha256_file(path), exp, policy, gh, None, label="continuity-attestation")
 
 
-# ---- owner authorization -------------------------------------------------------------------------
-# Distinct questions, answered in this order, each failing closed:
-#   authenticity  - who made this record? (provider-specific evidence, verified here, never asserted)
-#   authority     - may THAT identity approve THIS kind of subject, conferring THESE claims? (trust policy)
-#   binding       - does the record name exactly this archive digest, and is it the signed file?
-#   validity      - is it in force now? (not in the future, within validity, not superseded or revoked)
-# A valid signature only answers the first question. Unknown providers, unsigned records and unauthorized
-# identities never reach `accepted`. The Git author/committer fields on their own are not evidence.
+# ---- identity providers (a library for application-release approvals, ADR 0019) --------------------
+# A platform release is NOT judged by approval records (ADR 0024). tools/verify_app_release.py loads the pinned
+# platform verifier and authenticates application-release approval records with these providers. A valid
+# signature only establishes identity; authority comes from the application's own policy. Unknown providers fail
+# closed. The Git author/committer fields on their own are not evidence.
 AUTH_SCHEMA = "dev-platform.authorization/v1"
-CONFERABLE_CLAIMS = {"platform-baseline"}  # the ONLY claim a platform-release approval can confer
 NOT_CONFERRED = [
     "release certification (a property of consumer check results)",
     "qualification of any profile or platform beyond what the release's own qualification evidence shows",
@@ -405,7 +405,7 @@ def _auth_github_signed_commit(doc: dict, raw: bytes, auth_policy: dict, gh: GhR
 
 
 def _auth_github_environment_approval(doc: dict, raw: bytes, auth_policy: dict, gh: GhRunner):
-    """Authenticate a record produced by the pinned acceptance workflow after a GitHub Environment approval.
+    """Authenticate a record produced by a pinned approval workflow after a GitHub Environment approval.
 
     The record is the attested artifact: `gh attestation verify` must show that exactly these bytes were
     attested by the pinned workflow at the pinned ref, triggered manually (workflow_dispatch), on a
@@ -478,7 +478,7 @@ def _auth_github_environment_approval(doc: dict, raw: bytes, auth_policy: dict, 
                 "run": cert.get("runInvocationURI"),
                 "source_digest": cert.get("sourceRepositoryDigest"),
             }
-    raise ValueError("attestation does not match the pinned acceptance workflow, ref, trigger and runner")
+    raise ValueError("attestation does not match the pinned approval workflow, ref, trigger and runner")
 
 
 PROVIDERS = {
@@ -491,97 +491,6 @@ def _ts(v: object) -> datetime:
     if not isinstance(v, str):
         raise ValueError("timestamp must be a string")
     return datetime.fromisoformat(v.replace("Z", "+00:00")).astimezone(UTC)
-
-
-def assess_authorization(path: Path, archive_sha: str, policy: dict, gh: GhRunner, now: datetime) -> dict:
-    """Judge one record. {'status': 'authentic'|'ignored', 'problems': [...], ...}. Never raises."""
-    verdict: dict = {"file": Path(path).name, "id": None, "status": "ignored", "problems": []}
-    try:
-        raw = Path(path).read_bytes()
-        doc = json.loads(raw)
-        assert isinstance(doc, dict)
-    except (OSError, ValueError, AssertionError):
-        verdict["problems"].append("not a readable JSON object")
-        return verdict
-    verdict["id"] = doc.get("id")
-    try:
-        if doc.get("schema") != AUTH_SCHEMA:
-            raise ValueError(f"schema must be {AUTH_SCHEMA}")
-        for k in ("id", "subject", "decision", "decided_by", "decided_at", "scope"):
-            if k not in doc:
-                raise ValueError(f"missing {k}")
-        if not isinstance(doc["id"], str) or not doc["id"]:
-            raise ValueError("id must be a non-empty string")
-        sub = doc["subject"] if isinstance(doc["subject"], dict) else {}
-        if sub.get("kind") != "platform-release":
-            raise ValueError("subject.kind must be platform-release")
-        if sub.get("digest") != archive_sha:
-            raise ValueError("subject.digest is not this archive's sha256")
-        if doc["decision"] not in ("approved", "rejected", "revoked"):
-            raise ValueError("decision must be approved|rejected|revoked")
-        by = doc["decided_by"] if isinstance(doc["decided_by"], dict) else {}
-        ia = by.get("identity_assertion") if isinstance(by.get("identity_assertion"), dict) else {}
-        provider = ia.get("provider")
-        auth_policy = policy.get("authorization") or {}
-        if provider not in PROVIDERS or provider not in auth_policy.get("providers", []):
-            raise ValueError(f"identity provider {provider!r} is not supported (fail closed)")
-        # 1. authenticity
-        login, evidence = PROVIDERS[provider](doc, raw, auth_policy, gh)
-        verdict["authenticated_as"] = {"provider": provider, "login": login}
-        verdict["evidence"] = evidence
-        # 2. authority
-        who = [
-            a
-            for a in auth_policy.get("approvers", [])
-            if a.get("provider") == provider and _login_eq(a.get("login"), login)
-        ]
-        if not who:
-            raise ValueError(f"{login} is authenticated but is not an approver in the trust policy")
-        approver = who[0]
-        if "platform-release" not in approver.get("may_approve", []):
-            raise ValueError(f"approver {approver.get('id')} may not approve platform releases")
-        verdict["approver"] = approver.get("id")
-        # 3. scope: only the explicitly approved, explicitly permitted claim
-        scope = doc["scope"] if isinstance(doc["scope"], dict) else {}
-        confers = scope.get("confers")
-        if not (isinstance(confers, list) and confers) or not set(confers) <= CONFERABLE_CLAIMS:
-            raise ValueError(f"scope.confers must be a non-empty subset of {sorted(CONFERABLE_CLAIMS)}")
-        if not set(confers) <= set(approver.get("may_confer", [])):
-            raise ValueError("scope.confers exceeds the approver's authority in the trust policy")
-        verdict["scope"] = {"confers": sorted(set(confers)), "not_conferred": NOT_CONFERRED}
-        # 4. validity window
-        decided = _ts(doc["decided_at"])
-        if decided > now + CLOCK_SKEW:
-            raise ValueError("decided_at is in the future")
-        v = doc.get("validity") or {}
-        if v.get("not_before") and _ts(v["not_before"]) > now:
-            raise ValueError("not yet valid")
-        if v.get("not_after") and _ts(v["not_after"]) <= now:
-            raise ValueError("expired")
-        verdict.update(status="authentic", decision=doc["decision"], decided_at=decided.isoformat())
-        verdict["supersedes"] = list(doc.get("supersedes") or [])
-    except ValueError as e:
-        verdict["problems"].append(str(e))
-    except Exception as e:  # defensive: any surprise is a refusal, never an acceptance
-        verdict["problems"].append(f"unexpected {type(e).__name__}: {e}")
-    return verdict
-
-
-def effective_authorization(
-    paths: list[Path], archive_sha: str, policy: dict, gh: GhRunner, now: datetime | None = None
-) -> tuple[dict | None, list[dict]]:
-    """(the one authenticated, authorized, in-force approval or None, a verdict for every record)."""
-    now = now or datetime.now(UTC)
-    verdicts = [assess_authorization(p, archive_sha, policy, gh, now) for p in paths]
-    live = [v for v in verdicts if v["status"] == "authentic"]
-    superseded = {s for v in live for s in v["supersedes"]}
-    live = sorted((v for v in live if v["id"] not in superseded), key=lambda v: v["decided_at"])
-    if not live:
-        return None, verdicts
-    if len(live) > 1 and live[-1]["decided_at"] == live[-2]["decided_at"]:
-        live[-1]["problems"].append("ambiguous: two live decisions share a timestamp (fail closed)")
-        return None, verdicts
-    return (live[-1] if live[-1]["decision"] == "approved" else None), verdicts
 
 
 def verify(
@@ -597,7 +506,12 @@ def verify(
     continuity: Path | None = None,
     now: datetime | None = None,
 ) -> dict:
+    # `authorizations` and `now` are accepted from callers written for trust/v1 verifiers and are not evaluated:
+    # a platform release has no approval record (ADR 0024).
+    del authorizations, now
     rec = Record()
+    rec.add("policy-schema", policy.get("schema") == POLICY_SCHEMA,
+            f"policy must be {POLICY_SCHEMA}; a trust/v1 release is verified by the verifier pinned with it")  # fmt: skip
     sbom_doc = None
     manifest = None
     archive_sha = sha256_file(archive)
@@ -687,41 +601,22 @@ def verify(
 
     check_environment(rec, environment, manifest, exp, policy, gh)
     check_continuity(rec, continuity, exp, archive_sha, policy, gh)
-    prerelease = "-" in exp["version"]
-    auth, verdicts = (
-        (None, [])
-        if prerelease
-        else effective_authorization(list(authorizations), archive_sha, policy, gh, now)
-    )
-    # Stable releases ALWAYS need an authenticated approval; no policy switch can waive it.
-    rec.add(
-        "policy-requires-authorization",
-        policy.get("stable_requires_authorization", True) is True,
-        "stable_requires_authorization must not be disabled",
-    )
     if not rec.all_passed:
         state, reasons = "failed", [c["id"] for c in rec.checks if c["status"] == "failed"]
-    elif prerelease:
-        state, reasons = "pre-release", ["pre-releases are never accepted; they are verified artifacts only"]
-    elif auth is None:
-        state = "verified-unaccepted"
-        reasons = ["no authenticated, authorized, in-force approval for this archive digest"]
+    elif "-" in exp["version"]:
+        state, reasons = (
+            "pre-release",
+            ["pre-release version: verified artifacts, published as a pre-release"],
+        )
     else:
-        state, reasons = "accepted", [f"authenticated approval {auth['id']} by {auth['approver']}"]
+        state, reasons = "verified", ["every check passed for a release built from a protected version tag"]
     return {
         "schema": RECORD_SCHEMA,
         "subject": subject,
         "expected": {k: v for k, v in exp.items()},
         "policy_sha256": hashlib.sha256(json.dumps(policy, sort_keys=True).encode()).hexdigest(),
         "checks": rec.checks,
-        "acceptance": {
-            "state": state,
-            "reasons": reasons,
-            "authorization": auth["id"] if auth else None,
-            "confers": auth["scope"]["confers"] if auth else [],
-            "not_conferred": NOT_CONFERRED,
-            "authorization_evidence": verdicts,
-        },
+        "acceptance": {"state": state, "reasons": reasons, "not_conferred": NOT_CONFERRED},
     }
 
 
@@ -734,7 +629,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tree-digest")
     ap.add_argument("--ref", help="expected git ref (default refs/tags/v<version>)")
     ap.add_argument("--policy", type=Path, required=True, help="trust policy (from outside the release)")
-    ap.add_argument("--authorization", type=Path, action="append", default=[])
     ap.add_argument("--bundle", type=Path, help="offline provenance attestation bundle")
     ap.add_argument("--sbom-bundle", type=Path, help="offline SBOM attestation bundle")
     ap.add_argument("--environment", type=Path, help="release build-environment record (attested)")
@@ -743,7 +637,8 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     policy = json.loads(a.policy.read_text())
     if policy.get("schema") != POLICY_SCHEMA:
-        print(f"policy schema must be {POLICY_SCHEMA}", file=sys.stderr)
+        print(f"policy schema must be {POLICY_SCHEMA} (a trust/v1 release is verified by the verifier pinned "
+              "with its policy)", file=sys.stderr)  # fmt: skip
         return 2
     exp = {
         "version": a.version,
@@ -757,7 +652,6 @@ def main(argv: list[str] | None = None) -> int:
         a.archive,
         exp,
         policy,
-        authorizations=a.authorization,
         bundle=a.bundle,
         sbom_bundle=a.sbom_bundle,
         environment=a.environment,
@@ -770,11 +664,6 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"{c['status'].upper():7} {c['id']}"
             + (f"  ({c['detail']})" if c["detail"] and c["status"] == "failed" else "")
-        )
-    for v in doc["acceptance"]["authorization_evidence"]:
-        print(
-            f"AUTH    {v['file']}: {v['status']}"
-            + (f"  ({'; '.join(v['problems'])})" if v["problems"] else "")
         )
     print(f"acceptance: {doc['acceptance']['state']}  {'; '.join(doc['acceptance']['reasons'])}")
     return 0 if doc["acceptance"]["state"] != "failed" else 1

@@ -132,18 +132,20 @@ class VerifierTest(unittest.TestCase):
     def failed(self, doc):
         return {c["id"] for c in doc["checks"] if c["status"] == "failed"}
 
-    def test_prerelease_verifies_but_is_never_accepted(self):
+    def test_prerelease_verifies_as_a_prerelease(self):
         doc, _, _ = self.run_v("1.0.0-rc.1")
         self.assertEqual(self.failed(doc), set())
         self.assertEqual(doc["acceptance"]["state"], "pre-release")
 
-    def test_prerelease_is_never_accepted_whatever_the_authorization(self):
+    def test_prerelease_stays_a_prerelease_whatever_is_supplied(self):
         doc, _, _ = self.run_v("1.0.0-rc.1", auths=[{"anything": "at all"}])
         self.assertEqual(doc["acceptance"]["state"], "pre-release")
 
-    def test_stable_without_authorization_is_verified_unaccepted(self):
+    def test_stable_that_passes_every_check_is_verified(self):
         doc, _, _ = self.run_v("1.0.0")
-        self.assertEqual(doc["acceptance"]["state"], "verified-unaccepted")
+        self.assertEqual(self.failed(doc), set())
+        self.assertEqual(doc["acceptance"]["state"], "verified")
+        self.assertEqual(doc["checks"][0]["id"], "policy-schema")
 
     def test_valid_signature_from_untrusted_identity_fails(self):
         for name, over in {

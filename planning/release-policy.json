@@ -15,7 +15,7 @@
     "prerelease_identifiers": ["alpha", "beta", "rc"],
     "supported_lines": "latest-minor",
     "one_zero_criteria": [
-      "owner-accepted-baseline",
+      "stable-baseline-released",
       "predecessor-continuity-verified",
       "two-consumers-in-production-profile",
       "evidence-schemas-stable-two-minors",

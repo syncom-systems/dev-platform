@@ -1,6 +1,9 @@
 # 0020 GitHub Environment approval as an authorization provider
 
-Status: Proposed (v0.7.0; the owner directed simple approval by a logged-in GitHub click, "I trust my login to GitHub")
+Status: Superseded by [ADR 0024](0024-single-owner-release-authority.md) for platform releases: `accept.yml` is removed
+and the platform verifier reads no approval record. The provider remains in the registry for application-release
+approvals (ADR 0019). Proposed (v0.7.0; the owner directed simple approval by a logged-in GitHub click, "I trust my
+login to GitHub")
 
 ## Context
 `github-signed-commit` needs a locally held signing key and a commit whose author and committer are the approver. For the

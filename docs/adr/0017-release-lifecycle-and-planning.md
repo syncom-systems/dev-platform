@@ -1,7 +1,8 @@
 # 0017 Release lifecycle and GitHub-native planning
 
 Status: Proposed (approved by the owner as the development baseline). Planning and versioning policy only; it adds no trust anchor and changes no ratified decision
-(ADR 0014, 0015, 0016 are untouched).
+(ADR 0014, 0015, 0016 are untouched). Amended by [ADR 0024](0024-single-owner-release-authority.md): release authority
+and the lifecycle end state (see Amendments, 3).
 
 ## Decision
 Use GitHub's own features for planning and keep them strictly separate from verification and authority.
@@ -13,7 +14,7 @@ Use GitHub's own features for planning and keep them strictly separate from veri
 | Roadmap and cross-repository coordination | Project "Dev Platform roadmap" (fields Track, Release gate) | none |
 | Immutable artifacts | GitHub Releases published only by `release.yml` | none (publishing is not acceptance) |
 | Technical verification | `tools/verify_release.py` with operator pins | verifier |
-| Owner acceptance | authenticated authorization record (ADR 0016) | owner, via the pinned approver policy |
+| Release authority | pushing a protected version tag (ADR 0024; releases up to 0.11.0: ADR 0016 records) | owner |
 
 Thematic milestones M1-M6 are retired (closed, history kept); the theme is the Project's Track field.
 
@@ -66,3 +67,7 @@ absent evidence fails closed. Consumers get the same contract through the platfo
    `owner-decision`, `held`, `proposal`) and *blocked* ("Blocked by #n" on an open issue) separately. A held
    patch, a pending authorization or an unrelated blocked item never stops independent work in other
    milestones.
+3. **Single-owner release authority (ADR 0024, 2026-10-22).** For releases verified under `trust/v2` (0.12.0 on) the
+   lifecycle ends `independently-verified` -> `released`: both verification records say `verified` and the release is
+   published immutable. `verified-unaccepted` and `accepted` remain the end states of releases up to 0.11.0 and are
+   never reached by a newer one; `released` is derived from evidence like the states before it.

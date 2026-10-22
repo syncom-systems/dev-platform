@@ -726,7 +726,9 @@ def _reason_text(reasons: list[dict]) -> str:
 def platform_verification(V, entry: dict, archive_sha: str, a, plat_policy: dict, gh, now=None):
     """Re-run the platform verifier for a policy that requires an accepted Dev Platform release.
 
-    Acceptance is itself a current decision: unless inspecting history, the platform authorization records are read
+    A release verified under trust/v2 is `verified`, which is the platform baseline; there are no platform
+    authorization records to read (ADR 0024). For a trust/v1 release, acceptance is itself a current decision:
+    unless inspecting history, the platform authorization records are read
     from the platform policy's evidence repository at one commit and judged with the supplied ones, so an
     acceptance that was revoked (or never was) is not reported accepted from stale evidence. Returns
     (platform verification record, extra checks for the application record, platform currency or None).
@@ -741,7 +743,10 @@ def platform_verification(V, entry: dict, archive_sha: str, a, plat_policy: dict
     currency = None
     scratch = tempfile.TemporaryDirectory(prefix="current-platform-auth-")
     try:
-        if not historical:
+        v1 = (
+            not historical and "authorization" in plat_policy
+        )  # trust/v2 policies have no authorization section
+        if v1:
             snap, pinned, problems = current_authorizations(
                 V,
                 gh,
@@ -767,7 +772,7 @@ def platform_verification(V, entry: dict, archive_sha: str, a, plat_policy: dict
             continuity=a.platform_continuity,
             **({"now": now} if now else {}),
         )  # fmt: skip
-        if not historical:
+        if v1:
             if gh.failures and not any(r["code"] == "api-failure" for r in problems):
                 problems = [
                     *problems,
@@ -932,8 +937,12 @@ def verify(
                 or sub.get("version") != pl["release_version"]
             ):
                 problems.append("verified platform archive is not the release this record was built with")
-            if acc.get("state") != "accepted":
-                problems.append(f"platform release state is {acc.get('state')!r}, not 'accepted'")
+            if acc.get("state") == "verified":
+                pass  # trust/v2: a verified stable release is the platform baseline (ADR 0024)
+            elif acc.get("state") != "accepted":
+                problems.append(
+                    f"platform release state is {acc.get('state')!r}, not 'verified' or 'accepted'"
+                )
             elif "platform-baseline" not in acc.get("confers", []):
                 problems.append("platform acceptance does not confer platform-baseline")
         rec.add("platform-acceptance", not problems, "; ".join(problems))

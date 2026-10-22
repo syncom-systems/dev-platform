@@ -179,7 +179,9 @@ def main(argv: list[str] | None = None) -> int:
         "--dev-platform-checkout", type=Path, help="existing checkout of the platform at the pinned revision"
     )
     ap.add_argument(
-        "--allow-unaccepted", action="store_true", help="use a release that is verified but not accepted"
+        "--allow-unaccepted",
+        action="store_true",
+        help="the release was published before 0.12.0 as verified-unaccepted",
     )
     ap.add_argument("--infra-profile", type=Path, help="default: .dev-platform/infra-profile.json if present")
     ap.add_argument(

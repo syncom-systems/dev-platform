@@ -7,9 +7,9 @@ It composes the existing mechanisms; it is not a second release-management syste
      other tree is refused and left untouched) and the trusted installer's verification record must be beside
      it. Otherwise the trusted installer, verifier and policy are taken from the public platform repository at
      the pinned revision, must equal the pinned digests, and `install_release.py` verifies provenance, SBOM
-     and build-environment attestations before anything is extracted (ADR 0014). Admitting a
-     verified-unaccepted or pre-release version is the consumer's decision (`--allow-unaccepted`,
-     `--allow-prerelease`);
+     and build-environment attestations before anything is extracted (ADR 0014). A `verified` release
+     is admitted; a pre-release (`--allow-prerelease`) or a release published before 0.12.0 as
+     verified-unaccepted (`--allow-unaccepted`) is the consumer's decision (ADR 0024);
   3. the pinned release itself, run from a verified private snapshot exactly as the launcher runs it,
      verifies the provisioned toolchain profile, or provisions it (`toolchain provision --pinned --verify`);
   4. the pinned release's `doctor` checks the environment.
@@ -156,7 +156,12 @@ def recorded_state(record_file: Path, pins: dict) -> str | None:
 
 
 def admit(state: str, *, allow_unaccepted: bool, allow_prerelease: bool) -> None:
-    allowed = {"accepted": True, "verified-unaccepted": allow_unaccepted, "pre-release": allow_prerelease}
+    allowed = {
+        "verified": True,
+        "accepted": True,
+        "verified-unaccepted": allow_unaccepted,
+        "pre-release": allow_prerelease,
+    }
     if not allowed.get(state, False):
         flag = ADMISSION.get(state)
         raise Refused(

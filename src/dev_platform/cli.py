@@ -442,7 +442,7 @@ def build_parser() -> argparse.ArgumentParser:
     su.add_argument(
         "--allow-unaccepted",
         action="store_true",
-        help="use a pinned release that is verified but not accepted",
+        help="use a pinned release published before 0.12.0 as verified-unaccepted",
     )
     su.add_argument("--allow-prerelease", action="store_true", help="use a pinned pre-release")
     su.add_argument(
@@ -471,7 +471,11 @@ def build_parser() -> argparse.ArgumentParser:
     wf.add_argument("--project", type=Path, default=Path("."))
     wf.add_argument("--runs-on", default="ubuntu-24.04", help="a GitHub-hosted image label")
     wf.add_argument("--branch", default="main", help="the protected branch pushes run on")
-    wf.add_argument("--allow-unaccepted", action="store_true", help="the pinned release may be unaccepted")
+    wf.add_argument(
+        "--allow-unaccepted",
+        action="store_true",
+        help="the pinned release is a pre-0.12.0 verified-unaccepted one",
+    )
     wf.add_argument("--output", type=Path, help="write a new file instead of stdout (never replaces one)")
     return ap
 

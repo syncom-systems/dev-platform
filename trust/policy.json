@@ -1,6 +1,6 @@
 {
-  "schema": "dev-platform.trust/v1",
-  "description": "Who may produce a dev-platform release. A valid signature is necessary but not sufficient: the signer identity must match this policy, and stable releases additionally require an authenticated owner authorization (docs/release-trust.md, ADR 0016). Release N must carry a continuity record: the named predecessor, digest-pinned here, re-ran the full stage over N's source (evidence, never authority).",
+  "schema": "dev-platform.trust/v2",
+  "description": "Who may produce a dev-platform release: the release workflow of this repository, run on a GitHub-hosted runner for a protected version tag. A valid signature is necessary but not sufficient: the signer identity must match this policy. A release that passes every check is `verified` (a `-alpha/-beta/-rc` version is `pre-release`); the authority to release is the permission to push a protected version tag, with no separate approval record (ADR 0024). Release N must carry a continuity record: the named predecessor, digest-pinned here, re-ran the full stage over N's source (evidence, never authority).",
   "oidc_issuer": "https://token.actions.githubusercontent.com",
   "signers": [
     {
@@ -11,15 +11,6 @@
   ],
   "require_github_hosted_runner": true,
   "require_environment_evidence": true,
-  "stable_requires_authorization": true,
-  "authorization": {
-    "providers": [
-      "github-signed-commit"
-    ],
-    "evidence_repo": "syncom-systems/dev-platform",
-    "evidence_ref": "main",
-    "approvers": []
-  },
   "continuity": {
     "predecessor": {
       "version": "0.10.0",

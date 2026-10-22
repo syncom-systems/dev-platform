@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/syncom-systems/dev-platform/schemas/trust-v2.schema.json",
+  "title": "dev-platform.trust/v2",
+  "description": "Who may produce a release: the signer (repository, release workflow, version-tag pattern) and the runner and evidence requirements. A valid signature does not imply trust; the signer must match this policy. There is no approval registry: releasing is pushing a protected version tag (ADR 0024). Policies of releases published before trust/v2 keep dev-platform.trust/v1.",
+  "type": "object",
+  "required": [
+    "schema",
+    "oidc_issuer",
+    "signers",
+    "continuity"
+  ],
+  "properties": {
+    "schema": {
+      "const": "dev-platform.trust/v2"
+    },
+    "oidc_issuer": {
+      "type": "string"
+    },
+    "signers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "repo",
+          "workflow",
+          "ref_pattern"
+        ]
+      }
+    },
+    "require_github_hosted_runner": {
+      "type": "boolean"
+    },
+    "continuity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "predecessor"
+      ],
+      "properties": {
+        "predecessor": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "version",
+                "archive_sha256",
+                "tree_digest"
+              ],
+              "properties": {
+                "version": {
+                  "type": "string"
+                },
+                "archive_sha256": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "tree_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "require_environment_evidence": {
+      "type": "boolean"
+    },
+    "description": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

@@ -15,7 +15,8 @@ These steps are exactly what `tools/pilot.py` runs against a real public consume
    python3 install_release.py --version <v> --store ./store --verifier-sha256 <pin> --policy policy.json \
      --policy-sha256 <pin> --archive-sha256 <pin> --tree-sha256 <consumer pin> [--allow-unaccepted]
    ```
-   An unaccepted release is refused unless you pass `--allow-unaccepted`; accepted-ness is never inferred.
+   A `verified` release (0.12.0 on) installs as is. A release up to 0.11.0 is verified-unaccepted and is refused unless
+   you pass `--allow-unaccepted` (its own installer decides).
 3. **Write the pin**: `dev-platform init --platform-version <v> --sha256 <tree digest> --profile <profile>`.
    `init` derives starter checks from build-system markers and a real `tests/` layout, never from stray files.
 4. **Realize the toolchain profile** the release ships for your project (for Rust/Cargo: `rust-cargo-1.99` for

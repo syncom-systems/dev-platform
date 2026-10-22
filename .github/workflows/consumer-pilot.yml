@@ -20,7 +20,7 @@ on:
         required: true
         type: string
       allow_unaccepted:
-        description: "Use a release that is verified but not accepted"
+        description: "Use a release published before 0.12.0 as verified-unaccepted"
         required: false
         type: boolean
         default: false

@@ -1,6 +1,8 @@
 # 0016 Authorization trust boundary
 
-Status: Ratified (owner directive, 2026-10-11). Supersedes the `tools/validate_authorization.py` proposal
+Status: Superseded for platform releases by [ADR 0024](0024-single-owner-release-authority.md) from 0.12.0 (a
+platform release has no approval record; it is `verified` from its checks). It still describes how releases up to
+0.11.0 were judged. Ratified (owner directive, 2026-10-11). Supersedes the `tools/validate_authorization.py` proposal
 that accompanied the v0.1.0 acceptance packet; the owner did not ratify that two-tool design.
 
 ## Defect found

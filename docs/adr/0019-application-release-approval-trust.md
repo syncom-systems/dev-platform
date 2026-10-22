@@ -57,7 +57,8 @@ nothing re-derived the links (source, dependencies, platform release, toolchain 
    `require_acceptance: true` also names `archive_sha256` and `source_revision`. The verifier then re-runs the
    platform verifier (`--platform-archive`, `--platform-policy` with `--platform-policy-sha256`, platform
    authorizations/bundles) and adds the check `platform-acceptance`: the verified archive must be the one named, the
-   release the record was built with, and `acceptance.state` must be `accepted` conferring `platform-baseline`.
+   release the record was built with, and `acceptance.state` must be `accepted` conferring `platform-baseline`
+   (for a platform release verified under `trust/v2`, `verified`: ADR 0024; no platform authorization is read).
    This is an extra eligibility condition only. It never supplies an application approval, platform approvers have no
    authority in the application policy (and the reverse), and a record for one subject cannot bind to the other.
    The same flags exist on `rollback select`; with the requirement set and no platform verification supplied,

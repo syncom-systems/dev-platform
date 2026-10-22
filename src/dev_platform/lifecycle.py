@@ -1,10 +1,12 @@
 """Release lifecycle and version policy. This module is a *reader*, never an authority.
 
-States:   planned < implementation-complete < candidate-built < independently-verified
-          < verified-unaccepted < accepted;  overlays: suspended (warning), revoked (authoritative).
+States:   planned < implementation-complete < candidate-built < independently-verified < released;
+          overlays: suspended (warning), revoked (authoritative).
 `planned` and `implementation-complete` come from planning data (milestone state) and carry no trust.
-Everything from `candidate-built` on is derived from verification records. `accepted` is observable only
-from a result produced by running the pinned authoritative verifier (`run_verifier`): no planning input
+Everything from `candidate-built` on is derived from verification records. `released` is a stable release
+whose records say `verified` (trust/v2) and that is published as an immutable GitHub release (ADR 0024).
+Releases verified under trust/v1 end in `verified-unaccepted` or `accepted` instead; `accepted` is observable
+only from a result produced by running the pinned authoritative verifier (`run_verifier`): no planning input
 (milestone closure, labels, merged PRs, a workflow result, a hand-written record) can produce it.
 Overlays only narrow trust, but they are two different things: an unauthenticated safety *warning* suspends
 use conservatively and is never recorded as a governance decision; *revocation* (and replacement of an
@@ -30,8 +32,9 @@ STATES = (
     "implementation-complete",
     "candidate-built",
     "independently-verified",
-    "verified-unaccepted",
-    "accepted",
+    "released",
+    "verified-unaccepted",  # trust/v1 releases (before 0.12.0)
+    "accepted",  # trust/v1 releases (before 0.12.0)
 )
 OVERLAYS = ("suspended", "revoked")
 # Forward edges only; there is deliberately no edge that targets `accepted`.
@@ -39,7 +42,8 @@ EDGES = {
     "planned": {"implementation-complete"},
     "implementation-complete": {"candidate-built"},
     "candidate-built": {"independently-verified"},
-    "independently-verified": {"verified-unaccepted"},
+    "independently-verified": {"released", "verified-unaccepted"},
+    "released": set(),
     "verified-unaccepted": set(),
 }
 SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-([A-Za-z]+)\.(\d+))?$")
@@ -135,9 +139,15 @@ def derive(facts: dict) -> Derivation:
         acc = (ind.get("acceptance") or {}).get("state")
         v = facts.get("verifier")
         if acc == "pre-release":
-            reasons.append("pre-release: never accepted")
+            reasons.append("pre-release: verified artifacts only")
         elif not (facts.get("published") or {}).get("immutable"):
             reasons.append("release is not published as an immutable GitHub release")
+        elif acc == "verified":
+            if (ci.get("acceptance") or {}).get("state") == "verified":
+                state = "released"
+                reasons.append("verified and published as an immutable release (ADR 0024)")
+            else:
+                reasons.append("the CI and independent verification records disagree on the release state")
         else:
             state = "verified-unaccepted"
             if acc == "accepted" and not isinstance(v, VerifierResult):
@@ -201,7 +211,9 @@ def advance(current: str, target: str, facts: dict) -> Derivation:
     if target not in EDGES[current]:
         raise ConfigError([f"transition {current} -> {target} is not allowed"])
     d = derive(facts)
-    if STATES.index(d.state) < STATES.index(target):
+    # the end states are alternatives (trust/v2 `released`; trust/v1 `verified-unaccepted`, `accepted`)
+    ends = {"released": {"released"}, "verified-unaccepted": {"verified-unaccepted", "accepted"}}
+    if (target in ends and d.state not in ends[target]) or STATES.index(d.state) < STATES.index(target):
         raise ConfigError(
             [f"cannot advance to {target}: derived state is {d.state} ({'; '.join(d.reasons)})"]
         )

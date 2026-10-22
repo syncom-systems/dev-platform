@@ -29,7 +29,7 @@ In a project that commits `dev-platform.toml` and `dev-platform.release-pins.jso
 identity from `releases/<version>/identity.json`; see [consumer integration](consumer-integration.md)):
 ```sh
 cd my-project                      # or any subdirectory: setup looks upwards for dev-platform.toml
-dev-platform setup                 # add --allow-unaccepted to use a verified-but-unaccepted release (your decision)
+dev-platform setup                 # releases up to 0.11.0 are verified-unaccepted: add --allow-unaccepted (your decision)
 eval "$(dev-platform setup --print-env)"   # this shell: DEV_PLATFORM_STORE, DEV_PLATFORM_PYTHON, PATH
 dev-platform doctor
 dev-platform check --stage pre-merge --base origin/main
@@ -92,8 +92,8 @@ everything with `chmod -R u+w ~/.local/share/dev-platform && rm -rf ~/.local/sha
       on version and tree digest; the pins must be well formed (exit 2 otherwise);
    2. if `<store>/<version>` exists: its tree digest must equal the pin (otherwise exit 3, and the entry is left
       untouched for you to inspect and remove), and the installer's record beside it must name exactly this
-      version, tree and archive (otherwise `--reverify`); the recorded state must be admitted (`accepted`, or
-      `--allow-unaccepted` / `--allow-prerelease`);
+      version, tree and archive (otherwise `--reverify`); the recorded state must be admitted (`verified` or `accepted`,
+      or `--allow-unaccepted` / `--allow-prerelease`);
    3. otherwise: `tools/verify_release.py`, `trust/policy.json` and `tools/install_release.py` are read from the
       public platform repository **at the pinned source revision** and must equal the pinned digests (exit 3
       otherwise; nothing is installed). That pinned `install_release.py` runs with the pinned verifier and policy and
