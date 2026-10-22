@@ -1,13 +1,14 @@
 # Changelog
 
 ## Unreleased
+
+## 0.12.1
 Fixed:
 - `dev-platform.infra/v1`: a provider profile can mark a runner `kind: "hosted"` (optional; absent means `self-hosted`, so
   existing profiles and immutable provider releases are unchanged). Previously every provider runner was treated as
   self-hosted, so a project's `fallback: "none"` did not exclude a GitHub-hosted runner the provider listed. A hosted runner
   must be ephemeral, public-trust and credential-less; the schema, validator, contract documentation and conformance kit
   (`contracts/infra/v1`) carry the field. A profile using `kind` is rejected by earlier releases (unknown key).
-
 
 ## 0.12.0
 Single-owner release authority ([ADR 0024](docs/adr/0024-single-owner-release-authority.md)): a release that passes every
