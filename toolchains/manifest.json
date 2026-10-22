@@ -16,7 +16,7 @@
           "purl": "pkg:generic/python"
         },
         "uv": {
-          "version": "0.12.3",
+          "version": "0.13.4",
           "probe": {
             "argv": [
               "uv",
@@ -24,7 +24,7 @@
             ],
             "pattern": "uv (\\S+)"
           },
-          "purl": "pkg:pypi/uv@0.12.3"
+          "purl": "pkg:pypi/uv@0.13.4"
         },
         "ruff": {
           "version": "0.17.0",
