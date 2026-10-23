@@ -62,7 +62,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15]
-        profile: [python, rust-bazel, rust-bazel-9, rust-cargo, rust-cargo-1.99, rust-bazel-9.3, python-bazel-9.3, rust-python-bazel-9.3]
+        profile: [python, rust-bazel, rust-bazel-9, rust-cargo, rust-cargo-1.99, rust-bazel-9.3, python-bazel-9.3, rust-python-bazel-9.3, python-ty-bazel-9.3, rust-python-ty-bazel-9.3]
         include:
           - {profile: python, fixture: fixtures-real/python-locked}
           - {profile: rust-bazel, fixture: fixtures-real/rust-bazel}
