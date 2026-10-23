@@ -72,6 +72,8 @@ jobs:
           - {profile: rust-bazel-9.3, fixture: fixtures-real/baseline-rust}
           - {profile: python-bazel-9.3, fixture: fixtures-real/baseline-python}
           - {profile: rust-python-bazel-9.3, fixture: fixtures-real/baseline-mixed}
+          - {profile: python-ty-bazel-9.3, fixture: fixtures-real/baseline-python}
+          - {profile: rust-python-ty-bazel-9.3, fixture: fixtures-real/baseline-mixed}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}

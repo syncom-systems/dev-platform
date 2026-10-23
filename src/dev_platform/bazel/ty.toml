@@ -1,0 +1,11 @@
+[environment]
+python-version = "3.15"
+
+[terminal]
+error-on-warning = true
+
+[rules]
+all = "error"
+
+[src]
+exclude = ["dev-platform"]

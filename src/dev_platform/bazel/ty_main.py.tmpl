@@ -1,0 +1,20 @@
+"""ty entry point of the platform's type-check aspect."""
+
+import os
+import sys
+
+from ty import find_ty_bin
+
+
+def _binary() -> str:
+    # The wheel installs the binary under `bin/` next to the site-packages root; Bazel extracts it there.
+    for entry in sys.path:
+        candidate = os.path.join(os.path.dirname(entry.rstrip(os.sep)), "bin", "ty")
+        if os.path.isfile(candidate):
+            return candidate
+    return find_ty_bin()
+
+
+if __name__ == "__main__":
+    binary = _binary()
+    os.execv(binary, [binary, *sys.argv[1:]])

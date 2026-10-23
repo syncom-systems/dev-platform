@@ -28,7 +28,7 @@ version string, and an editor, an agent and CI could each see a different policy
    toolchain declaration, a Rust or Python version chosen elsewhere (`rust-toolchain.toml`, `.python-version`,
    `.tool-versions`, `USE_BAZEL_VERSION`, flags in `.bazelrc`), and formatter, linter, type-checker, pytest or coverage
    configuration (`rustfmt.toml`, `ruff.toml`, `mypy.ini`, `[tool.ruff]`, ...) that is not the generated one. The
-   Python tools (`pytest`, `pytest-cov`, `coverage`, `mypy`) are Bazel-managed tools `bound_to` that item: their identity
+   Python tools (`pytest`, `pytest-cov`, `coverage`, and `mypy` or, in the `-ty-` profiles, `ty`) are Bazel-managed tools `bound_to` that item: their identity
    is `config-locked` (the hash-locked file that declares them is proven equal to the release's), never stronger than
    what the check established.
 4. **Bazel remains the only orchestrator.** Formatting, lint, type checks, tests, documentation checks and coverage run

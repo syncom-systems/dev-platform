@@ -9,6 +9,11 @@ profiles and does not choose a compiler, runtime, formatter, linter, type checke
 | `rust-bazel-9.3` | Rust |
 | `python-bazel-9.3` | Python |
 | `rust-python-bazel-9.3` | Rust and Python |
+| `python-ty-bazel-9.3` | Python, type-checked with Ty |
+| `rust-python-ty-bazel-9.3` | Rust and Python, type-checked with Ty |
+
+The `-ty-` profiles replace mypy with Ty; they are otherwise identical to the profile of the same languages. The
+mypy profiles are published and unchanged. Pyright is not part of the platform: Ty is the type checker going forward.
 
 | Component | Version | Where it runs |
 |---|---|---|
@@ -19,7 +24,8 @@ profiles and does not choose a compiler, runtime, formatter, linter, type checke
 | rules_python | 2.4.5 | Bazel module (source.json pinned) |
 | CPython (python-build-standalone 20261021) | 3.15.1 | Bazel toolchain and host, the same archive |
 | Ruff | 0.17.2 | Bazel (pinned archive) and host, closure-verified |
-| pytest, pytest-cov, coverage, mypy | 9.1.1, 7.1.0, 7.17.0, 2.4.0 | Bazel, hash-locked requirements |
+| pytest, pytest-cov, coverage, mypy | 9.1.1, 7.1.0, 7.17.0, 2.4.0 | Bazel, hash-locked requirements (mypy profiles) |
+| Ty (`-ty-` profiles, replaces mypy) | 0.0.91 | Bazel, hash-locked requirements; `ty.toml` (all rules errors, Python 3.15) |
 
 Supported hosts: macOS arm64 (`darwin-arm64`) and Linux x86-64 (`linux-x86_64`). A host without a pinned source is
 refused by `setup` with the hosts that are supported.
@@ -43,7 +49,7 @@ refused by `setup` with the hosts that are supported.
 | What | Command |
 |---|---|
 | build, unit tests, doc tests, Python tests | `bazel test //...` |
-| formatting, lint (Rust: rustfmt, clippy `-D warnings`; Python: ruff check and format, mypy) | `bazel build --config=dp-lint //...` |
+| formatting, lint (Rust: rustfmt, clippy `-D warnings`; Python: ruff check and format, mypy or Ty) | `bazel build --config=dp-lint //...` |
 | coverage (LCOV, combined) | `bazel coverage //...` |
 
 `dev-platform init` writes these as the checks `bazel.test`, `bazel.lint` and `bazel.coverage` when the configuration
@@ -67,7 +73,7 @@ the action that resolves each finding, when:
 | `hook` | `MODULE.bazel` or `.bazelrc` does not load the generated files |
 | `independent-declaration` | the project declares `rules_rust` or `rules_python`, configures a Rust or Python toolchain, registers one, overrides the rules, or uses another `python_version` |
 | `independent-setting` | `.bazelrc` sets a `rules_rust` setting, a Python version or extra toolchains; `.bazeliskrc` pins another Bazel version |
-| `tool-config` | `rust-toolchain(.toml)`, `rustfmt.toml`, `clippy.toml`, `ruff.toml`, `mypy.ini`, `pytest.ini`, `.coveragerc`, `.python-version`, `.tool-versions` entries, or `[tool.ruff]`, `[tool.mypy]`, `[tool.pytest]`, `[tool.coverage]` (and the `setup.cfg`/`tox.ini` equivalents) outside the generated files |
+| `tool-config` | `rust-toolchain(.toml)`, `rustfmt.toml`, `clippy.toml`, `ruff.toml`, `mypy.ini`, `ty.toml`, `pytest.ini`, `.coveragerc`, `.python-version`, `.tool-versions` entries, or `[tool.ruff]`, `[tool.mypy]`, `[tool.pytest]`, `[tool.coverage]` (and the `setup.cfg`/`tox.ini` equivalents) outside the generated files |
 
 Only the languages of the profile are policed. A project's own `pip.parse` at the platform's Python version is not a
 conflict.

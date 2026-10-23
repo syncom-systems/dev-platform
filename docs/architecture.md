@@ -84,7 +84,7 @@ run may consume it with `--previous` to carry evidence ([model](verification-mod
 
 - Producer authenticity (attestations) is designed and the release workflow is written but has never run; no release exists ([release-trust](release-trust.md)).
 - Tool identity is mostly `version-only`; binary digests and Bazel lock-file reconciliation are planned (ADR 0010).
-- The `python` adapter is `unittest` discovery only; pytest/ruff/pyright are `exec` checks for now.
+- The `python` adapter is `unittest` discovery only; pytest/ruff/ty are `exec` checks for now.
 - No cross-run evidence persistence service: `--previous` consumes a result file the caller stores.
 - Open: bootstrapping rule for releasing the platform itself; whether `periodic` needs a scheduler
   contract; how Bazel graph queries plug in as an impact provider (see investigation).

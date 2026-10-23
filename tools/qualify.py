@@ -129,7 +129,7 @@ def _write(path_in_consumer: str, text: str):
     return mutate
 
 
-def _baseline_cases(rust: bool, python: bool) -> list:
+def _baseline_cases(rust: bool, python: bool, checker: str = "mypy") -> list:
     """Platform-owned Bazel configuration (bazelconf.py): each independent or edited setting must fail
     conformance (`environment`); a failing test or a lint finding must fail a check."""
     cases = [
@@ -151,7 +151,7 @@ def _baseline_cases(rust: bool, python: bool) -> list:
             ("resolved graph tampered (rules_python)", _lock_tamper_of("rules_python"), "environment"),
             ("independent Python version", _append(".bazelrc", "\nbuild --@rules_python//python/config_settings:python_version=3.11\n"), "environment"),
             ("independent linter policy", _write("ruff.toml", "line-length = 60\n"), "environment"),
-            ("independent type-checker policy", _write("pyproject.toml", "[tool.mypy]\nstrict = false\n"), "environment"),
+            ("independent type-checker policy", _write("pyproject.toml", f"[tool.{checker}]\nstrict = false\n"), "environment"),
             ("failing Python test", lambda c: _sub(c / "pylib/lib.py", "a + b", "a - b"), "check"),
             ("Python lint finding", _append("pylib/lib.py", "\nimport os\n"), "check"),
             ("Python type error", _append("pylib/lib.py", "\n\ndef bad() -> int:\n    return 'x'\n"), "check"),
@@ -163,9 +163,11 @@ BASELINE = {
     "rust-bazel-9.3": (True, False),
     "python-bazel-9.3": (False, True),
     "rust-python-bazel-9.3": (True, True),
+    "python-ty-bazel-9.3": (False, True),
+    "rust-python-ty-bazel-9.3": (True, True),
 }
 for _p, (_r, _py) in BASELINE.items():
-    NEGATIVE[_p] = _baseline_cases(_r, _py)
+    NEGATIVE[_p] = _baseline_cases(_r, _py, "ty" if "-ty-" in _p else "mypy")
 NEGATIVE["rust-cargo-1.99"] = NEGATIVE["rust-cargo"]
 NEGATIVE["rust-bazel"] = _bazel_cases("8.4.1", "1.85.0", "1.84.0", "abseil-cpp", "20250127.1")
 NEGATIVE["rust-bazel-9"] = _bazel_cases("9.1.0", "1.99.1", "1.99.0", "yaml-cpp", "0.8.0")
@@ -212,7 +214,7 @@ def prepare_baseline(consumer: Path, profile: str, env: dict, py: list) -> dict:
 
 
 DECOYS = ("rustc", "cargo", "rustup", "rustdoc", "clippy-driver", "python", "python3", "pip", "pip3",
-          "pytest", "coverage", "ruff", "mypy")  # fmt: skip
+          "pytest", "coverage", "ruff", "mypy", "ty")  # fmt: skip
 
 
 def host_independence(consumer: Path, benv: dict, rust: bool, python: bool) -> dict:
