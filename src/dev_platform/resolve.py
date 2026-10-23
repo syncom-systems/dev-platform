@@ -94,7 +94,7 @@ def resolve(cfg: Config, *, env=os.environ, protected: bool = False) -> Resoluti
             raise PlatformResolutionError(f"cannot digest running release {vdir}: {e}") from None
         if actual != pin.sha256:
             raise PlatformResolutionError("running release does not match the pinned digest")
-        return Resolution("pinned", pin.version, PACKAGE_ROOT, actual, _load_release(vdir))
+        return Resolution("pinned", pin.version, PACKAGE_ROOT, actual, _load_release(vdir, pin.version))
 
     vdir = default_store(env) / pin.version
     if not vdir.is_dir():
@@ -116,7 +116,12 @@ def resolve(cfg: Config, *, env=os.environ, protected: bool = False) -> Resoluti
         if not (root / "dev_platform").is_dir():
             raise PlatformResolutionError(f"{vdir}: malformed release (no src/dev_platform)")
         return Resolution(
-            "pinned", pin.version, root.resolve(), actual, _load_release(snap / "release"), cleanup=snap
+            "pinned",
+            pin.version,
+            root.resolve(),
+            actual,
+            _load_release(snap / "release", pin.version),
+            cleanup=snap,
         )
     except (OSError, ValueError) as e:
         shutil.rmtree(snap, ignore_errors=True)
@@ -126,10 +131,31 @@ def resolve(cfg: Config, *, env=os.environ, protected: bool = False) -> Resoluti
         raise
 
 
-def _load_release(vdir: Path) -> dict:
+def _newer_than_cli(version: str) -> bool:
+    from dev_platform import lifecycle
+
+    try:
+        return lifecycle._precedence(version) > lifecycle._precedence(dev_platform.__version__)
+    except ConfigError:
+        return False
+
+
+def _load_release(vdir: Path, version: str | None = None) -> dict:
+    """The release's record, validated by *this* CLI's own rules; nothing of the release is executed.
+
+    A release pinned at a version newer than this CLI may use manifest or record features this CLI does not
+    know, which validation can only report as invalid. The pinned version tells the two cases apart, so the
+    error names the actual remedy (upgrade the CLI) without relaxing validation."""
     try:
         return releases.load(vdir)
     except ConfigError as e:
+        if version and _newer_than_cli(version):
+            raise PlatformResolutionError(
+                f"release {version} is newer than this dev-platform CLI ({dev_platform.__version__}) and "
+                f"uses a format this CLI cannot validate: upgrade the CLI (brew upgrade dev-platform, or "
+                f"install the pinned version: docs/distribution.md#upgrading-the-cli); the release was not "
+                f"executed. Validation said: {e}"
+            ) from None
         raise PlatformResolutionError(f"invalid release: {e}") from None
 
 

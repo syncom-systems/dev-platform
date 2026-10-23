@@ -1,11 +1,12 @@
 import json
 import unittest
+from unittest import mock
 
 from dev_platform import release
 from dev_platform import resolve as R
 from dev_platform.config import PlatformPin
 from dev_platform.digest import tree_digest
-from dev_platform.errors import PlatformResolutionError
+from dev_platform.errors import ConfigError, PlatformResolutionError
 from tests.helpers import ROOT, tmpdir
 from tests.test_toolchain import MANIFEST
 
@@ -52,6 +53,39 @@ class ResolveTest(unittest.TestCase):
         self.assertEqual(oct(res.cleanup.stat().st_mode & 0o777), "0o700")
         res.dispose()
         self.assertFalse(res.cleanup.exists())
+
+    def test_a_release_newer_than_the_cli_says_to_upgrade_the_cli(self):
+        store, vdir = make_release(self, "99.0.0")
+        pin = PlatformPin("99.0.0", tree_digest(vdir), False, "p")
+        err = ConfigError(["toolchain manifest: profiles.p.bazel: unknown key"])
+        with (
+            mock.patch.object(R.releases, "load", side_effect=err),
+            self.assertRaises(PlatformResolutionError) as e,
+        ):
+            R.resolve(_Cfg(pin), env={R.STORE_ENV: str(store)})
+        msg = str(e.exception)
+        self.assertIn("release 99.0.0 is newer than this dev-platform CLI", msg)
+        self.assertIn("brew upgrade dev-platform", msg)
+        self.assertIn("was not executed", msg)
+        self.assertIn("unknown key", msg)  # the validation result is still reported
+        self.assertNotIn("invalid release", msg)
+
+    def test_an_invalid_release_that_is_not_newer_stays_invalid(self):
+        store, vdir = make_release(self, "0.0.1")
+        pin = PlatformPin("0.0.1", tree_digest(vdir), False, "p")
+        with (
+            mock.patch.object(R.releases, "load", side_effect=ConfigError(["bad"])),
+            self.assertRaisesRegex(PlatformResolutionError, "invalid release"),
+        ):
+            R.resolve(_Cfg(pin), env={R.STORE_ENV: str(store)})
+
+    def test_validation_is_not_relaxed_for_a_newer_release(self):
+        store, vdir = make_release(self, "99.0.0")
+        pin = PlatformPin("99.0.0", tree_digest(vdir), False, "p")
+        (vdir / "release.json").write_text("{}")  # not a release record at all
+        pin = PlatformPin("99.0.0", tree_digest(vdir), False, "p")
+        with self.assertRaises(PlatformResolutionError):
+            R.resolve(_Cfg(pin), env={R.STORE_ENV: str(store)})
 
     def test_tampered_release_is_rejected(self):
         store, vdir = make_release(self)

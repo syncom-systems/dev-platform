@@ -28,6 +28,20 @@ symlinks rejected.
    ([installation](installation.md#7-ci-job-local-installation-no-homebrew)).
 3. Upgrading = editing version + digest in a reviewed PR.
 
+## Upgrading the CLI
+
+The CLI is only the launcher: it validates the pinned release's record and toolchain manifest with its own rules before
+anything of the release runs. A release that uses a format an older CLI does not know (0.13.0 added profile `bazel`
+sections, `rust-components` sources and `bound_to` tools) cannot be validated by that CLI. CLIs up to 0.12.1 report this
+as `invalid release: toolchain manifest: ...`; they are published and are not changed. From 0.14.0 the CLI compares the
+pinned version with its own and, when the pin is newer, says so: `release X is newer than this dev-platform CLI (Y) ...
+upgrade the CLI`, with the validation result appended, and still executes nothing.
+
+Upgrade path: `brew update && brew upgrade dev-platform` ([homebrew.md](homebrew.md#upgrade-pin-roll-back)), or install the
+CLI release you need with the trusted installer ([installation](installation.md)). Validation is unchanged, a newer CLI
+validates every older release as before, and project pins, installed releases and CI (`consumer-pilot.yml` runs at the
+pinned release's own commit) are not affected.
+
 ## Release discipline
 
 Tag `vX.Y.Z` only from a commit where `dev-platform check --stage full` is certified; the release

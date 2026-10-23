@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+Changed:
+- A release pinned at a version newer than the running CLI that the CLI cannot validate is reported as such (`release X is
+  newer than this dev-platform CLI (Y) ... upgrade the CLI`, validation result appended, nothing executed) instead of
+  `invalid release`. Validation is unchanged. The upgrade path is documented
+  ([distribution](docs/distribution.md#upgrading-the-cli)); published releases and CLIs are not modified.
+
 Added (Ty as the platform type checker; additive, the published mypy profiles are unchanged):
 - Profiles `python-ty-bazel-9.3` and `rust-python-ty-bazel-9.3`: the 0.13 baseline with Ty 0.0.91 (hash-locked, Bazel-managed)
   in place of mypy. A profile's `bazel.type_checker` (`mypy` by default, or `ty`) selects the generated `ty.toml`, lint
