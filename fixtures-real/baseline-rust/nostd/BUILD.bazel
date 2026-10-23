@@ -1,0 +1,6 @@
+load("//dev-platform:rust.bzl", "dp_rust_no_std_library")
+
+dp_rust_no_std_library(
+    name = "kernel_core",
+    srcs = ["src/lib.rs"],
+)
