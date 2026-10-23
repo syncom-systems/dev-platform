@@ -201,10 +201,7 @@ def _ruff_archives(ruff: dict) -> str:
         blocks.append(
             "http_archive(\n"
             f'    name = "dp_ruff_{key.replace("-", "_")}",\n'
-            '    build_file_content = """load("@bazel_skylib//rules:native_binary.bzl", "native_binary")\n'
-            'native_binary(name = "ruff_bin", src = "ruff", out = "ruff_exe",'
-            ' visibility = ["//visibility:public"])\n'
-            '""",\n'
+            '    build_file_content = """exports_files(["ruff"], visibility = ["//visibility:public"])""",\n'
             f'    sha256 = "{src["sha256"]}",\n'
             f'    strip_prefix = "{src.get("strip", "")}",\n'
             f'    urls = ["{src["url"]}"],\n'
@@ -213,18 +210,19 @@ def _ruff_archives(ruff: dict) -> str:
     return "\n".join(blocks)
 
 
-def _ruff_select() -> str:
+def _ruff_binaries() -> str:
+    """One executable per supported host, and an alias that selects the host's. The conditions come from
+    @bazel_tools, so the project's MODULE.bazel needs no `platforms` or `bazel_skylib` dependency of ours."""
     return "\n".join(
-        f'        ":host_{key.replace("-", "_")}": "@dp_ruff_{key.replace("-", "_")}//:ruff_bin",'
-        for key in sorted(PLATFORMS)
+        f'dp_executable(name = "ruff_{k}", src = "@dp_ruff_{k}//:ruff")\n'
+        for k in (key.replace("-", "_") for key in sorted(PLATFORMS))
     )
 
 
-def _host_settings() -> str:
+def _ruff_select() -> str:
     return "\n".join(
-        f'\nconfig_setting(\n    name = "host_{key.replace("-", "_")}",\n'
-        f'    constraint_values = ["@platforms//os:{p["os"]}", "@platforms//cpu:{p["cpu"]}"],\n)'
-        for key, p in sorted(PLATFORMS.items())
+        f'        "@bazel_tools//src/conditions:{key.replace("-", "_")}": ":ruff_{key.replace("-", "_")}",'
+        for key in sorted(PLATFORMS)
     )
 
 
@@ -292,8 +290,11 @@ def render(manifest: dict, profile: str, version: str) -> dict[str, str]:
     rc += f"build:dp-lint --output_groups={','.join(groups)}\n"
     build = _sub(_template("BUILD.base.bazel"), EXPORTS=json.dumps(sorted(exports)))
     if "python" in langs:
-        build += _sub(_template(f"BUILD.python{suffix}.bazel"), RUFF_SELECT=_ruff_select())
-        build += _host_settings() + "\n"
+        build += _sub(
+            _template(f"BUILD.python{suffix}.bazel"),
+            RUFF_BINARIES=_ruff_binaries(),
+            RUFF_SELECT=_ruff_select(),
+        )
     put(f"{OUT_DIR}/BUILD.bazel", build)
     put(f"{OUT_DIR}/toolchains.MODULE.bazel", module)
     put(f"{OUT_DIR}/bazel.bazelrc", rc)
@@ -557,6 +558,25 @@ def _tool_config_conflicts(root: Path, langs: set[str], want: dict[str, str]) ->
     return out
 
 
+def _bazelversion_conflicts(root: Path, bazel_version: str) -> list[dict]:
+    """A project-owned .bazelversion selecting another Bazel than the profile pins: reported, never edited."""
+    text = _read(root / ".bazelversion")
+    if text is None:
+        return []
+    lines = text.strip().splitlines()
+    observed = lines[0].strip() if lines else ""
+    if observed == bazel_version:
+        return []
+    return [
+        _conflict(
+            "bazel-version",
+            ".bazelversion",
+            f"selects Bazel {observed or '(empty)'}; the profile pins Bazel {bazel_version}",
+            f"set .bazelversion to {bazel_version} (the platform does not edit it)",
+        )
+    ]
+
+
 def check(manifest: dict, profile: str, root: Path, version: str) -> dict:
     """The conformance verdict for a project's Bazel configuration against this release (reads only)."""
     root = Path(root)
@@ -567,6 +587,7 @@ def check(manifest: dict, profile: str, root: Path, version: str) -> dict:
     py = tools["python"]["version"] if "python" in langs else ""
     conflicts += _module_conflicts(root, langs, py)
     conflicts += _bazelrc_conflicts(root, langs, tools["bazel"]["version"])
+    conflicts += _bazelversion_conflicts(root, tools["bazel"]["version"])
     conflicts += _tool_config_conflicts(root, langs, want)
     dig = digest(want)
     return {
@@ -603,6 +624,7 @@ def materialize(
         "unchanged": [],
         "added_hooks": [],
         "refused": foreign,
+        "conflicts": [],
     }
     if foreign:
         return report
@@ -641,4 +663,8 @@ def materialize(
     if not bv.exists() and not dry_run:
         bv.write_text(manifest["profiles"][profile]["tools"]["bazel"]["version"] + "\n")
         report["written"].append(".bazelversion")
+    # project-owned state that cannot be generated away: reported so the caller can stop before Bazel runs
+    report["conflicts"] = _bazelversion_conflicts(
+        root, manifest["profiles"][profile]["tools"]["bazel"]["version"]
+    )
     return report

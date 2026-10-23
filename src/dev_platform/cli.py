@@ -990,8 +990,9 @@ def _cmd_materialize(args) -> int:
     lines += [f"  wrote {p}" for p in rep["written"]] + [f"  unchanged {p}" for p in rep["unchanged"]]
     lines += [f"  added the entry line to {p}" for p in rep["added_hooks"]]
     lines += [f"  REFUSED {c['path']}: {c['detail']} -> {c['action']}" for c in rep["refused"]]
+    lines += [f"  CONFLICT {c['path']}: {c['detail']} -> {c['action']}" for c in rep["conflicts"]]
     _emit(args, rep, "\n".join(lines))
-    return EXIT_UNSATISFIED if rep["refused"] else EXIT_OK
+    return EXIT_UNSATISFIED if rep["refused"] or rep["conflicts"] else EXIT_OK
 
 
 def cmd_toolchain(args) -> int:

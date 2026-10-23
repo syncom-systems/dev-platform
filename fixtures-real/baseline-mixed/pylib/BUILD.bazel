@@ -12,3 +12,16 @@ dp_py_test(
     srcs = ["test_lib.py"],
     deps = [":lib"],
 )
+
+load("@bazel_skylib//rules:write_file.bzl", "write_file")
+
+config_setting(
+    name = "on_linux",
+    constraint_values = ["@platforms//os:linux"],
+)
+
+write_file(
+    name = "stamp",
+    out = "stamp.txt",
+    content = ["project-owned skylib and platforms"],
+)

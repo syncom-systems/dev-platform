@@ -1,2 +1,2 @@
-bazel_dep(name = "platforms", version = "1.1.0")
-bazel_dep(name = "bazel_skylib", version = "1.8.2")
+# No bazel_dep on platforms or bazel_skylib: rules_rust and rules_python bring the versions they need, and the
+# project keeps declaring the ones it uses. Nothing generated here refers to either module.

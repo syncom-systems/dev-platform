@@ -383,10 +383,15 @@ def ensure_toolchain(res, profile: str, project: Path, loc: Locations, cenv: dic
                 str(project), "--create-hooks", "--json"]  # fmt: skip
         r = run(child(*argv), env=cenv, cwd=str(project))  # rendering needs no provisioned tool
         mrec = first_json(r.stdout or "")
-        if r.returncode:
-            refused = "; ".join(
-                f"{c['path']}: {c['detail']} -> {c['action']}" for c in mrec.get("refused", [])
+        refused = "; ".join(f"{c['path']}: {c['detail']} -> {c['action']}" for c in mrec.get("refused", []))
+        conflicts = "; ".join(
+            f"{c['path']}: {c['detail']} -> {c['action']}" for c in mrec.get("conflicts", [])
+        )
+        if conflicts and not refused:
+            raise Refused(
+                f"the project's Bazel configuration conflicts with release {res.version}: {conflicts}"
             )
+        if r.returncode:
             raise Refused(
                 f"release {res.version} could not write the Bazel configuration of {profile}: "
                 f"{refused or tail(r, 300)}"
