@@ -31,7 +31,7 @@ def _dump(doc: dict) -> str:
 def source_pins(plat: str, src: dict) -> list[tuple[str, str, str]]:
     """(comment, url, sha256) of every archive a source entry pins: one for a plain source, one per
     component (`<platform>/<archive>`) for a `rust-components` source."""
-    if "components" in src:
+    if src.get("type") == "rust-components":
         return [(f"{plat}/{c['archive']}", c["url"], c["sha256"]) for c in src["components"]]
     return [(plat, src["url"], src["sha256"])]
 

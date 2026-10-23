@@ -210,7 +210,9 @@ def expected_components(toolchains: dict) -> dict:
             c = want.setdefault((name, spec["version"]), {"closure": {}, "source": {}})
             c["closure"].update(spec.get("closure", {}).get("sha256", {}))
             for plat, src in spec.get("source", {}).items():
-                if "components" in src:  # one pin per component archive: "<platform>/<archive>"
+                if (
+                    src.get("type") == "rust-components"
+                ):  # one pin per component archive: "<platform>/<archive>"
                     for comp in src["components"]:
                         c["source"][f"{plat}/{comp['archive']}"] = (comp["url"], comp["sha256"])
                 else:

@@ -125,6 +125,11 @@ def validate(doc: dict) -> dict:
                 if isinstance(src, dict) and src.get("type") == "rust-components":
                     errs.extend(_validate_components(f"{w}.source[{plat}]", src))
                     continue
+                into = src.get("into") if isinstance(src, dict) else None
+                if into is not None and (
+                    not isinstance(into, str) or not into or into.startswith("/") or ".." in Path(into).parts
+                ):
+                    errs.append(f"{w}.source[{plat}].into: a relative subdirectory without '..'")
                 ok = (
                     isinstance(src, dict)
                     and str(src.get("url", "")).startswith("https://")

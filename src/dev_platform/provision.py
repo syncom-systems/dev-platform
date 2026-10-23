@@ -158,6 +158,8 @@ def provision(manifest: dict, profile: str, dev: Path, *, key: str | None = None
             archive = dev / "dl" / f"{name}-{spec['version']}.tar.gz"
             fetch(src["url"], src["sha256"], archive)
             into = vdir / src["into"] if src.get("into") else vdir
+            if not into.resolve().is_relative_to(vdir.resolve()):
+                raise ConfigError([f"{name}: source 'into' {src['into']!r} leaves the version directory"])
             into.mkdir(parents=True, exist_ok=True)
             extract(archive, into, src.get("strip", ""))
         activate(dev / name, vdir)

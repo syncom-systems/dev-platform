@@ -1,6 +1,7 @@
 """`rust-components` sources: individually pinned official Rust component archives, assembled on the host."""
 
 import io
+import json
 import tarfile
 import unittest
 from unittest import mock
@@ -122,6 +123,33 @@ class Install(unittest.TestCase):
         self.assertIn("hash mismatch", str(e.exception.problems))
         self.assertFalse((dev / "dl" / "rustc-1.0.0-k.tar.xz").exists())
 
+    def test_into_cannot_leave_the_version_directory(self):
+        for into in ("../bin", "/abs", "a/../../b"):
+            src = {"url": "https://x/t.tar.gz", "sha256": SHA, "into": into}
+            m = {
+                "schema": T.SCHEMA,
+                "profiles": {
+                    "p": {
+                        "tools": {
+                            "t": {
+                                "version": "1",
+                                "probe": {"argv": ["t"], "pattern": "(1)"},
+                                "source": {"k": src},
+                            }
+                        }
+                    }
+                },
+            }
+            with self.subTest(into), self.assertRaises(ConfigError):
+                T.validate(m)
+            tools = {"t": {"version": "1", "source": {"k": src}}}
+            with (
+                self.subTest(f"provision {into}"),
+                mock.patch.object(P, "fetch", lambda u, s, d: d.write_bytes(b"")),
+                self.assertRaises(ConfigError),
+            ):
+                P.provision({"profiles": {"p": {"tools": tools}}}, "p", tmpdir(self), key="k")
+
     def test_archive_extraction_honours_into(self):
         buf = io.BytesIO()
         with tarfile.open(fileobj=buf, mode="w:gz") as tar:
@@ -154,6 +182,17 @@ class Install(unittest.TestCase):
 
 
 class Sbom(unittest.TestCase):
+    def test_the_real_manifest_still_yields_an_sbom_the_verifier_accepts(self):
+        """`rust-dist` sources also have a `components` key (a list of names): only the source kind selects."""
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("verify_release", ROOT / "tools" / "verify_release.py")
+        V = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(V)
+        tc = T.validate(json.loads((ROOT / "toolchains" / "manifest.json").read_text()))
+        sbom = R.make_sbom("1.0.0", "c" * 64, tc)
+        self.assertEqual(V.sbom_matches_manifest(sbom, tc), [])
+
     def test_every_component_archive_is_a_pinned_distribution_the_verifier_recomputes(self):
         import importlib.util
 
