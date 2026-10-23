@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 0.13.0
 Added (Bazel Rust and Python baseline, [ADR 0025](docs/adr/0025-platform-owned-bazel-configuration.md),
 [guide](docs/rust-python-baseline.md); additive: no existing profile, release or consumer build changes):
 - Profiles `rust-bazel-9.3`, `python-bazel-9.3` and `rust-python-bazel-9.3`: Bazel 9.3.1 (Bazelisk 1.30.0), rules_rust
