@@ -389,6 +389,16 @@ class VerifiedAsPartOfTheEnvironment(unittest.TestCase):
         b = self.verify(root)
         self.assertNotEqual(a["identity_digest"], b["identity_digest"])
 
+    def test_setup_reports_the_conflicts_and_their_actions(self):
+        from dev_platform import projectsetup
+
+        root = self.materialize()
+        self.assertEqual(projectsetup.config_problems(self.verify(root)), "")
+        (root / "ruff.toml").write_text("line-length = 79\n")
+        text = projectsetup.config_problems(self.verify(root))
+        self.assertIn("foreign: ruff.toml", text)
+        self.assertIn("never overwritten", text)
+
     def test_profiles_without_a_bazel_section_have_no_such_item(self):
         rec = T.verify_profile(MANIFEST, "rust-bazel-9", tmpdir(self), probe=lambda argv: (0, ""))
         self.assertNotIn("bazel-config", [t["name"] for t in rec["tools"]])

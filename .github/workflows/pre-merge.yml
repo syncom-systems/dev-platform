@@ -62,13 +62,16 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15]
-        profile: [python, rust-bazel, rust-bazel-9, rust-cargo, rust-cargo-1.99]
+        profile: [python, rust-bazel, rust-bazel-9, rust-cargo, rust-cargo-1.99, rust-bazel-9.3, python-bazel-9.3, rust-python-bazel-9.3]
         include:
           - {profile: python, fixture: fixtures-real/python-locked}
           - {profile: rust-bazel, fixture: fixtures-real/rust-bazel}
           - {profile: rust-bazel-9, fixture: fixtures-real/rust-bazel-9}
           - {profile: rust-cargo, fixture: fixtures-real/rust-cargo}
           - {profile: rust-cargo-1.99, fixture: fixtures-real/rust-cargo}
+          - {profile: rust-bazel-9.3, fixture: fixtures-real/baseline-rust}
+          - {profile: python-bazel-9.3, fixture: fixtures-real/baseline-python}
+          - {profile: rust-python-bazel-9.3, fixture: fixtures-real/baseline-mixed}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
@@ -80,7 +83,7 @@ jobs:
       - name: Qualify (real execution, then must-be-rejected scenarios)
         shell: bash
         run: |
-          export PATH="$PWD/.devenv/bin:$PWD/.devenv/rust/bin:$PATH"
+          export PATH="$PWD/.devenv/bin:$PWD/.devenv/rust-dev/bin:$PWD/.devenv/ruff/bin:$PWD/.devenv/rust/bin:$PATH"
           PYTHONPATH=src python -m dev_platform toolchain measure --profile ${{ matrix.profile }} || true
           PY=python; [ -x .devenv/python/bin/python3 ] && PY=.devenv/python/bin/python3
           "$PY" tools/qualify.py --fixture ${{ matrix.fixture }} --profile ${{ matrix.profile }} --negative --app-release --out qualification.json
