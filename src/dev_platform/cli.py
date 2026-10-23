@@ -187,6 +187,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="append the two entry lines to MODULE.bazel and .bazelrc (created if absent)",
     )
+    tz.add_argument(
+        "--create-hooks",
+        action="store_true",
+        help="write the entry lines only into MODULE.bazel and .bazelrc files that do not exist yet",
+    )
     tz.add_argument("--dry-run", action="store_true")
     tz.add_argument("--json", action="store_true")
     tb = tsub.add_parser(
@@ -970,7 +975,13 @@ def _cmd_materialize(args) -> int:
             _emit(args, rec, "\n".join(lines))
             return EXIT_OK if rec["status"] == "ok" else EXIT_UNSATISFIED
         rep = bazelconf.materialize(
-            manifest, profile, project, __version__, add_hooks=args.add_hooks, dry_run=args.dry_run
+            manifest,
+            profile,
+            project,
+            __version__,
+            add_hooks=args.add_hooks,
+            create_hooks=args.create_hooks,
+            dry_run=args.dry_run,
         )
     finally:
         if res is not None:

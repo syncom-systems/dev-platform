@@ -566,9 +566,19 @@ def check(manifest: dict, profile: str, root: Path, version: str) -> dict:
 
 
 def materialize(
-    manifest: dict, profile: str, root: Path, version: str, *, add_hooks: bool = False, dry_run: bool = False
+    manifest: dict,
+    profile: str,
+    root: Path,
+    version: str,
+    *,
+    add_hooks: bool = False,
+    create_hooks: bool = False,
+    dry_run: bool = False,
 ) -> dict:
-    """Write the generated files. Atomic in effect: nothing is written when any target is a foreign file."""
+    """Write the generated files. Atomic in effect: nothing is written when any target is a foreign file.
+    `add_hooks` appends the entry lines to project files; `create_hooks` only writes them into files that do
+    not exist yet, so an existing project-owned file is never touched (its missing line is reported by
+    `check`)."""
     root = Path(root)
     want = render(manifest, profile, version)
     foreign = [c for c in _generated_conflicts(root, want) if c["kind"] == "foreign"]
@@ -593,10 +603,12 @@ def materialize(
             target.write_text(text)
     # Files that were generated for another release of this profile and are no longer rendered belong to the
     # platform: they are reported by `check` as unexpected, never deleted here.
-    if add_hooks:
+    if add_hooks or create_hooks:
         for rel, line in (("MODULE.bazel", MODULE_HOOK), (".bazelrc", BAZELRC_HOOK)):
             target = root / rel
             text = _read(target)
+            if create_hooks and not add_hooks and text is not None:
+                continue
             if text is not None and line in [x.strip() for x in _code_lines(text).splitlines()]:
                 continue
             report["added_hooks"].append(rel)

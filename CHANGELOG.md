@@ -10,8 +10,9 @@ Added (Bazel Rust and Python baseline, [ADR 0025](docs/adr/0025-platform-owned-b
   on darwin-arm64 and linux-x86_64; Bazel is told to fetch the same bytes.
 - A profile with a `bazel` section owns the project's Bazel configuration. `dev-platform toolchain materialize
   [--pinned] [--add-hooks] [--dry-run] [--check]` writes the files the release generates (module declarations, hashes,
-  `.bazelrc` policy, rustfmt/clippy/ruff/mypy/coverage policy, `dp_py_test`, a Python lint aspect, `dp_rust_library`);
-  it refuses foreign files and never edits project-owned ones. Conformance (`check`, `toolchain verify`, `setup`) gains a
+  `.bazelrc` policy, rustfmt/clippy/ruff (target py315, the pinned Python minor)/mypy/coverage policy, `dp_py_test`, a Python lint aspect, `dp_rust_library`);
+  it refuses foreign files and never edits project-owned ones. `setup` runs it (generated files only; entry lines only
+  into files that do not exist) and refuses with the correction otherwise. Conformance (`check`, `toolchain verify`, `setup`) gains a
   `bazel-config` item that fails on missing or edited generated files and on independently maintained settings that
   conflict (second rules_rust/rules_python or toolchain, compiler or Python version pinned elsewhere, other formatter,
   linter, type-checker, pytest or coverage configuration), each with the action that resolves it. New identity strength
