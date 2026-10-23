@@ -55,17 +55,16 @@ def extract(archive: Path, dest: Path, strip: str) -> None:
         inner.rmdir()
 
 
-def install_rust_dist(src: dict, prefix: Path, archive: Path) -> None:
-    """Assemble a Rust toolchain from the official dist tarball without running its install.sh: copy
-    exactly the files each component's manifest.in lists, so the tree is deterministic (install.sh
-    writes logs and path-dependent metadata)."""
+def _assemble(archive: Path, prefix: Path, components: list[str]) -> None:
+    """Copy exactly the files each named component's manifest.in lists out of one official Rust dist
+    tarball, so the tree is deterministic (install.sh writes logs and path-dependent metadata)."""
     stage = prefix.parent / (prefix.name + ".stage")
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)
     with tarfile.open(archive, "r:xz") as tar:
         tar.extractall(stage, filter="data")
     top = next(stage.iterdir())
-    for comp in src["components"]:
+    for comp in components:
         cdir = top / comp
         for line in (cdir / "manifest.in").read_text().splitlines():
             kind, _, rel = line.partition(":")
@@ -78,6 +77,23 @@ def install_rust_dist(src: dict, prefix: Path, archive: Path) -> None:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(cdir / rel, target, follow_symlinks=False)
     shutil.rmtree(stage)
+
+
+def install_rust_dist(src: dict, prefix: Path, archive: Path) -> None:
+    """Assemble a Rust toolchain from the official combined dist tarball without running its install.sh."""
+    _assemble(archive, prefix, src["components"])
+
+
+def install_rust_components(src: dict, prefix: Path, dl: Path) -> None:
+    """Assemble a Rust toolchain from the individually hashed component tarballs the manifest lists
+    (`type: rust-components`). Components marked `bazel_only` are pinned for the Bazel toolchain
+    declaration and are not installed on the host (the host toolchain has no Cargo)."""
+    for comp in src["components"]:
+        if comp.get("bazel_only"):
+            continue
+        archive = dl / comp["archive"]
+        fetch(comp["url"], comp["sha256"], archive)
+        _assemble(archive, prefix, comp["install"])
 
 
 def install_binary(src: dict, bindir: Path) -> Path:
@@ -136,10 +152,14 @@ def provision(manifest: dict, profile: str, dev: Path, *, key: str | None = None
             archive = dev / "dl" / f"{name}-{spec['version']}.tar.xz"
             fetch(src["url"], src["sha256"], archive)
             install_rust_dist(src, vdir, archive)
+        elif src.get("type") == "rust-components":
+            install_rust_components(src, vdir, dev / "dl")
         else:
             archive = dev / "dl" / f"{name}-{spec['version']}.tar.gz"
             fetch(src["url"], src["sha256"], archive)
-            extract(archive, vdir, src.get("strip", ""))
+            into = vdir / src["into"] if src.get("into") else vdir
+            into.mkdir(parents=True, exist_ok=True)
+            extract(archive, into, src.get("strip", ""))
         activate(dev / name, vdir)
         done.append(name)
     return done

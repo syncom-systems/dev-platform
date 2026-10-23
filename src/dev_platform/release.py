@@ -28,6 +28,14 @@ def _dump(doc: dict) -> str:
     return json.dumps(doc, indent=2, sort_keys=True) + "\n"
 
 
+def source_pins(plat: str, src: dict) -> list[tuple[str, str, str]]:
+    """(comment, url, sha256) of every archive a source entry pins: one for a plain source, one per
+    component (`<platform>/<archive>`) for a `rust-components` source."""
+    if "components" in src:
+        return [(f"{plat}/{c['archive']}", c["url"], c["sha256"]) for c in src["components"]]
+    return [(plat, src["url"], src["sha256"])]
+
+
 def make_sbom(version: str, source_digest: str, manifest: dict) -> dict:
     """One component per (tool, version), merging every pin any profile declares for it."""
     by_key: dict[tuple[str, str], dict] = {}
@@ -57,12 +65,13 @@ def make_sbom(version: str, source_digest: str, manifest: dict) -> dict:
                 comp["properties"] = [props[k] for k in sorted(props)]
             refs = {r["comment"]: r for r in comp.get("externalReferences", [])}
             for plat, src in spec.get("source", {}).items():
-                refs[plat] = {
-                    "type": "distribution",
-                    "url": src["url"],
-                    "comment": plat,
-                    "hashes": [{"alg": "SHA-256", "content": src["sha256"]}],
-                }
+                for comment, url, sha in source_pins(plat, src):
+                    refs[comment] = {
+                        "type": "distribution",
+                        "url": url,
+                        "comment": comment,
+                        "hashes": [{"alg": "SHA-256", "content": sha}],
+                    }
             if refs:
                 comp["externalReferences"] = [refs[k] for k in sorted(refs)]
     components = [by_key[k] for k in sorted(by_key)]
