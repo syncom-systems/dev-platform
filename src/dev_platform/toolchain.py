@@ -26,6 +26,39 @@ PYTHON_TOKEN = "{python}"  # noqa: S105 - placeholder, not a credential
 Probe = Callable[[list[str]], tuple[int, str]]
 
 
+def _validate_components(w: str, src: dict) -> list[str]:
+    """A `rust-components` source: individually pinned official component archives. `install` names the
+    component directories to assemble from an archive; `bazel_only` components are pinned for the Bazel
+    toolchain declaration and not installed on the host."""
+    comps = src.get("components")
+    if not isinstance(comps, list) or not comps:
+        return [f"{w}.components: a non-empty list is required"]
+    errs: list[str] = []
+    seen: set[str] = set()
+    for i, c in enumerate(comps):
+        cw = f"{w}.components[{i}]"
+        if not isinstance(c, dict):
+            errs.append(f"{cw}: object required")
+            continue
+        arc = c.get("archive")
+        if not isinstance(arc, str) or "/" in arc or not arc.endswith(".tar.xz"):
+            errs.append(f"{cw}.archive: a bare .tar.xz file name is required")
+        elif arc in seen:
+            errs.append(f"{cw}.archive: {arc} is listed twice")
+        else:
+            seen.add(arc)
+        if not str(c.get("url", "")).startswith("https://"):
+            errs.append(f"{cw}.url: https url required")
+        if not re.fullmatch(r"[0-9a-f]{64}", str(c.get("sha256", ""))):
+            errs.append(f"{cw}.sha256: 64 hex chars required")
+        inst = c.get("install")
+        if not c.get("bazel_only") and not (
+            isinstance(inst, list) and inst and all(isinstance(x, str) and x for x in inst)
+        ):
+            errs.append(f"{cw}.install: component directories to install are required (or bazel_only)")
+    return errs
+
+
 def validate(doc: dict) -> dict:
     errs: list[str] = []
     if doc.get("schema") != SCHEMA:
@@ -89,6 +122,14 @@ def validate(doc: dict) -> dict:
                 else:
                     errs.extend(_closure.validate(w, t["closure"]))
             for plat, src in (t.get("source") or {}).items() if isinstance(t.get("source", {}), dict) else []:
+                if isinstance(src, dict) and src.get("type") == "rust-components":
+                    errs.extend(_validate_components(f"{w}.source[{plat}]", src))
+                    continue
+                into = src.get("into") if isinstance(src, dict) else None
+                if into is not None and (
+                    not isinstance(into, str) or not into or into.startswith("/") or ".." in Path(into).parts
+                ):
+                    errs.append(f"{w}.source[{plat}].into: a relative subdirectory without '..'")
                 ok = (
                     isinstance(src, dict)
                     and str(src.get("url", "")).startswith("https://")

@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+Added (toolchain manifest, additive; existing profiles and releases are unchanged):
+- Source type `rust-components`: individually hashed official Rust component archives (`rustc`, `rust-std`, `rustfmt`,
+  `clippy`, `rust-analyzer`, `rust-src`), assembled on the host from each component's `manifest.in`. Components marked
+  `bazel_only` (`cargo`, `llvm-tools`) are pinned for the Bazel toolchain declaration and are not installed, so a host
+  toolchain built this way has no Cargo. The SBOM and the independent verifier carry one pin per component archive.
+- Archive sources accept `into`, extracting under a subdirectory of the tool's version directory (for a `bin/` layout).
 
 ## 0.12.1
 Fixed:
