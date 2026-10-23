@@ -1,0 +1,7 @@
+
+# Rust formatter and lint policy (rules_rust aspects; run with --config=dp-lint).
+build --@rules_rust//rust/settings:rustfmt.toml=//dev-platform:rustfmt.toml
+build --@rules_rust//rust/settings:clippy.toml=//dev-platform:clippy.toml
+build --@rules_rust//rust/settings:clippy_flags=-D,warnings
+build:dp-lint --aspects=@rules_rust//rust:defs.bzl%rustfmt_aspect
+build:dp-lint --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect

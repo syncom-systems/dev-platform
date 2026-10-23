@@ -1,0 +1,7 @@
+
+# Python: the test and binary launcher is a script that execs the pinned runtime directly. The default
+# launcher is a `#!/usr/bin/env python3` stub, which would make every py_test depend on a host python3.
+build --@rules_python//python/config_settings:bootstrap_impl=script
+
+# Python lint policy (platform aspect; run with --config=dp-lint).
+build:dp-lint --aspects=//dev-platform:lint.bzl%dp_py_lint_aspect

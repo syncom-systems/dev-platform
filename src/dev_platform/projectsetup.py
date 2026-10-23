@@ -328,6 +328,17 @@ def unsupported_tools(manifest: dict, profile: str, key: str) -> list[str]:
     return sorted(n for n, t in tools.items() if t.get("source") and key not in t["source"])
 
 
+def config_problems(rec: dict) -> str:
+    """The actionable conflicts of the platform-owned Bazel configuration, from an environment record."""
+    cfg = next((t for t in rec.get("tools", []) if t.get("name") == "bazel-config"), None)
+    if not cfg or cfg.get("status") == "ok":
+        return ""
+    lines = [
+        f"  {c['kind']}: {c['path']}: {c['detail']} -> {c['action']}" for c in cfg["config"]["conflicts"]
+    ]
+    return "\nthe project's Bazel configuration conflicts with the pinned release:\n" + "\n".join(lines)
+
+
 def ensure_toolchain(res, profile: str, project: Path, loc: Locations, cenv: dict, run: Run) -> dict:
     """Verify the profile's directory with the pinned release; provision it (bytes only) and verify again if
     that fails. Verification (`toolchain verify --require-certifiable`: closure identity against the release's
@@ -377,7 +388,7 @@ def ensure_toolchain(res, profile: str, project: Path, loc: Locations, cenv: dic
     if r.returncode or not rec.get("conformant"):
         raise Refused(
             f"release {res.version} provisioned {profile} in {dest}, but it is not a conformant, certifiable "
-            f"environment ({facts(rec) if rec else tail(r, 300)})"
+            f"environment ({facts(rec) if rec else tail(r, 300)}){config_problems(rec)}"
         )
     return {**out, "action": "provisioned", **facts(rec), "python": interpreter(manifest, profile, dest)}
 

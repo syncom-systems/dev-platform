@@ -18,6 +18,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from dev_platform import bazelconf as _bazelconf
 from dev_platform import closure as _closure
 from dev_platform.errors import ConfigError
 
@@ -51,6 +52,9 @@ def _validate_components(w: str, src: dict) -> list[str]:
             errs.append(f"{cw}.url: https url required")
         if not re.fullmatch(r"[0-9a-f]{64}", str(c.get("sha256", ""))):
             errs.append(f"{cw}.sha256: 64 hex chars required")
+        om = c.get("omit", [])
+        if not isinstance(om, list) or not all(isinstance(x, str) and x and ".." not in x for x in om):
+            errs.append(f"{cw}.omit: a list of relative file paths")
         inst = c.get("install")
         if not c.get("bazel_only") and not (
             isinstance(inst, list) and inst and all(isinstance(x, str) and x for x in inst)
@@ -80,6 +84,8 @@ def validate(doc: dict) -> dict:
             if t.get("compare", "exact") not in ("exact", "prefix"):
                 errs.append(f"{w}.compare: exact|prefix")
             managed = t.get("bazel_managed", False)
+            if t.get("bound_to", "bazel-config") != "bazel-config" or (t.get("bound_to") and not managed):
+                errs.append(f"{w}.bound_to: only 'bazel-config' on a Bazel-managed tool")
             if managed:
                 d = t.get("declared_in") or {}
                 if not (d.get("file") and d.get("pattern")):
@@ -142,6 +148,12 @@ def validate(doc: dict) -> dict:
                 vals = sha.values() if isinstance(sha, dict) else [sha]
                 if not all(isinstance(v, str) and re.fullmatch(r"[0-9a-f]{64}", v) for v in vals):
                     errs.append(f"{w}.sha256: 64 hex chars (or a map keyed by '<sys.platform>-<machine>')")
+    for pname, prof in profiles.items():
+        if isinstance(prof, dict) and "bazel" in prof and not errs:
+            try:
+                errs.extend(_bazelconf.validate_profile(doc, pname))
+            except (KeyError, TypeError, AttributeError):
+                errs.append(f"profile {pname}.bazel: malformed tool entries")
     pinned: dict[tuple[str, str, str, str], str] = {}
     for pname, prof in profiles.items():
         tools = prof.get("tools") if isinstance(prof, dict) else None
@@ -171,6 +183,7 @@ STRENGTH = {
     "digest-verified": 1,
     "closure-verified": 2,
     "bazel-locked": 2,
+    "config-locked": 2,
 }
 CERTIFIABLE_STRENGTH = 2
 
@@ -333,6 +346,7 @@ def verify_profile(
             ]
         )
     tools = []
+    config = _bazel_config_entry(manifest, profile, root) if "bazel" in prof else None
     # Launchers (executed tools) are verified before the Bazel-managed tools that depend on them.
     order = sorted(prof["tools"].items(), key=lambda kv: (bool(kv[1].get("bazel_managed")), kv[0]))
     for name, spec in order:
@@ -369,6 +383,10 @@ def verify_profile(
                             entry["identity"] = "none"
                     if entry["identity"] == "bazel-locked" and spec.get("binary_sha256"):
                         _bind_launcher(entry, spec, tools, root)
+                    if spec.get("bound_to") == "bazel-config" and config and config["status"] == "ok":
+                        entry["identity"] = (
+                            "config-locked"  # declared in a file proven equal to the release's
+                        )
         else:
             if "probe" in spec:
                 code, out = probe(spec["probe"]["argv"])
@@ -405,6 +423,8 @@ def verify_profile(
                         entry["status"] = "mismatch"
                         entry["identity"] = "none"
         tools.append(entry)
+    if config:
+        tools.append(config)
     required_ok = all(t["status"] == "ok" for t in tools)
     weak = [t["name"] for t in tools if STRENGTH[t["identity"]] < CERTIFIABLE_STRENGTH]
     identity = {
@@ -422,6 +442,22 @@ def verify_profile(
         "assurance": "certifiable" if required_ok and not weak else "diagnostic",
         "weak_tools": weak,
         "tools": tools,
+    }
+
+
+def _bazel_config_entry(manifest: dict, profile: str, root: Path) -> dict:
+    """The platform-owned Bazel configuration of a project as one verified item (see bazelconf.py)."""
+    from dev_platform import __version__
+
+    rec = _bazelconf.check(manifest, profile, root, __version__)
+    ok = rec["status"] == "ok"
+    return {
+        "name": "bazel-config",
+        "expected": rec["digest"],
+        "observed": rec["digest"] if ok else None,
+        "identity": "config-locked" if ok else "none",
+        "status": "ok" if ok else "mismatch",
+        "config": {"release": rec["release"], "files": rec["files"], "conflicts": rec["conflicts"]},
     }
 
 
@@ -484,6 +520,12 @@ def scope_for(tools: list[dict]) -> dict:
             "Bazel-managed toolchains are identified through the pinned Bazel binary digest and the "
             "resolved module graph; the Bazel repository cache, host C toolchain and network at fetch "
             "time are outside the evidence"
+        )
+    if any(t["identity"] == "config-locked" for t in tools):
+        lim.append(
+            "the Bazel configuration (module declarations, hashes, formatter, lint and coverage policy) is "
+            "proven equal to what the pinned release generates; Bazel's repository cache, the host C "
+            "toolchain and the network at fetch time are outside the evidence"
         )
     unverified = sorted(
         t["name"]

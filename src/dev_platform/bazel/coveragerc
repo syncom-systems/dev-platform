@@ -1,0 +1,13 @@
+[run]
+branch = True
+omit =
+    */site-packages/*
+    */dev-platform/*
+    */external/*
+    */test_*.py
+    */*_test.py
+
+[report]
+exclude_also =
+    if TYPE_CHECKING:
+    raise NotImplementedError

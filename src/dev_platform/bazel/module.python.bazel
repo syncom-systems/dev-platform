@@ -1,0 +1,23 @@
+
+bazel_dep(name = "rules_python", version = "@@RULES_PYTHON@@")
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+@@PYTHON_OVERRIDES@@
+python.toolchain(
+    is_default = True,
+    python_version = "@@PYTHON_VERSION@@",
+)
+
+rules_python_config = use_extension("@rules_python//python/extensions:config.bzl", "config")
+rules_python_config.explicit_init_py(default = True)
+
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+pip.parse(
+    hub_name = "dp_pytools",
+    python_version = "@@PYTHON_VERSION@@",
+    requirements_lock = "//dev-platform:python_lock.txt",
+)
+use_repo(pip, "dp_pytools")
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+@@RUFF_ARCHIVES@@

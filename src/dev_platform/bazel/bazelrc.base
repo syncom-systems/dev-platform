@@ -1,0 +1,2 @@
+# Policy applied to every Bazel invocation of this project.
+coverage --combined_report=lcov

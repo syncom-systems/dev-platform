@@ -1,0 +1,3 @@
+module(name = "dp_rust", version = "0.1.0")
+
+include("//dev-platform:toolchains.MODULE.bazel")

@@ -74,12 +74,19 @@ def _sub(path: Path, old: str, new: str) -> None:
     path.write_text(text.replace(old, new, 1))
 
 
-def _lock_tamper(c: Path) -> None:
-    lock = json.loads((c / "MODULE.bazel.lock").read_text())
-    for k in lock["registryFileHashes"]:
-        if "/rules_rust/" in k and k.endswith("source.json"):
+def _lock_tamper_of(module: str):
+    def tamper(c: Path) -> None:
+        lock = json.loads((c / "MODULE.bazel.lock").read_text())
+        hit = [k for k in lock["registryFileHashes"] if f"/{module}/" in k and k.endswith("source.json")]
+        assert hit, f"{module} is not in the resolved graph"
+        for k in hit:
             lock["registryFileHashes"][k] = "0" * 64
-    (c / "MODULE.bazel.lock").write_text(json.dumps(lock, indent=2))
+        (c / "MODULE.bazel.lock").write_text(json.dumps(lock, indent=2))
+
+    return tamper
+
+
+_lock_tamper = _lock_tamper_of("rules_rust")
 
 
 def _bazel_cases(other_bazel: str, rust: str, other_rust: str, dep: str, dep_version: str) -> list:
@@ -106,6 +113,59 @@ NEGATIVE = {
     ],
 }  # fmt: skip
 
+
+def _append(path_in_consumer: str, text: str):
+    def mutate(c: Path) -> None:
+        with open(c / path_in_consumer, "a") as f:
+            f.write(text)
+
+    return mutate
+
+
+def _write(path_in_consumer: str, text: str):
+    def mutate(c: Path) -> None:
+        (c / path_in_consumer).write_text(text)
+
+    return mutate
+
+
+def _baseline_cases(rust: bool, python: bool) -> list:
+    """Platform-owned Bazel configuration (bazelconf.py): each independent or edited setting must fail
+    conformance (`environment`); a failing test or a lint finding must fail a check."""
+    cases = [
+        ("generated file edited by hand", _append("dev-platform/bazel.bazelrc", "\nbuild --jobs=1\n"), "environment"),
+        ("declared bazel version differs", _write(".bazelversion", "9.2.0\n"), "environment"),
+    ]  # fmt: skip
+    if rust:
+        cases += [
+            ("resolved graph tampered (rules_rust)", _lock_tamper_of("rules_rust"), "environment"),
+            ("second Rust toolchain declared", _append("MODULE.bazel", 'bazel_dep(name = "rules_rust", version = "0.60.0")\n'), "environment"),
+            ("compiler pinned outside the platform", _write("rust-toolchain.toml", '[toolchain]\nchannel = "1.80.0"\n'), "environment"),
+            ("independent formatter policy", _write("rustfmt.toml", "max_width = 60\n"), "environment"),
+            ("failing Rust test", lambda c: _sub(c / "rs/src/lib.rs", "assert_eq!(super::add(2, 3), 5)", "assert_eq!(super::add(2, 3), 6)"), "check"),
+            ("Rust lint finding", _append("rs/src/lib.rs", "pub fn lint(a: i32) -> i32 {\n    return a;\n}\n"), "check"),
+            ("Rust formatting finding", _append("rs/src/lib.rs", "pub fn ugly( a:i32 )->i32{a}\n"), "check"),
+        ]  # fmt: skip
+    if python:
+        cases += [
+            ("resolved graph tampered (rules_python)", _lock_tamper_of("rules_python"), "environment"),
+            ("independent Python version", _append(".bazelrc", "\nbuild --@rules_python//python/config_settings:python_version=3.11\n"), "environment"),
+            ("independent linter policy", _write("ruff.toml", "line-length = 60\n"), "environment"),
+            ("independent type-checker policy", _write("pyproject.toml", "[tool.mypy]\nstrict = false\n"), "environment"),
+            ("failing Python test", lambda c: _sub(c / "pylib/lib.py", "a + b", "a - b"), "check"),
+            ("Python lint finding", _append("pylib/lib.py", "\nimport os\n"), "check"),
+            ("Python type error", _append("pylib/lib.py", "\n\ndef bad() -> int:\n    return 'x'\n"), "check"),
+        ]  # fmt: skip
+    return cases
+
+
+BASELINE = {
+    "rust-bazel-9.3": (True, False),
+    "python-bazel-9.3": (False, True),
+    "rust-python-bazel-9.3": (True, True),
+}
+for _p, (_r, _py) in BASELINE.items():
+    NEGATIVE[_p] = _baseline_cases(_r, _py)
 NEGATIVE["rust-cargo-1.99"] = NEGATIVE["rust-cargo"]
 NEGATIVE["rust-bazel"] = _bazel_cases("8.4.1", "1.85.0", "1.84.0", "abseil-cpp", "20250127.1")
 NEGATIVE["rust-bazel-9"] = _bazel_cases("9.1.0", "1.99.1", "1.99.0", "yaml-cpp", "0.8.0")
@@ -137,6 +197,51 @@ def negative_cases(profile: str, consumer: Path, genv: dict, env: dict, py: list
     return out
 
 
+def prepare_baseline(consumer: Path, profile: str, env: dict, py: list) -> dict:
+    """What a project does once per pinned release: materialize the platform's Bazel configuration, then
+    resolve the module graph (the existing lockfile machinery, unchanged)."""
+    manifest = json.loads((ROOT / "toolchains" / "manifest.json").read_text())
+    run([*py, "toolchain", "materialize", "--manifest", str(ROOT / "toolchains" / "manifest.json"),
+         "--project", str(consumer), "--profile", profile, "--add-hooks"], ROOT, env)  # fmt: skip
+    sys.path.insert(0, str(ROOT / "src"))
+    from dev_platform import toolchain
+
+    benv = {**env, **toolchain.runtime_env(manifest, profile)}
+    run(["bazel", "mod", "deps", "--lockfile_mode=update"], consumer, benv)
+    return benv
+
+
+DECOYS = ("rustc", "cargo", "rustup", "rustdoc", "clippy-driver", "python", "python3", "pip", "pip3",
+          "pytest", "coverage", "ruff", "mypy")  # fmt: skip
+
+
+def host_independence(consumer: Path, benv: dict, rust: bool, python: bool) -> dict:
+    """Build, test and lint with decoy compilers, interpreters and tools first on PATH and as the action
+    PATH: a host tool that was used is recorded and fails (exit 97), so it cannot go unnoticed."""
+    import tempfile
+    import uuid
+
+    with tempfile.TemporaryDirectory(prefix="dp-decoy-") as td:
+        decoy, log = Path(td) / "decoy", Path(td) / "decoy.log"
+        decoy.mkdir()
+        log.write_text("")
+        for name in DECOYS:
+            p = decoy / name
+            p.write_text(f'#!/bin/sh\necho "$0 $*" >> "{log}"\nexit 97\n')
+            p.chmod(0o755)
+        bazel = shutil.which("bazel", path=benv.get("PATH"))
+        assert bazel, "bazel is not on PATH"
+        env = {**benv, "PATH": f"{decoy}:{Path(bazel).parent}:/usr/bin:/bin"}
+        flags = ["--lockfile_mode=error", f"--action_env=PATH={decoy}:/usr/bin:/bin",
+                 f"--action_env=DP_PROOF_NONCE={uuid.uuid4().hex}"]  # fmt: skip
+        steps = {"test": ["bazel", "test", *flags, "--test_output=errors", "//..."],
+                 "lint": ["bazel", "build", *flags, "--config=dp-lint", "//..."]}  # fmt: skip
+        results = {k: run(v, consumer, env, check=False).returncode for k, v in steps.items()}
+        invoked = [ln for ln in log.read_text().splitlines() if ln.strip()]
+    return {"exit": results, "decoy_invocations": invoked[:5],
+            "ok": not invoked and all(c == 0 for c in results.values())}  # fmt: skip
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     ap.add_argument("--fixture", type=Path, required=True)
@@ -165,6 +270,24 @@ def main(argv=None) -> int:
     )
     genv = {**env, "GIT_AUTHOR_NAME": "q", "GIT_AUTHOR_EMAIL": "q@example.invalid",
             "GIT_COMMITTER_NAME": "q", "GIT_COMMITTER_EMAIL": "q@example.invalid"}  # fmt: skip
+    benv = None
+    if a.profile in BASELINE:
+        benv = prepare_baseline(consumer, a.profile, env, py)
+        run(
+            [
+                *py,
+                "init",
+                "--project",
+                str(consumer),
+                "--platform-version",
+                version,
+                "--profile",
+                a.profile,
+                "--force",
+            ],
+            ROOT,
+            env,
+        )  # fmt: skip  (again, now that the configuration exists: adds the lint and coverage checks)
     for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "fixture"]):
         run(["git", *cmd], consumer, genv)
     result = consumer.parent / f"{a.profile}.result.json"
@@ -195,7 +318,11 @@ def main(argv=None) -> int:
         "blockers": cert["blockers"],
     }
     ok = cert["certified"]
-    if a.profile.startswith("rust-bazel") and ok:
+    rust_profile = (
+        "rust-toolchain"
+        in json.loads((ROOT / "toolchains" / "manifest.json").read_text())["profiles"][a.profile]["tools"]
+    )
+    if rust_profile and ok:
         # Bazel must have compiled with its declared Rust toolchain, not a host rustc (issue #111).
         proof_file = WORK / f"{a.profile}.bazel-rust-proof.json"
         run([*py, "toolchain", "prove-bazel-rust", "--project", str(consumer), "--out", str(proof_file)],
@@ -203,6 +330,9 @@ def main(argv=None) -> int:
         proof = json.loads(proof_file.read_text()) if proof_file.is_file() else {"ok": False}
         summary["bazel_rust_toolchain"] = proof
         ok = bool(proof.get("ok"))
+    if benv is not None and ok:
+        summary["host_independence"] = host_independence(consumer, benv, *BASELINE[a.profile])
+        ok = summary["host_independence"]["ok"]
     if a.negative and ok:
         summary["negative"] = negative_cases(a.profile, consumer, genv, env, py)
         ok = all(n["rejected"] for n in summary["negative"])

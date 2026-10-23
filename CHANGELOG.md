@@ -1,6 +1,32 @@
 # Changelog
 
 ## Unreleased
+Added (Bazel Rust and Python baseline, [ADR 0025](docs/adr/0025-platform-owned-bazel-configuration.md),
+[guide](docs/rust-python-baseline.md); additive: no existing profile, release or consumer build changes):
+- Profiles `rust-bazel-9.3`, `python-bazel-9.3` and `rust-python-bazel-9.3`: Bazel 9.3.1 (Bazelisk 1.30.0), rules_rust
+  0.74.0 with Rust 1.99.1 (rustc, rust-std, rustfmt, clippy, rustdoc, rust-src, every component archive hash-pinned),
+  rules_python 2.4.5 with CPython 3.15.1, Ruff 0.17.2, pytest 9.1.1, pytest-cov 7.1.0, coverage 7.17.0 and mypy 2.4.0
+  (hash-locked). The host tools (Rust without Cargo including rust-analyzer, CPython, ruff, Bazelisk) are closure-verified
+  on darwin-arm64 and linux-x86_64; Bazel is told to fetch the same bytes.
+- A profile with a `bazel` section owns the project's Bazel configuration. `dev-platform toolchain materialize
+  [--pinned] [--add-hooks] [--dry-run] [--check]` writes the files the release generates (module declarations, hashes,
+  `.bazelrc` policy, rustfmt/clippy/ruff/mypy/coverage policy, `dp_py_test`, a Python lint aspect, `dp_rust_library`);
+  it refuses foreign files and never edits project-owned ones. Conformance (`check`, `toolchain verify`, `setup`) gains a
+  `bazel-config` item that fails on missing or edited generated files and on independently maintained settings that
+  conflict (second rules_rust/rules_python or toolchain, compiler or Python version pinned elsewhere, other formatter,
+  linter, type-checker, pytest or coverage configuration), each with the action that resolves it. New identity strength
+  `config-locked`; Bazel-managed tools can be `bound_to` the `bazel-config` item.
+- `dev-platform init` adds the checks `bazel.lint` (`--config=dp-lint`) and `bazel.coverage` for a project whose
+  configuration is materialized.
+- `tools/admit_baseline.py` authors the profiles from the publishers' checksums; `tools/qualify.py` qualifies them
+  (fixtures `fixtures-real/baseline-{rust,python,mixed}`), including host-independence (decoy compilers and interpreters
+  first on PATH) and must-be-rejected scenarios for conflicting local settings.
+- The dependency-graph submission now lists the PyPI tools of the new profiles, so they can raise Dependabot alerts.
+
+Constraints reported by the admission (not worked around): rules_python 2.4.5 knows CPython 3.15.0rc3, so 3.15.1 is
+declared to Bazel with `single_version_platform_override` and the same hash-pinned archive as the host; rules_rust 0.74.0
+has no hashes for Rust 1.99.1, so the generated module supplies them; its toolchain still fetches (not invokes)
+`cargo` and `llvm-tools`.
 Added (toolchain manifest, additive; existing profiles and releases are unchanged):
 - Source type `rust-components`: individually hashed official Rust component archives (`rustc`, `rust-std`, `rustfmt`,
   `clippy`, `rust-analyzer`, `rust-src`), assembled on the host from each component's `manifest.in`. Components marked

@@ -30,3 +30,4 @@ revision). Superseded records stay in place.
 | [0022](0022-homebrew-cli-and-project-setup.md) | Homebrew distribution of the CLI and project-aware setup | Proposed |
 | [0023](0023-infrastructure-capabilities-in-the-public-platform.md) | Generic infrastructure capabilities in the public platform; organization data stays private | Proposed |
 | [0024](0024-single-owner-release-authority.md) | Single-owner release authority: verified releases, no approval records | Proposed |
+| [0025](0025-platform-owned-bazel-configuration.md) | Platform-owned Bazel configuration for Rust and Python | Proposed |

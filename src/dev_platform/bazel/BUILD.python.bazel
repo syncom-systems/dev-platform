@@ -1,0 +1,16 @@
+
+load("@rules_python//python:defs.bzl", "py_binary")
+
+alias(
+    name = "ruff",
+    actual = select({
+@@RUFF_SELECT@@
+    }),
+)
+
+py_binary(
+    name = "mypy",
+    srcs = ["mypy_main.py"],
+    main = "mypy_main.py",
+    deps = ["@dp_pytools//mypy"],
+)

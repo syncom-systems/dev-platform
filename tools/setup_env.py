@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         provision(manifest, profile, dev)
     except ConfigError as e:
         raise SystemExit(str(e)) from None
-    if "ruff" in tools:  # the python venv carrying the hash-locked ruff wheel
+    if "ruff" in tools and not tools["ruff"].get("source"):  # the venv carrying the hash-locked ruff wheel
         venv = dev / "venv"
         shutil.rmtree(venv, ignore_errors=True)
         subprocess.run(
