@@ -177,6 +177,24 @@ class Materialize(unittest.TestCase):
         self.assertTrue((root / "MODULE.bazel").read_text().startswith("module(name ="))
         self.assertEqual((root / ".bazelversion").read_text().strip(), "9.3.1")
 
+    def test_create_hooks_wires_a_new_project_but_never_edits_an_existing_file(self):
+        fresh = tmpdir(self)
+        B.materialize(MANIFEST, MIXED, fresh, VERSION, create_hooks=True)
+        self.assertIn(B.MODULE_HOOK, (fresh / "MODULE.bazel").read_text())
+        self.assertIn(B.BAZELRC_HOOK, (fresh / ".bazelrc").read_text())
+        owned = tmpdir(self)
+        (owned / "MODULE.bazel").write_text('module(name = "p")\n')
+        rep = B.materialize(MANIFEST, MIXED, owned, VERSION, create_hooks=True)
+        self.assertEqual(rep["added_hooks"], [".bazelrc"])
+        self.assertEqual((owned / "MODULE.bazel").read_text(), 'module(name = "p")\n')
+        hooks = [c for c in B.check(MANIFEST, MIXED, owned, VERSION)["conflicts"] if c["kind"] == "hook"]
+        self.assertEqual([c["path"] for c in hooks], ["MODULE.bazel"])
+
+    def test_ruff_targets_the_pinned_python_minor(self):
+        text = B.render(MANIFEST, PYTHON, VERSION)["ruff.toml"]
+        minor = MANIFEST["profiles"][PYTHON]["tools"]["python"]["version"].split(".")[:2]
+        self.assertIn(f'target-version = "py{minor[0]}{minor[1]}"', text)
+
     def test_an_existing_bazelversion_is_never_rewritten(self):
         root = project(self, hooks=False)
         (root / ".bazelversion").write_text("8.0.0\n")

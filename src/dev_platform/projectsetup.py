@@ -375,6 +375,24 @@ def ensure_toolchain(res, profile: str, project: Path, loc: Locations, cenv: dic
     def facts(rec: dict) -> dict:
         return {k: rec.get(k) for k in ("conformant", "assurance", "identity_digest")}
 
+    if "bazel" in manifest["profiles"][profile]:
+        # The release generates the project's Bazel configuration. Generated files are written or updated;
+        # a foreign file is refused, and an existing MODULE.bazel/.bazelrc is never edited (verification
+        # reports its missing entry line with the correction).
+        argv = ["toolchain", "materialize", "--manifest", str(mf), "--profile", profile, "--project",
+                str(project), "--create-hooks", "--json"]  # fmt: skip
+        r = run(child(*argv), env=cenv, cwd=str(project))  # rendering needs no provisioned tool
+        mrec = first_json(r.stdout or "")
+        if r.returncode:
+            refused = "; ".join(
+                f"{c['path']}: {c['detail']} -> {c['action']}" for c in mrec.get("refused", [])
+            )
+            raise Refused(
+                f"release {res.version} could not write the Bazel configuration of {profile}: "
+                f"{refused or tail(r, 300)}"
+            )
+        out["bazel_config"] = {k: mrec.get(k, []) for k in ("written", "unchanged", "added_hooks")}
+
     if dest.is_dir():
         r, rec = verify()
         if r.returncode == 0 and rec.get("conformant"):
