@@ -246,7 +246,7 @@ def render(manifest: dict, profile: str, version: str) -> dict[str, str]:
         )
         rc += _template("bazelrc.rust")
         for name in RUST_POLICY:
-            text = _sub(_template(name), RUST_VERSION=rust_version)
+            text = _sub(_template(name), RUST_VERSION=rust_version, EDITION=edition)
             put(name, text)
             put(f"{OUT_DIR}/{name}", text)
             exports.append(name)
@@ -597,7 +597,7 @@ def materialize(
         for rel, line in (("MODULE.bazel", MODULE_HOOK), (".bazelrc", BAZELRC_HOOK)):
             target = root / rel
             text = _read(target)
-            if text is not None and line in _code_lines(text):
+            if text is not None and line in [x.strip() for x in _code_lines(text).splitlines()]:
                 continue
             report["added_hooks"].append(rel)
             if dry_run:

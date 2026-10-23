@@ -279,6 +279,13 @@ pip.parse(hub_name = "mine", python_version = "3.12", requirements_lock = "//:r.
         )
         self.assertEqual(self.check(root)["status"], "ok")
 
+    def test_a_try_import_is_not_the_entry_line_and_the_hook_flag_adds_the_real_one(self):
+        root = materialized(self)
+        (root / ".bazelrc").write_text("try-import %workspace%/dev-platform/bazel.bazelrc\n")
+        self.assertEqual(kinds(self.check(root)), [("hook", ".bazelrc")])
+        B.materialize(MANIFEST, MIXED, root, VERSION, add_hooks=True)
+        self.assertEqual(self.check(root)["status"], "ok")
+
     def test_independent_bazelrc_and_bazelisk_settings_conflict(self):
         root = materialized(self)
         (root / ".bazelrc").write_text(
