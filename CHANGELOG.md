@@ -2,7 +2,7 @@
 
 ## Unreleased
 Added (Bazel Rust and Python baseline, [ADR 0025](docs/adr/0025-platform-owned-bazel-configuration.md),
-[guide](docs/bazel-baseline.md); additive: no existing profile, release or consumer build changes):
+[guide](docs/rust-python-baseline.md); additive: no existing profile, release or consumer build changes):
 - Profiles `rust-bazel-9.3`, `python-bazel-9.3` and `rust-python-bazel-9.3`: Bazel 9.3.1 (Bazelisk 1.30.0), rules_rust
   0.74.0 with Rust 1.99.1 (rustc, rust-std, rustfmt, clippy, rustdoc, rust-src, every component archive hash-pinned),
   rules_python 2.4.5 with CPython 3.15.1, Ruff 0.17.2, pytest 9.1.1, pytest-cov 7.1.0, coverage 7.17.0 and mypy 2.4.0
