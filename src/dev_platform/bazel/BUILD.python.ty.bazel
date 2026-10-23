@@ -1,6 +1,8 @@
 
 load("@rules_python//python:defs.bzl", "py_binary")
+load(":python.bzl", "dp_executable")
 
+@@RUFF_BINARIES@@
 alias(
     name = "ruff",
     actual = select({

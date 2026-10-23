@@ -11,6 +11,8 @@ profiles and does not choose a compiler, runtime, formatter, linter, type checke
 | `rust-python-bazel-9.3` | Rust and Python |
 | `python-ty-bazel-9.3` | Python, type-checked with Ty |
 | `rust-python-ty-bazel-9.3` | Rust and Python, type-checked with Ty |
+| `rust-aarch64-none-bazel-9.3` | Rust, also cross-compiling for `aarch64-unknown-none-softfloat` (bare-metal AArch64) |
+| `rust-python-ty-aarch64-none-bazel-9.3` | Rust and Python with Ty, also cross-compiling for `aarch64-unknown-none-softfloat` |
 
 The `-ty-` profiles replace mypy with Ty; they are otherwise identical to the profile of the same languages. The
 mypy profiles are published and unchanged. Pyright is not part of the platform: Ty is the type checker going forward.
@@ -43,6 +45,21 @@ refused by `setup` with the hosts that are supported.
 3. `bazel mod deps --lockfile_mode=update` produces the project's `MODULE.bazel.lock` (the existing module resolution,
    unchanged). Commit the generated files and the lock.
 4. `dev-platform check` verifies the configuration with the rest of the environment.
+
+## Cross-compilation targets
+
+A profile's `bazel.extra_target_triples` lists the additional Rust targets it supports; the only approved one is
+`aarch64-unknown-none-softfloat`. Each has a pinned `rust-std-<triple>` tool (the official component archive, sha256 per
+host, in the manifest) that the generated `rust.toolchain(extra_target_triples = [...], sha256s = {...})` declares for
+Bazel; nothing is installed on the host. The release generates the platform
+(`//dev-platform:aarch64_none`) and `--config=dp-aarch64-none` selects it:
+
+    bazel build --config=dp-aarch64-none //nostd:kernel_core
+
+`dp_rust_no_std_library` (in `dev-platform/rust.bzl`) declares `#![no_std]` code: no test harness, tag `dp-cross`.
+`dev-platform init` adds the check `bazel.cross.dp-aarch64-none` (build and lint of every `dp-cross` target for the
+target). Qualification builds a `no_std` crate with inline `wfe` assembly for the target and checks that rustc ran with
+`--target=aarch64-unknown-none-softfloat` and that the rlib holds ELF64 objects for `EM_AARCH64`.
 
 ## The contract: the same commands locally and in CI
 

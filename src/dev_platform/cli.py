@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import posixpath
+import re
 import shlex
 import shutil
 import subprocess
@@ -648,6 +649,26 @@ def cmd_init(args) -> int:
                 'inputs = ["**"]',
                 "",
             ]
+    rc = root / "dev-platform" / "bazel.bazelrc"
+    cross = (
+        re.findall(r"^build:(dp-[a-z0-9-]+) --platforms=", rc.read_text(), re.M)
+        if bazel and rc.is_file()
+        else []
+    )
+    for cfg_name in cross:  # one cross-compilation check per target the profile approves
+        argv = ["bazel", "build", "--lockfile_mode=error", f"--config={cfg_name}", "--config=dp-lint",
+                "--build_tag_filters=dp-cross", "//..."]  # fmt: skip
+        lines += [
+            "[[check]]",
+            f'id = "bazel.cross.{cfg_name}"',
+            'adapter = "exec"',
+            "argv = [" + ", ".join(f'"{a}"' for a in argv) + "]",
+            'stages = ["pre-merge", "full"]',
+            'obligation = "change"',
+            'cost = "slow"',
+            'inputs = ["**"]',
+            "",
+        ]
     if python:
         lines += [
             "[[check]]",
@@ -990,8 +1011,9 @@ def _cmd_materialize(args) -> int:
     lines += [f"  wrote {p}" for p in rep["written"]] + [f"  unchanged {p}" for p in rep["unchanged"]]
     lines += [f"  added the entry line to {p}" for p in rep["added_hooks"]]
     lines += [f"  REFUSED {c['path']}: {c['detail']} -> {c['action']}" for c in rep["refused"]]
+    lines += [f"  CONFLICT {c['path']}: {c['detail']} -> {c['action']}" for c in rep["conflicts"]]
     _emit(args, rep, "\n".join(lines))
-    return EXIT_UNSATISFIED if rep["refused"] else EXIT_OK
+    return EXIT_UNSATISFIED if rep["refused"] or rep["conflicts"] else EXIT_OK
 
 
 def cmd_toolchain(args) -> int:

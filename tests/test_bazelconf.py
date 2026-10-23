@@ -2,7 +2,10 @@
 
 import json
 import re
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from dev_platform import bazelconf as B
 from dev_platform import toolchain as T
@@ -13,6 +16,8 @@ MANIFEST = T.validate(json.loads((ROOT / "toolchains" / "manifest.json").read_te
 VERSION = "9.9.9"
 MIXED, RUST, PYTHON = "rust-python-bazel-9.3", "rust-bazel-9.3", "python-bazel-9.3"
 PY_TY, MIXED_TY = "python-ty-bazel-9.3", "rust-python-ty-bazel-9.3"
+NONE, MIXED_NONE = "rust-aarch64-none-bazel-9.3", "rust-python-ty-aarch64-none-bazel-9.3"
+TRIPLE = "aarch64-unknown-none-softfloat"
 
 
 def render(profile=MIXED):
@@ -221,6 +226,87 @@ class Materialize(unittest.TestCase):
         (root / "pyproject.toml").write_text("[tool.ty.rules]\nall = 'ignore'\n")
         kinds = {c["kind"] for c in B.check(MANIFEST, PY_TY, root, VERSION)["conflicts"]}
         self.assertIn("tool-config", kinds)
+
+    def test_generated_files_never_declare_or_refer_to_platforms_or_skylib(self):
+        for profile in (RUST, PYTHON, MIXED, PY_TY, MIXED_TY):
+            for path, text in B.render(MANIFEST, profile, VERSION).items():
+                if path.endswith("python_lock.txt"):
+                    continue
+                self.assertIsNone(re.search(r"(?<!@)@platforms", text), f"{profile}:{path}")
+                self.assertNotIn("@bazel_skylib", text, f"{profile}:{path}")
+                self.assertNotIn('bazel_dep(name = "platforms"', text, f"{profile}:{path}")
+
+    def test_a_mismatching_bazelversion_is_reported_with_both_versions_and_never_edited(self):
+        root = materialized(self, MIXED)
+        (root / ".bazelversion").write_text("9.2.0\n")
+        rep = B.materialize(MANIFEST, MIXED, root, VERSION)
+        (c,) = rep["conflicts"]
+        self.assertEqual(c["path"], ".bazelversion")
+        self.assertIn("9.2.0", c["detail"])
+        self.assertIn("9.3.1", c["detail"] + c["action"])
+        self.assertEqual((root / ".bazelversion").read_text(), "9.2.0\n")
+        kinds = [x["kind"] for x in B.check(MANIFEST, MIXED, root, VERSION)["conflicts"]]
+        self.assertIn("bazel-version", kinds)
+
+    def test_a_matching_or_absent_bazelversion_is_no_conflict(self):
+        root = materialized(self, MIXED)
+        self.assertEqual(B.materialize(MANIFEST, MIXED, root, VERSION)["conflicts"], [])
+        (root / ".bazelversion").unlink()
+        self.assertEqual(B.materialize(MANIFEST, MIXED, root, VERSION)["conflicts"], [])
+
+    def test_extra_target_profiles_register_the_triple_with_every_archive_pinned(self):
+        std = MANIFEST["profiles"][NONE]["tools"][f"rust-std-{TRIPLE}"]
+        for profile in (NONE, MIXED_NONE):
+            files = B.render(MANIFEST, profile, VERSION)
+            module = files["dev-platform/toolchains.MODULE.bazel"]
+            self.assertIn(f'extra_target_triples = ["{TRIPLE}"]', module)
+            for key, src in std["source"].items():
+                (c,) = src["components"]
+                self.assertTrue(c["bazel_only"])
+                self.assertIn(f'"{c["archive"]}": "{c["sha256"]}"', module, key)
+            self.assertIn(
+                "build:dp-aarch64-none --platforms=//dev-platform:aarch64_none",
+                files["dev-platform/bazel.bazelrc"],
+            )
+            self.assertIn('"@@platforms//os:none"', files["dev-platform/BUILD.bazel"])
+
+    def test_profiles_without_extra_targets_are_unchanged(self):
+        for profile in (RUST, MIXED, PY_TY):
+            files = B.render(MANIFEST, profile, VERSION)
+            self.assertNotIn(TRIPLE, "".join(files.values()))
+        module = B.render(MANIFEST, RUST, VERSION)["dev-platform/toolchains.MODULE.bazel"]
+        self.assertIn("extra_target_triples = [],", module)
+
+    def test_an_unapproved_target_is_rejected(self):
+        bad = json.loads(json.dumps(MANIFEST))
+        bad["profiles"][NONE]["bazel"]["extra_target_triples"] = ["aarch64-unknown-linux-gnu"]
+        problems = B.validate_profile(bad, NONE)
+        self.assertTrue(any("not an approved target" in p for p in problems), problems)
+
+    def test_a_target_without_its_pinned_archive_is_rejected(self):
+        bad = json.loads(json.dumps(MANIFEST))
+        del bad["profiles"][NONE]["tools"][f"rust-std-{TRIPLE}"]
+        self.assertTrue(any(f"needs the tool rust-std-{TRIPLE}" in p for p in B.validate_profile(bad, NONE)))
+        bad = json.loads(json.dumps(MANIFEST))
+        src = bad["profiles"][NONE]["tools"][f"rust-std-{TRIPLE}"]["source"]["linux-x86_64"]
+        src["components"][0]["archive"] = "rust-std-1.99.1-other.tar.xz"
+        self.assertTrue(any("bazel_only component" in p for p in B.validate_profile(bad, NONE)))
+
+    def test_an_archive_pinned_twice_with_different_hashes_is_rejected(self):
+        bad = json.loads(json.dumps(MANIFEST))
+        std = bad["profiles"][NONE]["tools"][f"rust-std-{TRIPLE}"]
+        std["source"]["darwin-arm64"]["components"][0]["sha256"] = "0" * 64
+        with self.assertRaises(ConfigError):
+            B.render(bad, NONE, VERSION)
+
+    def test_a_target_archive_is_not_installed_on_the_host(self):
+        from dev_platform import provision
+
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(provision, "fetch") as fetch:
+            std = {"rust-std": MANIFEST["profiles"][NONE]["tools"][f"rust-std-{TRIPLE}"]}
+            done = provision.provision({"profiles": {"p": {"tools": std}}}, "p", Path(d), key="darwin-arm64")
+        self.assertEqual(done, [])
+        fetch.assert_not_called()
 
     def test_ruff_targets_the_pinned_python_minor(self):
         text = B.render(MANIFEST, PYTHON, VERSION)["ruff.toml"]
@@ -483,7 +569,7 @@ class Existing(unittest.TestCase):
 
     def test_the_new_profiles_are_exactly_the_baseline(self):
         got = {n for n, p in MANIFEST["profiles"].items() if "bazel" in p}
-        self.assertEqual(got, {MIXED, RUST, PYTHON, PY_TY, MIXED_TY})
+        self.assertEqual(got, {MIXED, RUST, PYTHON, PY_TY, MIXED_TY, NONE, MIXED_NONE})
         t = MANIFEST["profiles"][MIXED]["tools"]
         self.assertEqual(
             {

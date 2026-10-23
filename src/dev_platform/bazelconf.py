@@ -45,6 +45,17 @@ PLATFORMS = {
     "darwin-arm64": {"triple": "aarch64-apple-darwin", "os": "macos", "cpu": "aarch64"},
     "linux-x86_64": {"triple": "x86_64-unknown-linux-gnu", "os": "linux", "cpu": "x86_64"},
 }
+# Approved extra Rust target triples -> the --config that selects them and the constraints of its platform
+# it builds for (those rules_rust matches its toolchain for the triple on). Further triples are added here,
+# each with a rust-std tool in the manifest.
+TARGETS = {
+    "aarch64-unknown-none-softfloat": {
+        "config": "dp-aarch64-none",
+        "platform": "aarch64_none",
+        "cpu": "aarch64",
+        "os": "none",
+    },
+}
 RUST_POLICY = ("rustfmt.toml", "clippy.toml")
 TYPE_CHECKERS = ("mypy", "ty")  # `bazel.type_checker` of a profile; mypy when absent (profiles before ty)
 PYTHON_POLICY = {"mypy": ("ruff.toml", "mypy.ini"), "ty": ("ruff.toml", "ty.toml")}
@@ -118,6 +129,7 @@ def validate_profile(manifest: dict, pname: str) -> list[str]:
             errs += e.problems
         if tools.get("rust-dev", {}).get("version") != tools["rust-toolchain"]["version"]:
             errs.append(f"{w}: rust-dev and rust-toolchain must be the same version")
+        errs += _target_problems(w, cfg, tools)
     if "python" in langs:
         errs += _need_sources(w, tools, "python") + _need_sources(w, tools, "ruff")
         try:
@@ -131,6 +143,34 @@ def validate_profile(manifest: dict, pname: str) -> list[str]:
         for t in ("pytest", "pytest-cov", "coverage", type_checker(prof)):
             if t not in tools or tools[t].get("bound_to") != "bazel-config":
                 errs.append(f"{w}: tool {t} must be Bazel-managed and bound_to bazel-config")
+    return errs
+
+
+def extra_targets(profile: dict) -> list[str]:
+    return list((profile.get("bazel") or {}).get("extra_target_triples", []))
+
+
+def _target_problems(w: str, cfg: dict, tools: dict) -> list[str]:
+    triples = cfg.get("extra_target_triples", [])
+    if not isinstance(triples, list) or not all(isinstance(t, str) for t in triples):
+        return [f"{w}.extra_target_triples: a list of target triples is required"]
+    errs = []
+    version = tools["rust-toolchain"]["version"]
+    for t in triples:
+        if t not in TARGETS:
+            errs.append(f"{w}.extra_target_triples: {t} is not an approved target (have {sorted(TARGETS)})")
+            continue
+        archive = f"rust-std-{version}-{t}.tar.xz"
+        tool = tools.get(f"rust-std-{t}")
+        if not tool or tool.get("version") != version or tool.get("bound_to") != "bazel-config":
+            errs.append(f"{w}: target {t} needs the tool rust-std-{t} at {version}, bound_to bazel-config")
+            continue
+        for key in PLATFORMS:
+            comps = ((tool.get("source") or {}).get(key) or {}).get("components", [])
+            if not any(c.get("archive") == archive and c.get("bazel_only") for c in comps):
+                errs.append(f"{w}: tool rust-std-{t} needs the bazel_only component {archive} for {key}")
+    if len(set(triples)) != len(triples):
+        errs.append(f"{w}.extra_target_triples: duplicates")
     return errs
 
 
@@ -166,15 +206,17 @@ def _starlark_dict(entries: dict[str, str], indent: int = 8) -> str:
     return "\n".join(f'{pad}"{k}": "{entries[k]}",' for k in sorted(entries))
 
 
-def rust_sha256s(rust_dev: dict) -> dict[str, str]:
-    """Archive name -> sha256 for every component archive the Rust toolchain declaration may fetch."""
+def rust_sha256s(rust_dev: dict, *target_stds: dict) -> dict[str, str]:
+    """Archive name -> sha256 for every component archive the Rust toolchain declaration may fetch: the host
+    toolchain's and those of the extra targets' rust-std tools."""
     out: dict[str, str] = {}
-    for key in sorted(rust_dev["source"]):
-        if key not in PLATFORMS:
-            continue
-        for c in rust_dev["source"][key]["components"]:
-            if out.setdefault(c["archive"], c["sha256"]) != c["sha256"]:
-                raise ConfigError([f"rust-dev: archive {c['archive']} is pinned to two different hashes"])
+    for tool in (rust_dev, *target_stds):
+        for key in sorted(tool["source"]):
+            if key not in PLATFORMS:
+                continue
+            for c in tool["source"][key]["components"]:
+                if out.setdefault(c["archive"], c["sha256"]) != c["sha256"]:
+                    raise ConfigError([f"archive {c['archive']} is pinned to two different hashes"])
     return out
 
 
@@ -201,10 +243,7 @@ def _ruff_archives(ruff: dict) -> str:
         blocks.append(
             "http_archive(\n"
             f'    name = "dp_ruff_{key.replace("-", "_")}",\n'
-            '    build_file_content = """load("@bazel_skylib//rules:native_binary.bzl", "native_binary")\n'
-            'native_binary(name = "ruff_bin", src = "ruff", out = "ruff_exe",'
-            ' visibility = ["//visibility:public"])\n'
-            '""",\n'
+            '    build_file_content = """exports_files(["ruff"], visibility = ["//visibility:public"])""",\n'
             f'    sha256 = "{src["sha256"]}",\n'
             f'    strip_prefix = "{src.get("strip", "")}",\n'
             f'    urls = ["{src["url"]}"],\n'
@@ -213,18 +252,19 @@ def _ruff_archives(ruff: dict) -> str:
     return "\n".join(blocks)
 
 
-def _ruff_select() -> str:
+def _ruff_binaries() -> str:
+    """One executable per supported host, and an alias that selects the host's. The conditions come from
+    @bazel_tools, so the project's MODULE.bazel needs no `platforms` or `bazel_skylib` dependency of ours."""
     return "\n".join(
-        f'        ":host_{key.replace("-", "_")}": "@dp_ruff_{key.replace("-", "_")}//:ruff_bin",'
-        for key in sorted(PLATFORMS)
+        f'dp_executable(name = "ruff_{k}", src = "@dp_ruff_{k}//:ruff")\n'
+        for k in (key.replace("-", "_") for key in sorted(PLATFORMS))
     )
 
 
-def _host_settings() -> str:
+def _ruff_select() -> str:
     return "\n".join(
-        f'\nconfig_setting(\n    name = "host_{key.replace("-", "_")}",\n'
-        f'    constraint_values = ["@platforms//os:{p["os"]}", "@platforms//cpu:{p["cpu"]}"],\n)'
-        for key, p in sorted(PLATFORMS.items())
+        f'        "@bazel_tools//src/conditions:{key.replace("-", "_")}": ":ruff_{key.replace("-", "_")}",'
+        for key in sorted(PLATFORMS)
     )
 
 
@@ -252,9 +292,16 @@ def render(manifest: dict, profile: str, version: str) -> dict[str, str]:
             RULES_RUST=_module_version(tools["rust-toolchain"], "rules_rust"),
             EDITION=edition,
             RUST_VERSION=rust_version,
-            RUST_SHA256S=_starlark_dict(rust_sha256s(tools["rust-dev"])),
+            RUST_SHA256S=_starlark_dict(
+                rust_sha256s(tools["rust-dev"], *(tools[f"rust-std-{t}"] for t in extra_targets(prof)))
+            ),
+            EXTRA_TARGETS=json.dumps(extra_targets(prof)),
         )
         rc += _template("bazelrc.rust")
+        for triple in extra_targets(prof):
+            t = TARGETS[triple]
+            rc += f"# Cross-compile for {triple}: build --config={t['config']} //...\n"
+            rc += f"build:{t['config']} --platforms=//{OUT_DIR}:{t['platform']}\n"
         for name in RUST_POLICY:
             text = _sub(_template(name), RUST_VERSION=rust_version, EDITION=edition)
             put(name, text)
@@ -292,8 +339,19 @@ def render(manifest: dict, profile: str, version: str) -> dict[str, str]:
     rc += f"build:dp-lint --output_groups={','.join(groups)}\n"
     build = _sub(_template("BUILD.base.bazel"), EXPORTS=json.dumps(sorted(exports)))
     if "python" in langs:
-        build += _sub(_template(f"BUILD.python{suffix}.bazel"), RUFF_SELECT=_ruff_select())
-        build += _host_settings() + "\n"
+        build += _sub(
+            _template(f"BUILD.python{suffix}.bazel"),
+            RUFF_BINARIES=_ruff_binaries(),
+            RUFF_SELECT=_ruff_select(),
+        )
+    for triple in extra_targets(prof):
+        t = TARGETS[triple]
+        # canonical labels: the platforms module is in every graph (rules_rust depends on it), whatever the
+        # project declares, so no bazel_dep of ours is needed
+        build += (
+            f'\nplatform(\n    name = "{t["platform"]}",\n'
+            f'    constraint_values = ["@@platforms//cpu:{t["cpu"]}", "@@platforms//os:{t["os"]}"],\n)\n'
+        )
     put(f"{OUT_DIR}/BUILD.bazel", build)
     put(f"{OUT_DIR}/toolchains.MODULE.bazel", module)
     put(f"{OUT_DIR}/bazel.bazelrc", rc)
@@ -557,6 +615,25 @@ def _tool_config_conflicts(root: Path, langs: set[str], want: dict[str, str]) ->
     return out
 
 
+def _bazelversion_conflicts(root: Path, bazel_version: str) -> list[dict]:
+    """A project-owned .bazelversion selecting another Bazel than the profile pins: reported, never edited."""
+    text = _read(root / ".bazelversion")
+    if text is None:
+        return []
+    lines = text.strip().splitlines()
+    observed = lines[0].strip() if lines else ""
+    if observed == bazel_version:
+        return []
+    return [
+        _conflict(
+            "bazel-version",
+            ".bazelversion",
+            f"selects Bazel {observed or '(empty)'}; the profile pins Bazel {bazel_version}",
+            f"set .bazelversion to {bazel_version} (the platform does not edit it)",
+        )
+    ]
+
+
 def check(manifest: dict, profile: str, root: Path, version: str) -> dict:
     """The conformance verdict for a project's Bazel configuration against this release (reads only)."""
     root = Path(root)
@@ -567,6 +644,7 @@ def check(manifest: dict, profile: str, root: Path, version: str) -> dict:
     py = tools["python"]["version"] if "python" in langs else ""
     conflicts += _module_conflicts(root, langs, py)
     conflicts += _bazelrc_conflicts(root, langs, tools["bazel"]["version"])
+    conflicts += _bazelversion_conflicts(root, tools["bazel"]["version"])
     conflicts += _tool_config_conflicts(root, langs, want)
     dig = digest(want)
     return {
@@ -603,6 +681,7 @@ def materialize(
         "unchanged": [],
         "added_hooks": [],
         "refused": foreign,
+        "conflicts": [],
     }
     if foreign:
         return report
@@ -641,4 +720,8 @@ def materialize(
     if not bv.exists() and not dry_run:
         bv.write_text(manifest["profiles"][profile]["tools"]["bazel"]["version"] + "\n")
         report["written"].append(".bazelversion")
+    # project-owned state that cannot be generated away: reported so the caller can stop before Bazel runs
+    report["conflicts"] = _bazelversion_conflicts(
+        root, manifest["profiles"][profile]["tools"]["bazel"]["version"]
+    )
     return report
