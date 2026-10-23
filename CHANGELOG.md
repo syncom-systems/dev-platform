@@ -1,6 +1,16 @@
 # Changelog
 
 ## Unreleased
+Fixed (found by NGA's trial of 0.13.0):
+- The generated Bazel module no longer declares `platforms` or `bazel_skylib`, which collided with a project's own
+  declarations (`The repo name 'platforms' cannot be defined by a bazel_dep ...`). Nothing generated refers to either
+  module: the ruff binary is wrapped by a platform rule and selected with `@bazel_tools` conditions. The
+  `baseline-mixed` fixture now declares `platforms` 1.1.0 and `bazel_skylib` 1.9.2 itself and uses them, so every
+  qualification of the mixed profiles resolves and builds an existing workspace with overlapping dependencies.
+- `setup` (and `toolchain materialize`) report a project's `.bazelversion` that selects another Bazel than the profile
+  pins, with the file, the observed and the pinned version and the correction, before anything is provisioned or
+  run. The file is never edited. `toolchain materialize --check` and conformance report it as `bazel-version`.
+
 Added (Ty as the platform type checker; additive, the published mypy profiles are unchanged):
 - Profiles `python-ty-bazel-9.3` and `rust-python-ty-bazel-9.3`: the 0.13 baseline with Ty 0.0.91 (hash-locked, Bazel-managed)
   in place of mypy. A profile's `bazel.type_checker` (`mypy` by default, or `ty`) selects the generated `ty.toml`, lint

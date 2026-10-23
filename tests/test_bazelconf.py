@@ -222,6 +222,33 @@ class Materialize(unittest.TestCase):
         kinds = {c["kind"] for c in B.check(MANIFEST, PY_TY, root, VERSION)["conflicts"]}
         self.assertIn("tool-config", kinds)
 
+    def test_generated_files_never_declare_or_refer_to_platforms_or_skylib(self):
+        for profile in (RUST, PYTHON, MIXED, PY_TY, MIXED_TY):
+            for path, text in B.render(MANIFEST, profile, VERSION).items():
+                if path.endswith("python_lock.txt"):
+                    continue
+                self.assertNotIn("@platforms", text, f"{profile}:{path}")
+                self.assertNotIn("@bazel_skylib", text, f"{profile}:{path}")
+                self.assertNotIn('bazel_dep(name = "platforms"', text, f"{profile}:{path}")
+
+    def test_a_mismatching_bazelversion_is_reported_with_both_versions_and_never_edited(self):
+        root = materialized(self, MIXED)
+        (root / ".bazelversion").write_text("9.2.0\n")
+        rep = B.materialize(MANIFEST, MIXED, root, VERSION)
+        (c,) = rep["conflicts"]
+        self.assertEqual(c["path"], ".bazelversion")
+        self.assertIn("9.2.0", c["detail"])
+        self.assertIn("9.3.1", c["detail"] + c["action"])
+        self.assertEqual((root / ".bazelversion").read_text(), "9.2.0\n")
+        kinds = [x["kind"] for x in B.check(MANIFEST, MIXED, root, VERSION)["conflicts"]]
+        self.assertIn("bazel-version", kinds)
+
+    def test_a_matching_or_absent_bazelversion_is_no_conflict(self):
+        root = materialized(self, MIXED)
+        self.assertEqual(B.materialize(MANIFEST, MIXED, root, VERSION)["conflicts"], [])
+        (root / ".bazelversion").unlink()
+        self.assertEqual(B.materialize(MANIFEST, MIXED, root, VERSION)["conflicts"], [])
+
     def test_ruff_targets_the_pinned_python_minor(self):
         text = B.render(MANIFEST, PYTHON, VERSION)["ruff.toml"]
         minor = MANIFEST["profiles"][PYTHON]["tools"]["python"]["version"].split(".")[:2]
