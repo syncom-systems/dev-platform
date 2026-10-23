@@ -28,7 +28,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "toolchains" / "manifest.json"
-LOCK = ROOT / "src" / "dev_platform" / "bazel" / "python_lock.txt"
+LOCKS = {
+    "mypy": ROOT / "src" / "dev_platform" / "bazel" / "python_lock.txt",
+    "ty": ROOT / "src" / "dev_platform" / "bazel" / "python_lock.ty.txt",
+}
 
 VERSIONS = {
     "rust": "1.99.1",
@@ -61,10 +64,14 @@ SYSTEM_LIBS = [
     "libutil.so.1",
     "libgcc_s.so.1",
 ]
+# profile -> (languages, type checker, profile whose measured host-tool closures it shares). The ty profiles
+# are added beside the mypy ones: a published profile is never changed.
 PROFILES = {
-    "rust-bazel-9.3": ("rust",),
-    "python-bazel-9.3": ("python",),
-    "rust-python-bazel-9.3": ("rust", "python"),
+    "rust-bazel-9.3": (("rust",), "mypy", None),
+    "python-bazel-9.3": (("python",), "mypy", None),
+    "rust-python-bazel-9.3": (("rust", "python"), "mypy", None),
+    "python-ty-bazel-9.3": (("python",), "ty", "python-bazel-9.3"),
+    "rust-python-ty-bazel-9.3": (("rust", "python"), "ty", "rust-python-bazel-9.3"),
 }
 ZERO = "0" * 64
 
@@ -170,8 +177,8 @@ def module_pin(name: str, version: str) -> dict:
     return {"kind": "bazel_module", "name": name, "version": version, "source_json_sha256": sha(get(url))}
 
 
-def locked_versions() -> dict[str, str]:
-    text = LOCK.read_text()
+def locked_versions(checker: str) -> dict[str, str]:
+    text = LOCKS[checker].read_text()
     return {n: v for n, v in re.findall(r"^([a-z][a-z0-9_.-]*)==(\S+)", text, re.M)}
 
 
@@ -191,16 +198,19 @@ def build(prior: dict, measures: dict) -> dict:
     py = python_sources(v["python"], v["python_build"])
     ruff_src, ruff_bin = ruff_sources_and_binary(v["ruff"])
     bz, bl = bazel_pins(v["bazel"], v["bazelisk"])
-    locked = locked_versions()
+    locks = {c: locked_versions(c) for c in LOCKS}
     mods = {n: module_pin(n, v[n]) for n in ("rules_rust", "rules_python")}
-    lock_file = "dev-platform/python_lock.txt"
     module_file = "dev-platform/toolchains.MODULE.bazel"
     old = prior.get("profiles", {})
 
     def prev(profile: str, tool: str) -> dict:
-        return old.get(profile, {}).get("tools", {}).get(tool, {})
+        sibling = PROFILES[profile][2]
+        found = old.get(profile, {}).get("tools", {}).get(tool, {})
+        return found or old.get(sibling, {}).get("tools", {}).get(tool, {})
 
-    def tools_for(profile: str, langs: tuple[str, ...]) -> dict:
+    def tools_for(profile: str, langs: tuple[str, ...], checker: str) -> dict:
+        locked = locks[checker]
+        lock_file = "dev-platform/python_lock.txt"
         t: dict = {
             "bazelisk": {
                 "version": v["bazelisk"],
@@ -269,7 +279,7 @@ def build(prior: dict, measures: dict) -> dict:
                 "closure": file_closure(ruff_bin),
                 "source": ruff_src,
             }
-            for name in ("pytest", "pytest-cov", "coverage", "mypy"):
+            for name in ("pytest", "pytest-cov", "coverage", checker):
                 t[name] = {
                     "version": locked[name],
                     "bazel_managed": True,
@@ -280,11 +290,11 @@ def build(prior: dict, measures: dict) -> dict:
         return dict(sorted(t.items()))
 
     profiles = {}
-    for name, langs in PROFILES.items():
-        profiles[name] = {
-            "tools": tools_for(name, langs),
-            "bazel": {"edition": v["edition"]} if "rust" in langs else {},
-        }
+    for name, (langs, checker, _) in PROFILES.items():
+        bazel = {"edition": v["edition"]} if "rust" in langs else {}
+        if checker != "mypy":
+            bazel["type_checker"] = checker
+        profiles[name] = {"tools": tools_for(name, langs, checker), "bazel": bazel}
     return profiles
 
 

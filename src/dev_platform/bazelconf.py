@@ -7,9 +7,10 @@ renders, from the release alone, the files Bazel and its language rules need:
   dev-platform/toolchains.MODULE.bazel   rules_rust / rules_python, toolchain versions, pinned hashes
   dev-platform/bazel.bazelrc             formatter, lint and coverage policy (`--config=dp-lint`)
   dev-platform/{BUILD.bazel,*.bzl,...}   rules the policy needs (pytest test rule, lint aspect, Rust macro)
-  dev-platform/python_lock.txt           hash-locked pytest, coverage and mypy
-  rustfmt.toml clippy.toml ruff.toml mypy.ini   tool policy, at the root where editors and CLIs look for it
-                                                  and in dev-platform/ where Bazel consumes it
+  dev-platform/python_lock.txt           hash-locked pytest, coverage and the type checker
+  rustfmt.toml clippy.toml ruff.toml mypy.ini|ty.toml
+                                         tool policy, at the root where editors and CLIs look for it
+                                         and in dev-platform/ where Bazel consumes it
   dev-platform/generated.json            release, profile and sha256 of every generated file
 
 Every number in the rendering (versions, urls, hashes) comes from the toolchain manifest; the policy files are
@@ -45,7 +46,8 @@ PLATFORMS = {
     "linux-x86_64": {"triple": "x86_64-unknown-linux-gnu", "os": "linux", "cpu": "x86_64"},
 }
 RUST_POLICY = ("rustfmt.toml", "clippy.toml")
-PYTHON_POLICY = ("ruff.toml", "mypy.ini")
+TYPE_CHECKERS = ("mypy", "ty")  # `bazel.type_checker` of a profile; mypy when absent (profiles before ty)
+PYTHON_POLICY = {"mypy": ("ruff.toml", "mypy.ini"), "ty": ("ruff.toml", "ty.toml")}
 _PRUNE = {".git", ".devenv", "node_modules", "target", ".venv", "venv", ".tox", "__pycache__", OUT_DIR}
 _STRAY = {  # file name -> languages it configures
     "rustfmt.toml": "rust",
@@ -57,6 +59,8 @@ _STRAY = {  # file name -> languages it configures
     "ruff.toml": "python",
     ".ruff.toml": "python",
     "mypy.ini": "python",
+    "ty.toml": "python",
+    ".ty.toml": "python",
     ".mypy.ini": "python",
     "pytest.ini": "python",
     ".coveragerc": "python",
@@ -70,7 +74,11 @@ _TOOL_VERSIONS_KEYS = {
     "bazelisk": "any",
 }
 _INI_SECTIONS = ("mypy", "tool:pytest", "coverage:run", "coverage:report", "coverage:paths")
-_PYPROJECT_TABLES = ("ruff", "mypy", "pytest", "coverage")
+_PYPROJECT_TABLES = ("ruff", "mypy", "ty", "pytest", "coverage")
+
+
+def type_checker(profile: dict) -> str:
+    return (profile.get("bazel") or {}).get("type_checker", "mypy")
 
 
 def languages(profile: dict) -> set[str]:
@@ -118,7 +126,9 @@ def validate_profile(manifest: dict, pname: str) -> list[str]:
             errs += e.problems
         if tools.get("python", {}).get("version") != tools["python-runtime"]["version"]:
             errs.append(f"{w}: python and python-runtime must be the same version")
-        for t in ("pytest", "pytest-cov", "coverage", "mypy"):
+        if type_checker(prof) not in TYPE_CHECKERS:
+            errs.append(f"{w}.type_checker: one of {list(TYPE_CHECKERS)}")
+        for t in ("pytest", "pytest-cov", "coverage", type_checker(prof)):
             if t not in tools or tools[t].get("bound_to") != "bazel-config":
                 errs.append(f"{w}: tool {t} must be Bazel-managed and bound_to bazel-config")
     return errs
@@ -261,15 +271,19 @@ def render(manifest: dict, profile: str, version: str) -> dict[str, str]:
             RUFF_ARCHIVES=_ruff_archives(tools["ruff"]),
         )
         rc += _template("bazelrc.python")
-        for name in PYTHON_POLICY:
+        checker = type_checker(prof)
+        suffix = "" if checker == "mypy" else f".{checker}"  # templates of a later checker are named for it
+        for name in PYTHON_POLICY[checker]:
             text = _template(name)
             put(name, text)
             put(f"{OUT_DIR}/{name}", text)
             exports.append(name)
         for name in ("lint.bzl", "python.bzl", "coveragerc", "python_lock.txt"):
-            put(f"{OUT_DIR}/{name}", _template(name))
+            variants = {"lint.bzl": f"lint{suffix}.bzl", "python_lock.txt": f"python_lock{suffix}.txt"}
+            src = variants.get(name, name)
+            put(f"{OUT_DIR}/{name}", _template(src))
             exports.append(name)
-        for name in ("pytest_main.py", "mypy_main.py"):
+        for name in ("pytest_main.py", f"{checker}_main.py"):
             put(f"{OUT_DIR}/{name}", _template(name + ".tmpl"))
             exports.append(name)
     groups = (["rustfmt_checks", "clippy_checks"] if "rust" in langs else []) + (
@@ -278,7 +292,7 @@ def render(manifest: dict, profile: str, version: str) -> dict[str, str]:
     rc += f"build:dp-lint --output_groups={','.join(groups)}\n"
     build = _sub(_template("BUILD.base.bazel"), EXPORTS=json.dumps(sorted(exports)))
     if "python" in langs:
-        build += _sub(_template("BUILD.python.bazel"), RUFF_SELECT=_ruff_select())
+        build += _sub(_template(f"BUILD.python{suffix}.bazel"), RUFF_SELECT=_ruff_select())
         build += _host_settings() + "\n"
     put(f"{OUT_DIR}/BUILD.bazel", build)
     put(f"{OUT_DIR}/toolchains.MODULE.bazel", module)

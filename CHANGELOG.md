@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+Added (Ty as the platform type checker; additive, the published mypy profiles are unchanged):
+- Profiles `python-ty-bazel-9.3` and `rust-python-ty-bazel-9.3`: the 0.13 baseline with Ty 0.0.91 (hash-locked, Bazel-managed)
+  in place of mypy. A profile's `bazel.type_checker` (`mypy` by default, or `ty`) selects the generated `ty.toml`, lint
+  aspect, wrapper and lock; a stray `ty.toml` or `[tool.ty]` is a conformance conflict like the other tool policies.
+  Qualified with the same real-execution, host-independence and must-be-rejected scenarios as the mypy profiles.
+  Pyright is not used anywhere in the platform.
+
 
 ## 0.13.0
 Added (Bazel Rust and Python baseline, [ADR 0025](docs/adr/0025-platform-owned-bazel-configuration.md),

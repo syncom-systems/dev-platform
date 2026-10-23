@@ -12,6 +12,7 @@ from tests.helpers import ROOT, tmpdir
 MANIFEST = T.validate(json.loads((ROOT / "toolchains" / "manifest.json").read_text()))
 VERSION = "9.9.9"
 MIXED, RUST, PYTHON = "rust-python-bazel-9.3", "rust-bazel-9.3", "python-bazel-9.3"
+PY_TY, MIXED_TY = "python-ty-bazel-9.3", "rust-python-ty-bazel-9.3"
 
 
 def render(profile=MIXED):
@@ -189,6 +190,37 @@ class Materialize(unittest.TestCase):
         self.assertEqual((owned / "MODULE.bazel").read_text(), 'module(name = "p")\n')
         hooks = [c for c in B.check(MANIFEST, MIXED, owned, VERSION)["conflicts"] if c["kind"] == "hook"]
         self.assertEqual([c["path"] for c in hooks], ["MODULE.bazel"])
+
+    def test_ty_profiles_render_ty_policy_and_no_mypy(self):
+        for profile in (PY_TY, MIXED_TY):
+            files = B.render(MANIFEST, profile, VERSION)
+            self.assertIn("ty.toml", files)
+            self.assertIn("dev-platform/ty_main.py", files)
+            self.assertNotIn("mypy.ini", files)
+            self.assertNotIn("dev-platform/mypy_main.py", files)
+            self.assertIn("ty==0.0.91", files["dev-platform/python_lock.txt"])
+            self.assertNotIn("mypy", files["dev-platform/python_lock.txt"])
+            self.assertIn("DpTy", files["dev-platform/lint.bzl"])
+            self.assertNotIn("mypy", files["dev-platform/lint.bzl"].lower())
+            self.assertIn('name = "ty"', files["dev-platform/BUILD.bazel"])
+
+    def test_the_published_mypy_profiles_still_render_mypy(self):
+        for profile in (PYTHON, MIXED):
+            files = B.render(MANIFEST, profile, VERSION)
+            self.assertIn("mypy.ini", files)
+            self.assertNotIn("ty.toml", files)
+            self.assertIn("DpMypy", files["dev-platform/lint.bzl"])
+
+    def test_ty_and_ruff_target_the_pinned_python_minor(self):
+        files = B.render(MANIFEST, PY_TY, VERSION)
+        self.assertIn('python-version = "3.15"', files["ty.toml"])
+        self.assertIn('target-version = "py315"', files["ruff.toml"])
+
+    def test_a_stray_ty_config_conflicts_in_a_ty_profile(self):
+        root = materialized(self, PY_TY)
+        (root / "pyproject.toml").write_text("[tool.ty.rules]\nall = 'ignore'\n")
+        kinds = {c["kind"] for c in B.check(MANIFEST, PY_TY, root, VERSION)["conflicts"]}
+        self.assertIn("tool-config", kinds)
 
     def test_ruff_targets_the_pinned_python_minor(self):
         text = B.render(MANIFEST, PYTHON, VERSION)["ruff.toml"]
@@ -451,7 +483,7 @@ class Existing(unittest.TestCase):
 
     def test_the_new_profiles_are_exactly_the_baseline(self):
         got = {n for n, p in MANIFEST["profiles"].items() if "bazel" in p}
-        self.assertEqual(got, {MIXED, RUST, PYTHON})
+        self.assertEqual(got, {MIXED, RUST, PYTHON, PY_TY, MIXED_TY})
         t = MANIFEST["profiles"][MIXED]["tools"]
         self.assertEqual(
             {
