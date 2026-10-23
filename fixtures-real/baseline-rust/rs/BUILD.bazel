@@ -1,0 +1,6 @@
+load("//dev-platform:rust.bzl", "dp_rust_library")
+
+dp_rust_library(
+    name = "demo",
+    srcs = ["src/lib.rs"],
+)

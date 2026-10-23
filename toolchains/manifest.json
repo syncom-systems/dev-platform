@@ -418,6 +418,851 @@
           "purl": "pkg:generic/rust@1.99.1"
         }
       }
+    },
+    "rust-bazel-9.3": {
+      "tools": {
+        "bazel": {
+          "version": "9.3.1",
+          "bazel_managed": true,
+          "declared_in": {
+            "file": ".bazelversion",
+            "pattern": "(\\S+)"
+          },
+          "launcher": "bazelisk",
+          "binary_sha256": {
+            "darwin-arm64": "19c4958626e0e3a564a61c2e85eeaab97b550a30632b82341191aa61ed0ccc1b",
+            "linux-x86_64": "7f775b54bbec487efaf0f49ccda1d2ed02cd34f582edfdd6aeeec76e39ef585c"
+          },
+          "purl": "pkg:github/bazelbuild/bazel@9.3.1"
+        },
+        "bazelisk": {
+          "version": "1.30.0",
+          "executable": "bazel",
+          "purl": "pkg:github/bazelbuild/bazelisk@v1.30.0",
+          "closure": {
+            "kind": "file",
+            "sha256": {
+              "darwin-arm64": "555d2ff912ccd336d0060bdb5251ef2f62629c6f8fbadb59005a45d5625793ec",
+              "linux-x86_64": "a248ae2b2b62b5baebb748f6fba7203bff1a27e5d01b55399a8406744cb539e8"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/bazelbuild/bazelisk/releases/download/v1.30.0/bazelisk-darwin-arm64",
+              "sha256": "555d2ff912ccd336d0060bdb5251ef2f62629c6f8fbadb59005a45d5625793ec",
+              "type": "binary",
+              "as": "bazel"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/bazelbuild/bazelisk/releases/download/v1.30.0/bazelisk-linux-amd64",
+              "sha256": "a248ae2b2b62b5baebb748f6fba7203bff1a27e5d01b55399a8406744cb539e8",
+              "type": "binary",
+              "as": "bazel"
+            }
+          }
+        },
+        "rust-dev": {
+          "version": "1.99.1",
+          "executable": "rustc",
+          "purl": "pkg:generic/rust@1.99.1",
+          "closure": {
+            "kind": "prefix",
+            "prefix_up": 2,
+            "sha256": {
+              "darwin-arm64": "0e2fa1a7fd712c299b6e48e5385fb2b934f6999f942a340b6f3323bee11fcd1e",
+              "linux-x86_64": "e0de7a75f36a630eb23471813318c60e2c8b3adc78af2c9ccdd9942cf2f99093"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1",
+              "libz.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "type": "rust-components",
+              "components": [
+                {
+                  "archive": "rustc-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rustc-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "23948a0a9c162fd2952defb3fb0462c44e8fcfd1a4ab8a274a1e1bdb2cf810a3",
+                  "install": [
+                    "rustc"
+                  ]
+                },
+                {
+                  "archive": "rust-std-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-std-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "fe79d6ab5a0321de26463999d8c112b8ad3eafbcbcf822d66a2300b45dde1031",
+                  "install": [
+                    "rust-std-aarch64-apple-darwin"
+                  ]
+                },
+                {
+                  "archive": "clippy-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "c463f31831196702fc544900a0dc4c1837905327507fbec751fe46e59ca098bf",
+                  "install": [
+                    "clippy-preview"
+                  ],
+                  "omit": [
+                    "bin/cargo-clippy"
+                  ]
+                },
+                {
+                  "archive": "rustfmt-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rustfmt-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "8b80dda570f140ee9ced8799294e812bba847a025f185bae4cba85a2ba235570",
+                  "install": [
+                    "rustfmt-preview"
+                  ],
+                  "omit": [
+                    "bin/cargo-fmt"
+                  ]
+                },
+                {
+                  "archive": "rust-analyzer-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-analyzer-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "c1ee8a54e685e13414e53fc46029d46db12613bc45c081f1a49020f1674ad6b4",
+                  "install": [
+                    "rust-analyzer-preview"
+                  ]
+                },
+                {
+                  "archive": "rust-src-1.99.1.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-src-1.99.1.tar.xz",
+                  "sha256": "e485a88c45db546b73571df7bebfcb4454ba4fb552c492e25fc5b00eeb5bf22d",
+                  "install": [
+                    "rust-src"
+                  ]
+                },
+                {
+                  "archive": "cargo-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "685e563d94db1f003ffa5f5831439eec02569b9950b69867953c8213269c1eaf",
+                  "bazel_only": true
+                },
+                {
+                  "archive": "llvm-tools-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "b348db9d79666aee4b5e2ff4269029fffd16815cbd47f47018cd0b06e4f815f5",
+                  "bazel_only": true
+                }
+              ]
+            },
+            "linux-x86_64": {
+              "type": "rust-components",
+              "components": [
+                {
+                  "archive": "rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "2ff05ff9c08a90861e7f6e4065b40a8b87463b4576186fd613871c3e37f2091f",
+                  "install": [
+                    "rustc"
+                  ]
+                },
+                {
+                  "archive": "rust-std-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-std-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "109b074225bf5b9ea3820890876bfdf4ed161adbfaf94b2b4b5984c85ee5d958",
+                  "install": [
+                    "rust-std-x86_64-unknown-linux-gnu"
+                  ]
+                },
+                {
+                  "archive": "clippy-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "458339712a058e52cc4522ff9ef8b59cd1ea1340312216cd94194c464a3f6dc5",
+                  "install": [
+                    "clippy-preview"
+                  ],
+                  "omit": [
+                    "bin/cargo-clippy"
+                  ]
+                },
+                {
+                  "archive": "rustfmt-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rustfmt-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "e3b36c4c7ec3486c059d8067ff48787676612007123aad7a4e8ec12c48ee9ba2",
+                  "install": [
+                    "rustfmt-preview"
+                  ],
+                  "omit": [
+                    "bin/cargo-fmt"
+                  ]
+                },
+                {
+                  "archive": "rust-analyzer-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-analyzer-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "5f2613d62003fc8cbe788d4ae409359c91c241ba248adbefe032df8bb77357bf",
+                  "install": [
+                    "rust-analyzer-preview"
+                  ]
+                },
+                {
+                  "archive": "rust-src-1.99.1.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-src-1.99.1.tar.xz",
+                  "sha256": "e485a88c45db546b73571df7bebfcb4454ba4fb552c492e25fc5b00eeb5bf22d",
+                  "install": [
+                    "rust-src"
+                  ]
+                },
+                {
+                  "archive": "cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "53f3521949404d595efb06a55c12c5658d4ed1c75566f33d3d514eaebe70bd8a",
+                  "bazel_only": true
+                },
+                {
+                  "archive": "llvm-tools-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "8429c5117debfb45c22cf2f97712ef00e0e94976c96cf92f661974a458ca7e84",
+                  "bazel_only": true
+                }
+              ]
+            }
+          }
+        },
+        "rust-toolchain": {
+          "version": "1.99.1",
+          "bazel_managed": true,
+          "declared_in": {
+            "file": "dev-platform/toolchains.MODULE.bazel",
+            "pattern": "versions = \\[\"([^\"]+)\"\\]"
+          },
+          "integrity": [
+            {
+              "kind": "bazel_module",
+              "name": "rules_rust",
+              "version": "0.74.0",
+              "source_json_sha256": "04eac31b4536eb23dd8e8e8ca7e079d3c1c4ac99934d38aa54bbae36917c7507",
+              "file": "dev-platform/toolchains.MODULE.bazel"
+            }
+          ],
+          "purl": "pkg:generic/rust@1.99.1"
+        }
+      },
+      "bazel": {
+        "edition": "2024"
+      }
+    },
+    "python-bazel-9.3": {
+      "tools": {
+        "bazel": {
+          "version": "9.3.1",
+          "bazel_managed": true,
+          "declared_in": {
+            "file": ".bazelversion",
+            "pattern": "(\\S+)"
+          },
+          "launcher": "bazelisk",
+          "binary_sha256": {
+            "darwin-arm64": "19c4958626e0e3a564a61c2e85eeaab97b550a30632b82341191aa61ed0ccc1b",
+            "linux-x86_64": "7f775b54bbec487efaf0f49ccda1d2ed02cd34f582edfdd6aeeec76e39ef585c"
+          },
+          "purl": "pkg:github/bazelbuild/bazel@9.3.1"
+        },
+        "bazelisk": {
+          "version": "1.30.0",
+          "executable": "bazel",
+          "purl": "pkg:github/bazelbuild/bazelisk@v1.30.0",
+          "closure": {
+            "kind": "file",
+            "sha256": {
+              "darwin-arm64": "555d2ff912ccd336d0060bdb5251ef2f62629c6f8fbadb59005a45d5625793ec",
+              "linux-x86_64": "a248ae2b2b62b5baebb748f6fba7203bff1a27e5d01b55399a8406744cb539e8"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/bazelbuild/bazelisk/releases/download/v1.30.0/bazelisk-darwin-arm64",
+              "sha256": "555d2ff912ccd336d0060bdb5251ef2f62629c6f8fbadb59005a45d5625793ec",
+              "type": "binary",
+              "as": "bazel"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/bazelbuild/bazelisk/releases/download/v1.30.0/bazelisk-linux-amd64",
+              "sha256": "a248ae2b2b62b5baebb748f6fba7203bff1a27e5d01b55399a8406744cb539e8",
+              "type": "binary",
+              "as": "bazel"
+            }
+          }
+        },
+        "coverage": {
+          "version": "7.17.0",
+          "bazel_managed": true,
+          "bound_to": "bazel-config",
+          "declared_in": {
+            "file": "dev-platform/python_lock.txt",
+            "pattern": "(?m)^coverage==(\\S+)"
+          },
+          "purl": "pkg:pypi/coverage@7.17.0"
+        },
+        "mypy": {
+          "version": "2.4.0",
+          "bazel_managed": true,
+          "bound_to": "bazel-config",
+          "declared_in": {
+            "file": "dev-platform/python_lock.txt",
+            "pattern": "(?m)^mypy==(\\S+)"
+          },
+          "purl": "pkg:pypi/mypy@2.4.0"
+        },
+        "pytest": {
+          "version": "9.1.1",
+          "bazel_managed": true,
+          "bound_to": "bazel-config",
+          "declared_in": {
+            "file": "dev-platform/python_lock.txt",
+            "pattern": "(?m)^pytest==(\\S+)"
+          },
+          "purl": "pkg:pypi/pytest@9.1.1"
+        },
+        "pytest-cov": {
+          "version": "7.1.0",
+          "bazel_managed": true,
+          "bound_to": "bazel-config",
+          "declared_in": {
+            "file": "dev-platform/python_lock.txt",
+            "pattern": "(?m)^pytest\\-cov==(\\S+)"
+          },
+          "purl": "pkg:pypi/pytest-cov@7.1.0"
+        },
+        "python": {
+          "version": "3.15.1",
+          "executable": "{python}",
+          "probe": {
+            "argv": [
+              "{python}",
+              "--version"
+            ],
+            "pattern": "Python (\\S+)"
+          },
+          "purl": "pkg:generic/cpython@3.15.1",
+          "closure": {
+            "kind": "prefix",
+            "prefix_up": 2,
+            "sha256": {
+              "darwin-arm64": "0f8c9588f754eba0d2693b776736934c923d5a109173d824d2aa70e9a6096b8c",
+              "linux-x86_64": "712d34fb790626bf3ad37253800aa61678dac998d8d92f135fdc426ec252633f"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.15.1%2B20261021-aarch64-apple-darwin-install_only_stripped.tar.gz",
+              "sha256": "1a4eb4d5aa82400de6eeb94e6fc6d870f5fabc97eb1d801f7eeba8072117b11c",
+              "strip": "python"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.15.1%2B20261021-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+              "sha256": "01d901e09ca673c99a6c9bd9ec2cfbd58dbe8813d07514c36cb73cfd20b18bd8",
+              "strip": "python"
+            }
+          }
+        },
+        "python-runtime": {
+          "version": "3.15.1",
+          "bazel_managed": true,
+          "declared_in": {
+            "file": "dev-platform/toolchains.MODULE.bazel",
+            "pattern": "python_version = \"([^\"]+)\""
+          },
+          "integrity": [
+            {
+              "kind": "bazel_module",
+              "name": "rules_python",
+              "version": "2.4.5",
+              "source_json_sha256": "04cc90b07e4f0abba225743fa138e12a3dee6f04a92ec3741112e83fbf100dc1",
+              "file": "dev-platform/toolchains.MODULE.bazel"
+            }
+          ],
+          "purl": "pkg:generic/cpython@3.15.1"
+        },
+        "ruff": {
+          "version": "0.17.2",
+          "executable": "ruff",
+          "probe": {
+            "argv": [
+              "ruff",
+              "--version"
+            ],
+            "pattern": "ruff (\\S+)"
+          },
+          "purl": "pkg:pypi/ruff@0.17.2",
+          "closure": {
+            "kind": "file",
+            "sha256": {
+              "darwin-arm64": "2ffdab6c43a5790dad20b09c47fb49fd7f77aea2ef924debd216d941c315c38e",
+              "linux-x86_64": "396f38351ef19df216c0aa7a230305e2aca19fd537d3eaaf5e4dd5fba33de82c"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/astral-sh/ruff/releases/download/0.17.2/ruff-aarch64-apple-darwin.tar.gz",
+              "sha256": "94fbca85f19e8b6bb068adb7cbc9a74e3e6c01004cc67c6b00246a094ad4ccd9",
+              "strip": "ruff-aarch64-apple-darwin",
+              "into": "bin"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/astral-sh/ruff/releases/download/0.17.2/ruff-x86_64-unknown-linux-gnu.tar.gz",
+              "sha256": "7b2e6a6e132ecf7b5fe726163b186d5d209befe93bb25f83767b2d97fbdf14e5",
+              "strip": "ruff-x86_64-unknown-linux-gnu",
+              "into": "bin"
+            }
+          }
+        }
+      },
+      "bazel": {}
+    },
+    "rust-python-bazel-9.3": {
+      "tools": {
+        "bazel": {
+          "version": "9.3.1",
+          "bazel_managed": true,
+          "declared_in": {
+            "file": ".bazelversion",
+            "pattern": "(\\S+)"
+          },
+          "launcher": "bazelisk",
+          "binary_sha256": {
+            "darwin-arm64": "19c4958626e0e3a564a61c2e85eeaab97b550a30632b82341191aa61ed0ccc1b",
+            "linux-x86_64": "7f775b54bbec487efaf0f49ccda1d2ed02cd34f582edfdd6aeeec76e39ef585c"
+          },
+          "purl": "pkg:github/bazelbuild/bazel@9.3.1"
+        },
+        "bazelisk": {
+          "version": "1.30.0",
+          "executable": "bazel",
+          "purl": "pkg:github/bazelbuild/bazelisk@v1.30.0",
+          "closure": {
+            "kind": "file",
+            "sha256": {
+              "darwin-arm64": "555d2ff912ccd336d0060bdb5251ef2f62629c6f8fbadb59005a45d5625793ec",
+              "linux-x86_64": "a248ae2b2b62b5baebb748f6fba7203bff1a27e5d01b55399a8406744cb539e8"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/bazelbuild/bazelisk/releases/download/v1.30.0/bazelisk-darwin-arm64",
+              "sha256": "555d2ff912ccd336d0060bdb5251ef2f62629c6f8fbadb59005a45d5625793ec",
+              "type": "binary",
+              "as": "bazel"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/bazelbuild/bazelisk/releases/download/v1.30.0/bazelisk-linux-amd64",
+              "sha256": "a248ae2b2b62b5baebb748f6fba7203bff1a27e5d01b55399a8406744cb539e8",
+              "type": "binary",
+              "as": "bazel"
+            }
+          }
+        },
+        "coverage": {
+          "version": "7.17.0",
+          "bazel_managed": true,
+          "bound_to": "bazel-config",
+          "declared_in": {
+            "file": "dev-platform/python_lock.txt",
+            "pattern": "(?m)^coverage==(\\S+)"
+          },
+          "purl": "pkg:pypi/coverage@7.17.0"
+        },
+        "mypy": {
+          "version": "2.4.0",
+          "bazel_managed": true,
+          "bound_to": "bazel-config",
+          "declared_in": {
+            "file": "dev-platform/python_lock.txt",
+            "pattern": "(?m)^mypy==(\\S+)"
+          },
+          "purl": "pkg:pypi/mypy@2.4.0"
+        },
+        "pytest": {
+          "version": "9.1.1",
+          "bazel_managed": true,
+          "bound_to": "bazel-config",
+          "declared_in": {
+            "file": "dev-platform/python_lock.txt",
+            "pattern": "(?m)^pytest==(\\S+)"
+          },
+          "purl": "pkg:pypi/pytest@9.1.1"
+        },
+        "pytest-cov": {
+          "version": "7.1.0",
+          "bazel_managed": true,
+          "bound_to": "bazel-config",
+          "declared_in": {
+            "file": "dev-platform/python_lock.txt",
+            "pattern": "(?m)^pytest\\-cov==(\\S+)"
+          },
+          "purl": "pkg:pypi/pytest-cov@7.1.0"
+        },
+        "python": {
+          "version": "3.15.1",
+          "executable": "{python}",
+          "probe": {
+            "argv": [
+              "{python}",
+              "--version"
+            ],
+            "pattern": "Python (\\S+)"
+          },
+          "purl": "pkg:generic/cpython@3.15.1",
+          "closure": {
+            "kind": "prefix",
+            "prefix_up": 2,
+            "sha256": {
+              "darwin-arm64": "0f8c9588f754eba0d2693b776736934c923d5a109173d824d2aa70e9a6096b8c",
+              "linux-x86_64": "712d34fb790626bf3ad37253800aa61678dac998d8d92f135fdc426ec252633f"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.15.1%2B20261021-aarch64-apple-darwin-install_only_stripped.tar.gz",
+              "sha256": "1a4eb4d5aa82400de6eeb94e6fc6d870f5fabc97eb1d801f7eeba8072117b11c",
+              "strip": "python"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.15.1%2B20261021-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+              "sha256": "01d901e09ca673c99a6c9bd9ec2cfbd58dbe8813d07514c36cb73cfd20b18bd8",
+              "strip": "python"
+            }
+          }
+        },
+        "python-runtime": {
+          "version": "3.15.1",
+          "bazel_managed": true,
+          "declared_in": {
+            "file": "dev-platform/toolchains.MODULE.bazel",
+            "pattern": "python_version = \"([^\"]+)\""
+          },
+          "integrity": [
+            {
+              "kind": "bazel_module",
+              "name": "rules_python",
+              "version": "2.4.5",
+              "source_json_sha256": "04cc90b07e4f0abba225743fa138e12a3dee6f04a92ec3741112e83fbf100dc1",
+              "file": "dev-platform/toolchains.MODULE.bazel"
+            }
+          ],
+          "purl": "pkg:generic/cpython@3.15.1"
+        },
+        "ruff": {
+          "version": "0.17.2",
+          "executable": "ruff",
+          "probe": {
+            "argv": [
+              "ruff",
+              "--version"
+            ],
+            "pattern": "ruff (\\S+)"
+          },
+          "purl": "pkg:pypi/ruff@0.17.2",
+          "closure": {
+            "kind": "file",
+            "sha256": {
+              "darwin-arm64": "2ffdab6c43a5790dad20b09c47fb49fd7f77aea2ef924debd216d941c315c38e",
+              "linux-x86_64": "396f38351ef19df216c0aa7a230305e2aca19fd537d3eaaf5e4dd5fba33de82c"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "url": "https://github.com/astral-sh/ruff/releases/download/0.17.2/ruff-aarch64-apple-darwin.tar.gz",
+              "sha256": "94fbca85f19e8b6bb068adb7cbc9a74e3e6c01004cc67c6b00246a094ad4ccd9",
+              "strip": "ruff-aarch64-apple-darwin",
+              "into": "bin"
+            },
+            "linux-x86_64": {
+              "url": "https://github.com/astral-sh/ruff/releases/download/0.17.2/ruff-x86_64-unknown-linux-gnu.tar.gz",
+              "sha256": "7b2e6a6e132ecf7b5fe726163b186d5d209befe93bb25f83767b2d97fbdf14e5",
+              "strip": "ruff-x86_64-unknown-linux-gnu",
+              "into": "bin"
+            }
+          }
+        },
+        "rust-dev": {
+          "version": "1.99.1",
+          "executable": "rustc",
+          "purl": "pkg:generic/rust@1.99.1",
+          "closure": {
+            "kind": "prefix",
+            "prefix_up": 2,
+            "sha256": {
+              "darwin-arm64": "0e2fa1a7fd712c299b6e48e5385fb2b934f6999f942a340b6f3323bee11fcd1e",
+              "linux-x86_64": "e0de7a75f36a630eb23471813318c60e2c8b3adc78af2c9ccdd9942cf2f99093"
+            },
+            "system_libs": [
+              "/usr/lib/",
+              "/System/Library/",
+              "ld-linux-x86-64.so.2",
+              "libc.so.6",
+              "libdl.so.2",
+              "libm.so.6",
+              "libpthread.so.0",
+              "librt.so.1",
+              "libutil.so.1",
+              "libgcc_s.so.1",
+              "libz.so.1"
+            ]
+          },
+          "source": {
+            "darwin-arm64": {
+              "type": "rust-components",
+              "components": [
+                {
+                  "archive": "rustc-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rustc-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "23948a0a9c162fd2952defb3fb0462c44e8fcfd1a4ab8a274a1e1bdb2cf810a3",
+                  "install": [
+                    "rustc"
+                  ]
+                },
+                {
+                  "archive": "rust-std-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-std-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "fe79d6ab5a0321de26463999d8c112b8ad3eafbcbcf822d66a2300b45dde1031",
+                  "install": [
+                    "rust-std-aarch64-apple-darwin"
+                  ]
+                },
+                {
+                  "archive": "clippy-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "c463f31831196702fc544900a0dc4c1837905327507fbec751fe46e59ca098bf",
+                  "install": [
+                    "clippy-preview"
+                  ],
+                  "omit": [
+                    "bin/cargo-clippy"
+                  ]
+                },
+                {
+                  "archive": "rustfmt-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rustfmt-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "8b80dda570f140ee9ced8799294e812bba847a025f185bae4cba85a2ba235570",
+                  "install": [
+                    "rustfmt-preview"
+                  ],
+                  "omit": [
+                    "bin/cargo-fmt"
+                  ]
+                },
+                {
+                  "archive": "rust-analyzer-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-analyzer-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "c1ee8a54e685e13414e53fc46029d46db12613bc45c081f1a49020f1674ad6b4",
+                  "install": [
+                    "rust-analyzer-preview"
+                  ]
+                },
+                {
+                  "archive": "rust-src-1.99.1.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-src-1.99.1.tar.xz",
+                  "sha256": "e485a88c45db546b73571df7bebfcb4454ba4fb552c492e25fc5b00eeb5bf22d",
+                  "install": [
+                    "rust-src"
+                  ]
+                },
+                {
+                  "archive": "cargo-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "685e563d94db1f003ffa5f5831439eec02569b9950b69867953c8213269c1eaf",
+                  "bazel_only": true
+                },
+                {
+                  "archive": "llvm-tools-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-aarch64-apple-darwin.tar.xz",
+                  "sha256": "b348db9d79666aee4b5e2ff4269029fffd16815cbd47f47018cd0b06e4f815f5",
+                  "bazel_only": true
+                }
+              ]
+            },
+            "linux-x86_64": {
+              "type": "rust-components",
+              "components": [
+                {
+                  "archive": "rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "2ff05ff9c08a90861e7f6e4065b40a8b87463b4576186fd613871c3e37f2091f",
+                  "install": [
+                    "rustc"
+                  ]
+                },
+                {
+                  "archive": "rust-std-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-std-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "109b074225bf5b9ea3820890876bfdf4ed161adbfaf94b2b4b5984c85ee5d958",
+                  "install": [
+                    "rust-std-x86_64-unknown-linux-gnu"
+                  ]
+                },
+                {
+                  "archive": "clippy-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/clippy-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "458339712a058e52cc4522ff9ef8b59cd1ea1340312216cd94194c464a3f6dc5",
+                  "install": [
+                    "clippy-preview"
+                  ],
+                  "omit": [
+                    "bin/cargo-clippy"
+                  ]
+                },
+                {
+                  "archive": "rustfmt-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rustfmt-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "e3b36c4c7ec3486c059d8067ff48787676612007123aad7a4e8ec12c48ee9ba2",
+                  "install": [
+                    "rustfmt-preview"
+                  ],
+                  "omit": [
+                    "bin/cargo-fmt"
+                  ]
+                },
+                {
+                  "archive": "rust-analyzer-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-analyzer-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "5f2613d62003fc8cbe788d4ae409359c91c241ba248adbefe032df8bb77357bf",
+                  "install": [
+                    "rust-analyzer-preview"
+                  ]
+                },
+                {
+                  "archive": "rust-src-1.99.1.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/rust-src-1.99.1.tar.xz",
+                  "sha256": "e485a88c45db546b73571df7bebfcb4454ba4fb552c492e25fc5b00eeb5bf22d",
+                  "install": [
+                    "rust-src"
+                  ]
+                },
+                {
+                  "archive": "cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "53f3521949404d595efb06a55c12c5658d4ed1c75566f33d3d514eaebe70bd8a",
+                  "bazel_only": true
+                },
+                {
+                  "archive": "llvm-tools-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "url": "https://static.rust-lang.org/dist/2026-10-15/llvm-tools-1.99.1-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "8429c5117debfb45c22cf2f97712ef00e0e94976c96cf92f661974a458ca7e84",
+                  "bazel_only": true
+                }
+              ]
+            }
+          }
+        },
+        "rust-toolchain": {
+          "version": "1.99.1",
+          "bazel_managed": true,
+          "declared_in": {
+            "file": "dev-platform/toolchains.MODULE.bazel",
+            "pattern": "versions = \\[\"([^\"]+)\"\\]"
+          },
+          "integrity": [
+            {
+              "kind": "bazel_module",
+              "name": "rules_rust",
+              "version": "0.74.0",
+              "source_json_sha256": "04eac31b4536eb23dd8e8e8ca7e079d3c1c4ac99934d38aa54bbae36917c7507",
+              "file": "dev-platform/toolchains.MODULE.bazel"
+            }
+          ],
+          "purl": "pkg:generic/rust@1.99.1"
+        }
+      },
+      "bazel": {
+        "edition": "2024"
+      }
     }
   }
 }

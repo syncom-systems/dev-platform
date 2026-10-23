@@ -1,0 +1,28 @@
+"""pytest entry point of dp_py_test; under `bazel coverage` it also writes LCOV for Bazel to merge."""
+
+import os
+import sys
+
+import pytest
+
+
+def main() -> int:
+    args = ["-p", "no:cacheprovider", "-c", "/dev/null", *sys.argv[1:]]
+    cov_dir = os.environ.get("COVERAGE_DIR")
+    out = os.path.join(cov_dir, "python_coverage.dat") if cov_dir else None
+    # Sources are symlinks into the workspace and execute from their real paths: measure that tree.
+    root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    if out:
+        args += [f"--cov={root}", "--cov-config=dev-platform/coveragerc", f"--cov-report=lcov:{out}"]
+    rc = int(pytest.main(args))
+    if out and os.path.exists(out):
+        prefix = "SF:" + root + os.sep
+        with open(out) as f:
+            lines = f.read().splitlines()
+        with open(out, "w") as f:
+            for line in lines:
+                f.write((("SF:" + line[len(prefix) :]) if line.startswith(prefix) else line) + "\n")
+    return rc
+
+
+sys.exit(main())

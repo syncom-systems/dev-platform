@@ -1,0 +1,3 @@
+
+# Python lint policy (platform aspect; run with --config=dp-lint).
+build:dp-lint --aspects=//dev-platform:lint.bzl%dp_py_lint_aspect

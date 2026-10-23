@@ -1,0 +1,16 @@
+
+bazel_dep(name = "rules_rust", version = "@@RULES_RUST@@")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "@@EDITION@@",
+    extra_target_triples = [],
+    rustfmt_version = "@@RUST_VERSION@@",
+    sha256s = {
+@@RUST_SHA256S@@
+    },
+    versions = ["@@RUST_VERSION@@"],
+)
+use_repo(rust, "rust_toolchains")
+
+register_toolchains("@rust_toolchains//:all")

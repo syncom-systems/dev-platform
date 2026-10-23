@@ -42,12 +42,13 @@ def default_run(argv: list[str], env: dict[str, str], cwd: Path) -> tuple[int, s
 
 
 def declared_versions(root: Path) -> list[str]:
-    f = Path(root) / "MODULE.bazel"
-    if not f.is_file():
-        return []
     out: list[str] = []
-    for m in _VERSIONS.finditer(f.read_text()):
-        out += re.findall(r'"([^"]+)"', m.group(1))
+    # MODULE.bazel, and the platform's generated declaration it includes (bazelconf.py)
+    for name in ("MODULE.bazel", "dev-platform/toolchains.MODULE.bazel"):
+        f = Path(root) / name
+        if f.is_file():
+            for m in _VERSIONS.finditer(f.read_text()):
+                out += re.findall(r'"([^"]+)"', m.group(1))
     return out
 
 

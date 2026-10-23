@@ -55,9 +55,10 @@ def extract(archive: Path, dest: Path, strip: str) -> None:
         inner.rmdir()
 
 
-def _assemble(archive: Path, prefix: Path, components: list[str]) -> None:
+def _assemble(archive: Path, prefix: Path, components: list[str], omit: tuple[str, ...] = ()) -> None:
     """Copy exactly the files each named component's manifest.in lists out of one official Rust dist
-    tarball, so the tree is deterministic (install.sh writes logs and path-dependent metadata)."""
+    tarball, so the tree is deterministic (install.sh writes logs and path-dependent metadata). Files named
+    in `omit` (relative to the prefix) are not installed."""
     stage = prefix.parent / (prefix.name + ".stage")
     shutil.rmtree(stage, ignore_errors=True)
     stage.mkdir(parents=True)
@@ -70,6 +71,8 @@ def _assemble(archive: Path, prefix: Path, components: list[str]) -> None:
             kind, _, rel = line.partition(":")
             if kind not in ("file", "dir") or not rel or ".." in Path(rel).parts:
                 raise ConfigError([f"unexpected manifest line {line!r} in {comp}"])
+            if rel in omit:
+                continue
             target = prefix / rel
             if kind == "dir":
                 shutil.copytree(cdir / rel, target, symlinks=True, dirs_exist_ok=True)
@@ -87,13 +90,14 @@ def install_rust_dist(src: dict, prefix: Path, archive: Path) -> None:
 def install_rust_components(src: dict, prefix: Path, dl: Path) -> None:
     """Assemble a Rust toolchain from the individually hashed component tarballs the manifest lists
     (`type: rust-components`). Components marked `bazel_only` are pinned for the Bazel toolchain
-    declaration and are not installed on the host (the host toolchain has no Cargo)."""
+    declaration and are not installed on the host, and `omit` drops files such as the `cargo-clippy` and
+    `cargo-fmt` shims: the host toolchain has no Cargo interface."""
     for comp in src["components"]:
         if comp.get("bazel_only"):
             continue
         archive = dl / comp["archive"]
         fetch(comp["url"], comp["sha256"], archive)
-        _assemble(archive, prefix, comp["install"])
+        _assemble(archive, prefix, comp["install"], tuple(comp.get("omit", ())))
 
 
 def install_binary(src: dict, bindir: Path) -> Path:

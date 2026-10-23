@@ -169,6 +169,26 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also verify the provisioned tools (exit 1 unless conformant and certifiable)",
     )
+    tz = tsub.add_parser(
+        "materialize",
+        help="write the Bazel configuration the release generates (--check: verify it, read-only)",
+    )
+    tz.add_argument("--manifest", type=Path, default=Path("toolchains/manifest.json"))
+    tz.add_argument("--pinned", action="store_true", help="use the manifest of the project's pinned release")
+    tz.add_argument("--project", type=Path, default=Path("."))
+    tz.add_argument("--profile", help="default: the project's profile")
+    tz.add_argument(
+        "--check",
+        action="store_true",
+        help="write nothing; exit 1 on any missing, edited or conflicting file",
+    )
+    tz.add_argument(
+        "--add-hooks",
+        action="store_true",
+        help="append the two entry lines to MODULE.bazel and .bazelrc (created if absent)",
+    )
+    tz.add_argument("--dry-run", action="store_true")
+    tz.add_argument("--json", action="store_true")
     tb = tsub.add_parser(
         "prove-bazel-rust",
         help="prove Bazel uses the declared Rust toolchain, not a host rustc (runs bazel, never cargo)",
@@ -606,6 +626,23 @@ def cmd_init(args) -> int:
             'inputs = ["**"]',
             "",
         ]
+    if bazel and (root / "dev-platform" / "bazel.bazelrc").is_file():
+        # The platform's Bazel configuration (`toolchain materialize`) defines lint and coverage policy.
+        for cid, argv in (
+            ("bazel.lint", ["bazel", "build", "--lockfile_mode=error", "--config=dp-lint", "//..."]),
+            ("bazel.coverage", ["bazel", "coverage", "--lockfile_mode=error", "//..."]),
+        ):
+            lines += [
+                "[[check]]",
+                f'id = "{cid}"',
+                'adapter = "exec"',
+                "argv = [" + ", ".join(f'"{a}"' for a in argv) + "]",
+                'stages = ["pre-merge", "full"]',
+                'obligation = "change"',
+                'cost = "slow"',
+                'inputs = ["**"]',
+                "",
+            ]
     if python:
         lines += [
             "[[check]]",
@@ -899,6 +936,53 @@ def cmd_affected(args) -> int:
     return EXIT_UNSATISFIED if hit else EXIT_OK
 
 
+def _cmd_materialize(args) -> int:
+    from . import __version__, bazelconf
+
+    project = args.project.resolve()
+    cfg = load(project) if (project / CONFIG_FILENAME).is_file() else None
+    profile = args.profile or (cfg.platform.profile if cfg else None)
+    if not profile:
+        raise ConfigError(["no profile: pass --profile or set [platform].profile in dev-platform.toml"])
+    res = None
+    if args.pinned:
+        if cfg is None:
+            raise ConfigError([f"no {CONFIG_FILENAME} in {project}"])
+        res = _resolve_and_delegate(cfg, args)  # the release's own code renders its own files
+    try:
+        if res is not None:
+            if not res.release:
+                raise ConfigError(["no pinned release resolved (override or self-hosted mode has none)"])
+            manifest = res.release["toolchains"]
+        else:
+            manifest = toolchain.validate(json.loads(args.manifest.read_text()))
+        if profile not in manifest["profiles"]:
+            raise ConfigError(
+                [f"profile {profile!r} is not in the manifest (have {sorted(manifest['profiles'])})"]
+            )
+        if "bazel" not in manifest["profiles"][profile]:
+            raise ConfigError([f"profile {profile!r} has no Bazel configuration to materialize"])
+        if args.check:
+            rec = bazelconf.check(manifest, profile, project, __version__)
+            lines = [f"bazel configuration of {project} for {profile}: {rec['status']}"] + [
+                f"  {c['kind']}: {c['path']}: {c['detail']} -> {c['action']}" for c in rec["conflicts"]
+            ]
+            _emit(args, rec, "\n".join(lines))
+            return EXIT_OK if rec["status"] == "ok" else EXIT_UNSATISFIED
+        rep = bazelconf.materialize(
+            manifest, profile, project, __version__, add_hooks=args.add_hooks, dry_run=args.dry_run
+        )
+    finally:
+        if res is not None:
+            res.dispose()
+    lines = [f"profile {profile}, release {__version__}"]
+    lines += [f"  wrote {p}" for p in rep["written"]] + [f"  unchanged {p}" for p in rep["unchanged"]]
+    lines += [f"  added the entry line to {p}" for p in rep["added_hooks"]]
+    lines += [f"  REFUSED {c['path']}: {c['detail']} -> {c['action']}" for c in rep["refused"]]
+    _emit(args, rep, "\n".join(lines))
+    return EXIT_UNSATISFIED if rep["refused"] else EXIT_OK
+
+
 def cmd_toolchain(args) -> int:
     if args.tcmd == "provision" and args.pinned:
         from . import provision
@@ -925,6 +1009,8 @@ def cmd_toolchain(args) -> int:
             return EXIT_OK if ok else EXIT_UNSATISFIED
         print(f"then: export PATH={args.dest / 'bin'}:$PATH  and run: dev-platform toolchain verify")
         return EXIT_OK
+    if args.tcmd == "materialize":
+        return _cmd_materialize(args)
     if args.tcmd == "prove-bazel-rust":
         from . import bazel_rust
 

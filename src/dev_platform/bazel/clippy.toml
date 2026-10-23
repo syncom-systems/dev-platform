@@ -1,0 +1,2 @@
+msrv = "@@RUST_VERSION@@"
+avoid-breaking-exported-api = false
