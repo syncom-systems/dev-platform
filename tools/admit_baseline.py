@@ -72,6 +72,14 @@ PROFILES = {
     "rust-python-bazel-9.3": (("rust", "python"), "mypy", None),
     "python-ty-bazel-9.3": (("python",), "ty", "python-bazel-9.3"),
     "rust-python-ty-bazel-9.3": (("rust", "python"), "ty", "rust-python-bazel-9.3"),
+    "rust-aarch64-none-bazel-9.3": (("rust",), "mypy", "rust-bazel-9.3"),
+    "rust-python-ty-aarch64-none-bazel-9.3": (("rust", "python"), "ty", "rust-python-ty-bazel-9.3"),
+}
+# Additional Rust target triples a profile cross-compiles for (the host-installed toolchain is unchanged: the
+# target's rust-std is pinned for Bazel only).
+TARGETS = {
+    "rust-aarch64-none-bazel-9.3": ["aarch64-unknown-none-softfloat"],
+    "rust-python-ty-aarch64-none-bazel-9.3": ["aarch64-unknown-none-softfloat"],
 }
 ZERO = "0" * 64
 
@@ -125,6 +133,18 @@ def rust_components(version: str) -> dict[str, list[dict]]:
                 comps.append({**c, "bazel_only": True})
         out[key] = comps
     return out
+
+
+def target_std(version: str, triple: str) -> dict[str, dict]:
+    """Per platform key: the rust-std archive of an extra target, pinned for Bazel only (nothing is installed on
+    the host)."""
+    pkg = tomllib.loads(get(f"https://static.rust-lang.org/dist/channel-rust-{version}.toml").decode())[
+        "pkg"
+    ]["rust-std"]["target"].get(triple)
+    if not pkg or not pkg.get("available"):
+        raise SystemExit(f"rust {version}: rust-std is not available for {triple}")
+    comp = {"archive": pkg["xz_url"].rsplit("/", 1)[1], "url": pkg["xz_url"], "sha256": pkg["xz_hash"]}
+    return {k: {"type": "rust-components", "components": [{**comp, "bazel_only": True}]} for k in PLATFORMS}
 
 
 def python_sources(version: str, build: str) -> dict[str, dict]:
@@ -230,6 +250,18 @@ def build(prior: dict, measures: dict) -> dict:
         }
         if "rust" in langs:
             rv = v["rust"]
+            for triple in TARGETS.get(profile, ()):
+                t[f"rust-std-{triple}"] = {
+                    "version": rv,
+                    "bazel_managed": True,
+                    "bound_to": "bazel-config",
+                    "declared_in": {
+                        "file": module_file,
+                        "pattern": rf'"rust-std-([0-9.]+)-{re.escape(triple)}\.tar\.xz"',
+                    },
+                    "purl": f"pkg:generic/rust-std@{rv}?target={triple}",
+                    "source": target_std(rv, triple),
+                }
             t["rust-toolchain"] = {
                 "version": rv,
                 "bazel_managed": True,
@@ -294,6 +326,8 @@ def build(prior: dict, measures: dict) -> dict:
         bazel = {"edition": v["edition"]} if "rust" in langs else {}
         if checker != "mypy":
             bazel["type_checker"] = checker
+        if name in TARGETS:
+            bazel["extra_target_triples"] = TARGETS[name]
         profiles[name] = {"tools": tools_for(name, langs, checker), "bazel": bazel}
     return profiles
 

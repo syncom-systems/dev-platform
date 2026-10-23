@@ -150,6 +150,8 @@ def provision(manifest: dict, profile: str, dev: Path, *, key: str | None = None
             activate(dev / "bin" / src["as"], vdir / "bin" / src["as"])
             done.append(name)
             continue
+        if src.get("type") == "rust-components" and all(c.get("bazel_only") for c in src["components"]):
+            continue  # pinned for Bazel's own fetch: nothing to install on the host
         shutil.rmtree(vdir, ignore_errors=True)
         vdir.mkdir(parents=True)
         if src.get("type") == "rust-dist":

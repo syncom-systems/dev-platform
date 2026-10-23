@@ -129,7 +129,17 @@ def _write(path_in_consumer: str, text: str):
     return mutate
 
 
-def _baseline_cases(rust: bool, python: bool, checker: str = "mypy") -> list:
+def _retarget(rel: str, pattern: str, repl: str):
+    def mutate(c: Path) -> None:
+        text = (c / rel).read_text()
+        new, n = re.subn(pattern, repl, text, count=1)
+        assert n == 1, f"{rel}: {pattern!r} not found"
+        (c / rel).write_text(new)
+
+    return mutate
+
+
+def _baseline_cases(rust: bool, python: bool, checker: str = "mypy", targets: tuple = ()) -> list:
     """Platform-owned Bazel configuration (bazelconf.py): each independent or edited setting must fail
     conformance (`environment`); a failing test or a lint finding must fail a check."""
     cases = [
@@ -145,6 +155,16 @@ def _baseline_cases(rust: bool, python: bool, checker: str = "mypy") -> list:
             ("failing Rust test", lambda c: _sub(c / "rs/src/lib.rs", "assert_eq!(super::add(2, 3), 5)", "assert_eq!(super::add(2, 3), 6)"), "check"),
             ("Rust lint finding", _append("rs/src/lib.rs", "pub fn lint(a: i32) -> i32 {\n    return a;\n}\n"), "check"),
             ("Rust formatting finding", _append("rs/src/lib.rs", "pub fn ugly( a:i32 )->i32{a}\n"), "check"),
+        ]  # fmt: skip
+    if targets:
+        module = "dev-platform/toolchains.MODULE.bazel"
+        triple = targets[0]
+        cases += [
+            ("cross-target archive hash tampered", _retarget(module, rf'("rust-std-[\d.]+-{triple}\.tar\.xz": ")[0-9a-f]{{64}}', r"\g<1>" + "0" * 64), "environment"),
+            ("cross-target archive pin missing", _retarget(module, rf'\s*"rust-std-[\d.]+-{triple}\.tar\.xz": "[0-9a-f]{{64}}",', ""), "environment"),
+            ("cross target removed from the toolchain", lambda c: _sub(c / module, f'extra_target_triples = ["{triple}"]', "extra_target_triples = []"), "environment"),
+            ("unsupported cross target declared", lambda c: _sub(c / module, f'extra_target_triples = ["{triple}"]', 'extra_target_triples = ["aarch64-unknown-linux-gnu"]'), "environment"),
+            ("hosted code in the no_std crate", _append("nostd/src/lib.rs", "\nextern crate std;\n\npub fn hosted() -> std::string::String {\n    std::string::String::new()\n}\n"), "check"),
         ]  # fmt: skip
     if python:
         cases += [
@@ -165,9 +185,15 @@ BASELINE = {
     "rust-python-bazel-9.3": (True, True),
     "python-ty-bazel-9.3": (False, True),
     "rust-python-ty-bazel-9.3": (True, True),
+    "rust-aarch64-none-bazel-9.3": (True, False),
+    "rust-python-ty-aarch64-none-bazel-9.3": (True, True),
+}
+BASELINE_TARGETS = {
+    "rust-aarch64-none-bazel-9.3": ("aarch64-unknown-none-softfloat",),
+    "rust-python-ty-aarch64-none-bazel-9.3": ("aarch64-unknown-none-softfloat",),
 }
 for _p, (_r, _py) in BASELINE.items():
-    NEGATIVE[_p] = _baseline_cases(_r, _py, "ty" if "-ty-" in _p else "mypy")
+    NEGATIVE[_p] = _baseline_cases(_r, _py, "ty" if "-ty-" in _p else "mypy", BASELINE_TARGETS.get(_p, ()))
 NEGATIVE["rust-cargo-1.99"] = NEGATIVE["rust-cargo"]
 NEGATIVE["rust-bazel"] = _bazel_cases("8.4.1", "1.85.0", "1.84.0", "abseil-cpp", "20250127.1")
 NEGATIVE["rust-bazel-9"] = _bazel_cases("9.1.0", "1.99.1", "1.99.0", "yaml-cpp", "0.8.0")
@@ -211,6 +237,92 @@ def prepare_baseline(consumer: Path, profile: str, env: dict, py: list) -> dict:
     benv = {**env, **toolchain.runtime_env(manifest, profile)}
     run(["bazel", "mod", "deps", "--lockfile_mode=update"], consumer, benv)
     return benv
+
+
+def _ar_members(path: Path) -> dict[str, bytes]:
+    """Members of a GNU ar archive (an rlib is one)."""
+    data = path.read_bytes()
+    assert data[:8] == b"!<arch>\n", f"{path} is not an ar archive"
+    out, pos = {}, 8
+    while pos + 60 <= len(data):
+        name = data[pos : pos + 16].decode().strip().rstrip("/")
+        size = int(data[pos + 48 : pos + 58].decode().strip())
+        out[name] = data[pos + 60 : pos + 60 + size]
+        pos += 60 + size + (size & 1)
+    return out
+
+
+def cross_compile(consumer: Path, benv: dict, profile: str) -> dict:
+    """Real Bazel cross-compilation for every approved extra target of the profile: the build succeeds with the
+    platform's toolchain, rustc was run with `--target=<triple>`, and the code objects of the produced rlib are
+    ELF objects for the target's architecture (EM_AARCH64 for aarch64)."""
+    sys.path.insert(0, str(ROOT / "src"))
+    from dev_platform import bazelconf
+
+    manifest = json.loads((ROOT / "toolchains" / "manifest.json").read_text())
+    machines = {"aarch64": 183}
+    rec: dict = {"ok": True, "targets": []}
+    for triple in bazelconf.extra_targets(manifest["profiles"][profile]):
+        cfg = bazelconf.TARGETS[triple]["config"]
+        t: dict = {"triple": triple, "config": cfg}
+        base = ["bazel"]
+        built = run(
+            [*base, "build", "--lockfile_mode=error", f"--config={cfg}", "//nostd:kernel_core"],
+            consumer,
+            benv,
+            check=False,
+        )
+        t["build_exit"] = built.returncode
+        files = run(
+            [
+                *base,
+                "cquery",
+                "--lockfile_mode=error",
+                f"--config={cfg}",
+                "--output=files",
+                "//nostd:kernel_core",
+            ],
+            consumer,
+            benv,
+            check=False,
+        ).stdout.split()
+        rlibs = [consumer / f for f in files if f.endswith(".rlib")]
+        t["rlib"] = [str(r.relative_to(consumer)) for r in rlibs]
+        aq = run(
+            [
+                *base,
+                "aquery",
+                "--lockfile_mode=error",
+                f"--config={cfg}",
+                "--output=text",
+                'mnemonic("Rustc", //nostd:kernel_core)',
+            ],
+            consumer,
+            benv,
+            check=False,
+        ).stdout
+        t["rustc_target_flag"] = f"--target={triple}" in aq
+        elf = []
+        for r in rlibs:
+            if not r.is_file():
+                continue
+            for name, blob in _ar_members(r).items():
+                if blob[:4] == b"\x7fELF":
+                    elf.append(
+                        {"member": name, "class": blob[4], "machine": int.from_bytes(blob[18:20], "little")}
+                    )
+        t["objects"] = elf
+        want = machines[triple.split("-")[0]]
+        t["ok"] = bool(
+            built.returncode == 0
+            and rlibs
+            and t["rustc_target_flag"]
+            and elf
+            and all(e["machine"] == want and e["class"] == 2 for e in elf)
+        )
+        rec["targets"].append(t)
+        rec["ok"] = rec["ok"] and t["ok"]
+    return rec
 
 
 DECOYS = ("rustc", "cargo", "rustup", "rustdoc", "clippy-driver", "python", "python3", "pip", "pip3",
@@ -335,6 +447,9 @@ def main(argv=None) -> int:
     if benv is not None and ok:
         summary["host_independence"] = host_independence(consumer, benv, *BASELINE[a.profile])
         ok = summary["host_independence"]["ok"]
+    if benv is not None and ok and a.profile in BASELINE_TARGETS:
+        summary["cross_compile"] = cross_compile(consumer, benv, a.profile)
+        ok = summary["cross_compile"]["ok"]
     if a.negative and ok:
         summary["negative"] = negative_cases(a.profile, consumer, genv, env, py)
         ok = all(n["rejected"] for n in summary["negative"])

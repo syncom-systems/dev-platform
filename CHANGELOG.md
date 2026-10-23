@@ -1,6 +1,15 @@
 # Changelog
 
 ## Unreleased
+Added (cross-compilation; additive):
+- Profiles `rust-aarch64-none-bazel-9.3` and `rust-python-ty-aarch64-none-bazel-9.3`: the Rust (and Python/Ty) baseline plus
+  the `aarch64-unknown-none-softfloat` target. A profile's `bazel.extra_target_triples` (approved triples only) requires a
+  `rust-std-<triple>` tool pinning the official archive per host; the generated toolchain declares the triple and every
+  sha256, `dev-platform/BUILD.bazel` defines the platform, and `--config=dp-aarch64-none` selects it. New macro
+  `dp_rust_no_std_library` and check `bazel.cross.dp-aarch64-none`. Qualified with a real `no_std` AArch64 build (rustc
+  `--target`, ELF `EM_AARCH64` objects) and negative cases: wrong or missing archive hash, target removed, unsupported
+  target, hosted code in the `no_std` crate.
+
 Fixed (found by NGA's trial of 0.13.0):
 - The generated Bazel module no longer declares `platforms` or `bazel_skylib`, which collided with a project's own
   declarations (`The repo name 'platforms' cannot be defined by a bazel_dep ...`). Nothing generated refers to either
