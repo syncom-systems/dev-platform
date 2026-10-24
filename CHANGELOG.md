@@ -1,6 +1,22 @@
 # Changelog
 
 ## Unreleased
+Changed (installation; [ADR 0026](docs/adr/0026-stable-bootstrap-contract.md)):
+- The CLI is only the bootstrap: it verifies the pinned release (trusted installer, archive, revision, provenance, SBOM,
+  attestations, tree digest) and runs it from a verified snapshot. It no longer validates the release record or
+  toolchain manifest with its own schema (the cause of `invalid release` on 0.12.1/0.13.0 and `release X is newer than
+  this CLI` on 0.14.0 for a release using newer manifest features); the release validates itself when it runs. A CLI's
+  age no longer decides which pinned release a project can install.
+- New `toolchain prepare` (bootstrap contract 1, declared in `src/dev_platform/bootstrap-contract.json`): the release
+  verifies or provisions its own profile and answers with one JSON record. Releases 0.8.0 to 0.14.0 are driven through the
+  same function over their manifest (read, not validated). A release declaring a contract the CLI does not implement,
+  or one at 0.15.0 or later declaring none, is refused before it runs.
+- `tools/release.py ready` has a bootstrap-compatibility gate (`trust/bootstrap-compat.json`): the candidate must declare
+  a contract every supported bootstrap implements, and the built release must install and run verified through the
+  launcher; a contract change blocks publication until a migration path is published.
+- Documented limitation: CLIs up to 0.14.0 are immutable and still reject releases with newer manifest features; one
+  upgrade of the CLI ([distribution](docs/distribution.md#bootstrap-contract-and-upgrading-the-cli)) ends it. New
+  acceptance tool `tools/bootstrap_acceptance.py` (fresh install, older CLIs, repeat setup) runs in CI on macOS and Linux.
 
 ## 0.14.0
 Added (cross-compilation; additive):

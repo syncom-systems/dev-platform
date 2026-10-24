@@ -68,14 +68,13 @@ def tree_of(path: Path) -> str:
     return tree_digest(path)
 
 
-def install_old_cli(version: str, base: Path, env: dict) -> Path:
+def install_old_cli(version: str, base: Path, env: dict, creds: dict) -> Path:
     """The published CLI `version`, installed with its trusted installer into its own store (what `brew install`
     of that formula leaves; nothing is shared with the CLI under test)."""
     from dev_platform import locations, projectsetup
 
     home = base / version
     loc = locations.locate({}, home=home)
-    creds = {k: env[k] for k in projectsetup.TOKEN_VARS if k in env}
     rec = projectsetup.ensure_release(
         pins_of(version),
         loc,
@@ -86,7 +85,7 @@ def install_old_cli(version: str, base: Path, env: dict) -> Path:
             "repo_url": projectsetup.DEFAULT_REPO,
         },
         run=projectsetup.run_process,
-        env={k: v for k, v in env.items() if k not in projectsetup.TOKEN_VARS},
+        env=env,
         creds=creds,
     )
     return Path(rec["path"]) / "src"
@@ -123,13 +122,24 @@ def main(argv=None) -> int:
     ap.add_argument("--release", required=True, help="the published release the project pins")
     ap.add_argument("--profile", required=True)
     ap.add_argument("--fixture", type=Path, required=True)
-    ap.add_argument("--old-cli", action="append", default=[], help="older published CLI versions to try first")
+    ap.add_argument(
+        "--old-cli", action="append", default=[], help="older published CLI versions to try first"
+    )
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     rmtree(WORK)
     WORK.mkdir(parents=True)
     home = WORK / "home"
-    base = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "DEV_PLATFORM_STORE")}
+    from dev_platform import projectsetup
+
+    # The GitHub token is for the trusted installer's attestation verification alone: it is handed to the
+    # processes that install and set up, and to no build, lint or test.
+    creds = {k: os.environ[k] for k in projectsetup.TOKEN_VARS if k in os.environ}
+    base = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PYTHONPATH", "DEV_PLATFORM_STORE", *projectsetup.TOKEN_VARS)
+    }
     cli_env = {**base, "PYTHONPATH": str(ROOT / "src")}
     py = [sys.executable, "-m", "dev_platform"]
     steps: dict = {"release": a.release, "profile": a.profile, "host": f"{sys.platform}-{os.uname().machine}"}
@@ -141,17 +151,35 @@ def main(argv=None) -> int:
 
     steps["old_clis"] = []
     for old in a.old_cli:
-        src = install_old_cli(old, WORK / "old", base)
-        env = {**base, "PYTHONPATH": str(src)}
+        src = install_old_cli(old, WORK / "old", base, creds)
+        env = {**base, **creds, "PYTHONPATH": str(src)}
         before = sorted(p.name for p in (home / "versions").glob("*")) if (home / "versions").is_dir() else []
-        r = run(py + ["setup", "--project", str(project), "--home", str(home)], project, env, check=False)
+        r = run([*py, "setup", "--project", str(project), "--home", str(home)], project, env, check=False)
         after = sorted(p.name for p in (home / "versions").glob("*") if not p.name.startswith("."))
         steps["old_clis"].append({"cli": old, "exit": r.returncode, "output": (r.stdout + r.stderr)[-300:],
                                   "store_before": before, "store_after": after})  # fmt: skip
 
-    code, rec = setup(project, py, cli_env, home)
+    code, rec = setup(project, py, {**cli_env, **creds}, home)
     steps["setup"] = {"exit": code, "ok": rec.get("ok"), "problem": rec.get("problem"),
                       "release": rec.get("release"), "toolchain": rec.get("toolchain")}  # fmt: skip
+    dest = home / "toolchains" / a.release / a.profile
+    if code and dest.is_dir():
+        # A project that has not resolved its module graph yet is not conformant (the lockfile is the project's
+        # own and part of the closure identity). It resolves it with the provisioned Bazel, the existing
+        # `bazel mod deps` machinery, commits it, and runs setup again: the environment is reused.
+        steps["first_setup_without_lockfile"] = steps.pop("setup")
+        from dev_platform import toolchain
+        from dev_platform.provision import tool_dirs
+
+        manifest = json.loads((home / "versions" / a.release / "release.json").read_text())["toolchains"]
+        benv = {**cli_env, "PATH": os.pathsep.join([*tool_dirs(dest), base.get("PATH", "")]),
+                **toolchain.runtime_env(manifest, a.profile)}  # fmt: skip
+        run(["bazel", "mod", "deps", "--lockfile_mode=update"], project, benv)
+        for cmd in (["add", "-A"], ["commit", "-qm", "module graph"]):
+            run(["git", *cmd], project, genv)
+        code, rec = setup(project, py, {**cli_env, **creds}, home)
+        steps["setup"] = {"exit": code, "ok": rec.get("ok"), "problem": rec.get("problem"),
+                          "release": rec.get("release"), "toolchain": rec.get("toolchain")}  # fmt: skip
     if code or not rec.get("ok"):
         return finish(a, steps, False)
     tree = tree_of(Path(rec["release"]["path"]))
@@ -164,10 +192,9 @@ def main(argv=None) -> int:
 
     manifest = json.loads((Path(rec["release"]["path"]) / "release.json").read_text())["toolchains"]
     benv = {**benv, **toolchain.runtime_env(manifest, a.profile)}
-    run(["bazel", "mod", "deps", "--lockfile_mode=update"], project, benv)
     run([*py, "init", "--project", str(project), "--platform-version", a.release,
          "--sha256", pins_of(a.release)["tree_digest_pin"], "--profile", a.profile, "--force"], ROOT, benv)  # fmt: skip
-    for cmd in (["add", "-A"], ["commit", "-qm", "lockfile and checks"]):
+    for cmd in (["add", "-A"], ["commit", "-qm", "checks"]):
         run(["git", *cmd], project, genv)
     result = WORK / "result.json"
     r = run([*py, "check", "--project", str(project), "--stage", "full", "--result", str(result)],
@@ -178,7 +205,7 @@ def main(argv=None) -> int:
     steps["check"] = {"exit": r.returncode, "certified": cert,
                       "checks": {c["id"]: c["state"] for c in doc.get("checks", [])},
                       "identity_digest": (doc.get("environment") or {}).get("identity_digest")}  # fmt: skip
-    code2, rec2 = setup(project, py, cli_env, home)
+    code2, rec2 = setup(project, py, {**cli_env, **creds}, home)
     steps["repeat"] = {
         "exit": code2,
         "release_action": (rec2.get("release") or {}).get("action"),

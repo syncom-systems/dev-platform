@@ -28,19 +28,33 @@ symlinks rejected.
    ([installation](installation.md#7-ci-job-local-installation-no-homebrew)).
 3. Upgrading = editing version + digest in a reviewed PR.
 
-## Upgrading the CLI
+## Bootstrap contract and upgrading the CLI
 
-The CLI is only the launcher: it validates the pinned release's record and toolchain manifest with its own rules before
-anything of the release runs. A release that uses a format an older CLI does not know (0.13.0 added profile `bazel`
-sections, `rust-components` sources and `bound_to` tools) cannot be validated by that CLI. CLIs up to 0.12.1 report this
-as `invalid release: toolchain manifest: ...`; they are published and are not changed. From 0.14.0 the CLI compares the
-pinned version with its own and, when the pin is newer, says so: `release X is newer than this dev-platform CLI (Y) ...
-upgrade the CLI`, with the validation result appended, and still executes nothing.
+The CLI is the bootstrap: it verifies a project's pinned release and runs it from a verified snapshot, and nothing more
+([ADR 0026](adr/0026-stable-bootstrap-contract.md)). It does not validate the release's record or toolchain manifest;
+the release does that itself when it runs, whatever manifest features it uses. So a project's ability to install its
+pinned release does not depend on the age of the installed CLI, and a CLI upgrade never changes a project's release.
 
-Upgrade path: `brew update && brew upgrade dev-platform` ([homebrew.md](homebrew.md#upgrade-pin-roll-back)), or install the
-CLI release you need with the trusted installer ([installation](installation.md)). Validation is unchanged, a newer CLI
-validates every older release as before, and project pins, installed releases and CI (`consumer-pilot.yml` runs at the
-pinned release's own commit) are not affected.
+| Situation | What happens |
+|---|---|
+| Fresh machine | install the CLI (`brew install syncom-systems/dev-platform/dev-platform`, or the trusted installer for the CLI release, [installation](installation.md)); `dev-platform setup` in the project installs and verifies the pinned release, provisions its profile |
+| CLI 0.15.0 or later, any pinned release from 0.8.0 | the release is installed with its own pinned trusted installer, verified, run from a snapshot; releases from 0.15.0 prepare their own environment (`toolchain prepare`, contract 1), earlier ones are driven through the same function over their manifest |
+| Different projects, different releases | each runs its own verified release and toolchain directory; releases and toolchains coexist in the store |
+| Rollback | revert the pin change; the earlier release is still in the store (`release: present`) |
+
+**Transition from CLIs up to 0.14.0.** Those CLIs validate a release's record and manifest with their own bundled schema
+before running it, are published and immutable, and therefore reject a release that uses features they do not know
+(0.12.1 and 0.13.0 report `invalid release: toolchain manifest: ...`; 0.14.0 reports `release X is newer than this
+dev-platform CLI`). They cannot be changed. The one-time step is to install a CLI of 0.15.0 or later:
+`brew update && brew upgrade dev-platform`, or install the CLI release with the trusted installer
+([installation](installation.md)); no manual change of Homebrew directories or the release store is needed.
+Installed releases, toolchains, caches and project pins are valid as they are and are reused (`release: present`,
+`toolchain: reused`). Setup never runs `brew` and never changes a pin. After that step no later release's schema
+can strand the CLI; a future change of the bootstrap contract itself is a release-readiness blocker until a migration
+path is published (`trust/bootstrap-compat.json`).
+
+A release at 0.15.0 or later that declares a bootstrap contract the CLI does not implement is refused before anything of
+it runs: `release X requires bootstrap contract N; ... install a newer CLI`.
 
 ## Release discipline
 

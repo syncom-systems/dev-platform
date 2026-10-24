@@ -70,6 +70,11 @@ An upgrade leaves every project's pins, every installed release and toolchain, t
 `[infra]` selection byte for byte unchanged, and the newer CLI runs and resolves all of them. `brew pin dev-platform` holds the
 current CLI.
 
+**From a CLI up to 0.14.0** this upgrade is the one-time step to a release that uses newer manifest features: those CLIs
+validate a release with their own schema and answer `invalid release` (0.12.1, 0.13.0) or `release X is newer than this
+dev-platform CLI` (0.14.0). From 0.15.0 the CLI only verifies and runs the pinned release, which validates itself
+([distribution](distribution.md#bootstrap-contract-and-upgrading-the-cli)), so no later release can strand it.
+
 ## 4. Upgrading a project's release
 Edit both pin files to the new release's identity in one reviewed change, then `dev-platform setup`
 (it installs the new release beside the old one). A toolchain change is always a new release. A release that adds a configuration key (for example
