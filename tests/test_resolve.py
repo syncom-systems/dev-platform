@@ -31,7 +31,7 @@ class ResolveTest(unittest.TestCase):
         res = R.resolve(_Cfg(pin), env={R.STORE_ENV: str(store)})
         self.assertEqual((res.mode, res.version, res.digest), ("pinned", "0.1.0", pin.sha256))
         self.assertTrue(res.certifiable)
-        self.assertEqual(res.release["platform"]["version"], "0.1.0")
+        self.assertIsNone(res.release)  # the release validates its own record when it runs
         res.dispose()
 
     def test_verified_bytes_are_the_executed_bytes(self):
@@ -54,37 +54,33 @@ class ResolveTest(unittest.TestCase):
         res.dispose()
         self.assertFalse(res.cleanup.exists())
 
-    def test_a_release_newer_than_the_cli_says_to_upgrade_the_cli(self):
+    def test_the_launcher_does_not_validate_a_release_it_has_not_run(self):
         store, vdir = make_release(self, "99.0.0")
         pin = PlatformPin("99.0.0", tree_digest(vdir), False, "p")
         err = ConfigError(["toolchain manifest: profiles.p.bazel: unknown key"])
-        with (
-            mock.patch.object(R.releases, "load", side_effect=err),
-            self.assertRaises(PlatformResolutionError) as e,
-        ):
-            R.resolve(_Cfg(pin), env={R.STORE_ENV: str(store)})
-        msg = str(e.exception)
-        self.assertIn("release 99.0.0 is newer than this dev-platform CLI", msg)
-        self.assertIn("brew upgrade dev-platform", msg)
-        self.assertIn("was not executed", msg)
-        self.assertIn("unknown key", msg)  # the validation result is still reported
-        self.assertNotIn("invalid release", msg)
+        with mock.patch.object(R.releases, "load", side_effect=err) as load:
+            res = R.resolve(_Cfg(pin), env={R.STORE_ENV: str(store)})
+        self.addCleanup(res.dispose)
+        load.assert_not_called()  # a manifest newer than this code is the release's to judge
+        self.assertEqual((res.mode, res.digest), ("pinned", pin.sha256))
+        self.assertIsNone(res.release)
 
-    def test_an_invalid_release_that_is_not_newer_stays_invalid(self):
+    def test_the_release_itself_validates_its_own_record_when_it_runs(self):
         store, vdir = make_release(self, "0.0.1")
         pin = PlatformPin("0.0.1", tree_digest(vdir), False, "p")
+        env = {R.REEXEC_ENV: "0.0.1"}
         with (
+            mock.patch.object(R, "PACKAGE_ROOT", vdir / "src"),
             mock.patch.object(R.releases, "load", side_effect=ConfigError(["bad"])),
             self.assertRaisesRegex(PlatformResolutionError, "invalid release"),
         ):
-            R.resolve(_Cfg(pin), env={R.STORE_ENV: str(store)})
+            R.resolve(_Cfg(pin), env=env)
 
-    def test_validation_is_not_relaxed_for_a_newer_release(self):
+    def test_an_integrity_failure_is_still_refused_for_a_newer_release(self):
         store, vdir = make_release(self, "99.0.0")
         pin = PlatformPin("99.0.0", tree_digest(vdir), False, "p")
-        (vdir / "release.json").write_text("{}")  # not a release record at all
-        pin = PlatformPin("99.0.0", tree_digest(vdir), False, "p")
-        with self.assertRaises(PlatformResolutionError):
+        (vdir / "release.json").write_text("{}")  # no longer the pinned bytes
+        with self.assertRaisesRegex(PlatformResolutionError, "integrity failure"):
             R.resolve(_Cfg(pin), env={R.STORE_ENV: str(store)})
 
     def test_tampered_release_is_rejected(self):

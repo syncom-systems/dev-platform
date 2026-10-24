@@ -33,7 +33,7 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from dev_platform import __version__
+from dev_platform import __version__, bootstrap, prepare
 from dev_platform.config import CONFIG_FILENAME, load
 from dev_platform.digest import tree_digest
 from dev_platform.errors import (
@@ -44,9 +44,17 @@ from dev_platform.errors import (
     DevPlatformError,
 )
 from dev_platform.locations import STORE_ENV, Locations
-from dev_platform.provision import platform_key, tool_dirs
+from dev_platform.prepare import (  # noqa: F401
+    child,
+    config_problems,
+    first_json,
+    interpreter,
+    tail,
+    unsupported_tools,
+    with_path,
+)
+from dev_platform.provision import tool_dirs
 from dev_platform.resolve import OVERRIDE_ENV, PACKAGE_ROOT, PYTHON_ENV, REEXEC_ENV, reexec_env, resolve
-from dev_platform.toolchain import PYTHON_TOKEN
 
 PINS_FILE = "dev-platform.release-pins.json"
 DEFAULT_REPO = "https://github.com/syncom-systems/dev-platform"
@@ -77,10 +85,6 @@ def run_process(argv, *, env=None, cwd=None, text=True) -> subprocess.CompletedP
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def tail(r: subprocess.CompletedProcess, n: int = 400) -> str:
-    return ((r.stdout or "") + (r.stderr or "")).strip()[-n:]
 
 
 def find_project(start: Path, explicit: bool) -> Path:
@@ -291,129 +295,42 @@ def ensure_release(pins, loc: Locations, *, opts: dict, run: Run, env: dict, cre
     }
 
 
-def child(*args: str, python: str | None = None) -> list[str]:
-    """The pinned release's own CLI (`-P`: the working directory never shadows the snapshot)."""
-    return [python or sys.executable, "-P", "-m", "dev_platform", *args]
+def legacy_manifest(res) -> dict:
+    """The toolchain manifest of a release that predates the bootstrap contract, as the verified snapshot
+    holds it. It is read, not validated: the release validates it when it runs, and this launcher must not
+    judge a format it may not know."""
+    try:
+        return json.loads((Path(res.root).parent / "release.json").read_text())["toolchains"]
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise Refused(f"release {res.version}: release.json carries no toolchain manifest: {e}") from None
 
 
-def interpreter(manifest: dict, profile: str, dest: Path) -> str | None:
-    """A profile whose python is the interpreter running the platform (`{python}`) is verified, and then used,
-    by running the release on the provisioned python; other profiles run on any supported interpreter."""
-    tool = manifest["profiles"][profile]["tools"].get("python") or {}
-    running = tool.get("executable") == PYTHON_TOKEN or PYTHON_TOKEN in (tool.get("probe") or {}).get(
-        "argv", []
-    )
-    exe = dest / "python" / "bin" / "python3"
-    return str(exe) if running and exe.is_file() else None
+def ensure_toolchain(
+    res, profile: str, project: Path, loc: Locations, cenv: dict, run: Run, *, contract: int | None = None
+) -> dict:
+    """Have the pinned release verify the profile's directory, or provision it and verify again.
 
-
-def with_path(env: dict, dest: Path) -> dict:
-    dirs = tool_dirs(dest) if dest.is_dir() else []
-    return {**env, "PATH": os.pathsep.join([*dirs, env.get("PATH", "")])}
-
-
-def first_json(text: str) -> dict:
-    with contextlib.suppress(json.JSONDecodeError, IndexError):
-        return json.loads(text)
-    with contextlib.suppress(json.JSONDecodeError, IndexError):
-        return json.loads(text.strip().splitlines()[0])
-    return {}
-
-
-def unsupported_tools(manifest: dict, profile: str, key: str) -> list[str]:
-    """The profile's provisioned tools (those with pinned sources) that have no source for host `key`.
-    Releases up to 0.10.0 skip them when provisioning, so an unsupported host would only fail verification
-    later, without saying why."""
-    tools = manifest["profiles"][profile]["tools"]
-    return sorted(n for n, t in tools.items() if t.get("source") and key not in t["source"])
-
-
-def config_problems(rec: dict) -> str:
-    """The actionable conflicts of the platform-owned Bazel configuration, from an environment record."""
-    cfg = next((t for t in rec.get("tools", []) if t.get("name") == "bazel-config"), None)
-    if not cfg or cfg.get("status") == "ok":
-        return ""
-    lines = [
-        f"  {c['kind']}: {c['path']}: {c['detail']} -> {c['action']}" for c in cfg["config"]["conflicts"]
-    ]
-    return "\nthe project's Bazel configuration conflicts with the pinned release:\n" + "\n".join(lines)
-
-
-def ensure_toolchain(res, profile: str, project: Path, loc: Locations, cenv: dict, run: Run) -> dict:
-    """Verify the profile's directory with the pinned release; provision it (bytes only) and verify again if
-    that fails. Verification (`toolchain verify --require-certifiable`: closure identity against the release's
-    manifest) is the authority; a directory is reused only when it passes."""
-    manifest = res.release["toolchains"]
-    if profile not in manifest["profiles"]:
-        raise Refused(
-            f"profile {profile!r} is not in release {res.version} (has {sorted(manifest['profiles'])})",
-            EXIT_USAGE,
-        )
-    unsourced = unsupported_tools(manifest, profile, platform_key())
-    if unsourced:
-        sourced = [
-            set(t["source"]) for t in manifest["profiles"][profile]["tools"].values() if t.get("source")
-        ]
-        complete = sorted(set.intersection(*sourced))  # hosts with a source for every tool of the profile
-        where = f"it supports {', '.join(complete)}" if complete else "no host has a source for every tool"
-        raise Refused(
-            f"release {res.version} has no pinned source of {', '.join(unsourced)} (profile {profile!r}) for "
-            f"this host ({platform_key()}); {where}: run on a supported host, or pin a release that supports "
-            "this one"
-        )
+    A release that declares a bootstrap contract (`dev_platform.bootstrap`) does all of it itself, validating
+    its own manifest: this runs its `toolchain prepare`. A release from before the contract is driven by the
+    frozen adapter, `prepare.prepare` over its manifest."""
     dest = loc.toolchain_dir(res.version, profile)
-    out = {"profile": profile, "path": str(dest)}
-    mf = Path(res.cleanup) / "toolchains.json"  # the verified snapshot's manifest, private to this run
-    mf.write_text(json.dumps(manifest))
-
-    def verify() -> tuple[subprocess.CompletedProcess, dict]:
-        argv = ["toolchain", "verify", "--manifest", str(mf), "--profile", profile, "--require-certifiable"]
-        r = run(child(*argv, python=interpreter(manifest, profile, dest)), env=with_path(cenv, dest),
-                cwd=str(project))  # fmt: skip
-        return r, first_json(r.stdout or "")
-
-    def facts(rec: dict) -> dict:
-        return {k: rec.get(k) for k in ("conformant", "assurance", "identity_digest")}
-
-    if "bazel" in manifest["profiles"][profile]:
-        # The release generates the project's Bazel configuration. Generated files are written or updated;
-        # a foreign file is refused, and an existing MODULE.bazel/.bazelrc is never edited (verification
-        # reports its missing entry line with the correction).
-        argv = ["toolchain", "materialize", "--manifest", str(mf), "--profile", profile, "--project",
-                str(project), "--create-hooks", "--json"]  # fmt: skip
-        r = run(child(*argv), env=cenv, cwd=str(project))  # rendering needs no provisioned tool
-        mrec = first_json(r.stdout or "")
-        refused = "; ".join(f"{c['path']}: {c['detail']} -> {c['action']}" for c in mrec.get("refused", []))
-        conflicts = "; ".join(
-            f"{c['path']}: {c['detail']} -> {c['action']}" for c in mrec.get("conflicts", [])
-        )
-        if conflicts and not refused:
-            raise Refused(
-                f"the project's Bazel configuration conflicts with release {res.version}: {conflicts}"
-            )
-        if r.returncode:
-            raise Refused(
-                f"release {res.version} could not write the Bazel configuration of {profile}: "
-                f"{refused or tail(r, 300)}"
-            )
-        out["bazel_config"] = {k: mrec.get(k, []) for k in ("written", "unchanged", "added_hooks")}
-
-    if dest.is_dir():
-        r, rec = verify()
-        if r.returncode == 0 and rec.get("conformant"):
-            return {**out, "action": "reused", **facts(rec), "python": interpreter(manifest, profile, dest)}
-    argv = ["toolchain", "provision", "--pinned", "--project", str(project), "--profile", profile,
-            "--dest", str(dest)]  # fmt: skip
-    r = run(child(*argv), env=cenv, cwd=str(project))
-    if r.returncode:
-        raise Refused(f"release {res.version} could not provision {profile} in {dest}: {tail(r, 300)}")
-    r, rec = verify()
-    if r.returncode or not rec.get("conformant"):
+    try:
+        if contract is None:
+            manifest = res.release["toolchains"] if getattr(res, "release", None) else legacy_manifest(res)
+            return prepare.prepare(manifest, res.version, profile, project, dest, cenv, run)
+        argv = child("toolchain", "prepare", "--project", str(project), "--profile", profile,
+                     "--dest", str(dest))  # fmt: skip
+        r = run(argv, env=cenv, cwd=str(project))
+    except prepare.PrepareError as e:
+        raise Refused(str(e), e.exit_code) from None
+    rec = first_json(r.stdout or "")
+    if r.returncode or not rec.get("ok"):
         raise Refused(
-            f"release {res.version} provisioned {profile} in {dest}, but it is not a conformant, certifiable "
-            f"environment ({facts(rec) if rec else tail(r, 300)}){config_problems(rec)}"
+            f"release {res.version} could not prepare {profile}: {rec.get('problem') or tail(r, 400)}",
+            rec.get("exit") or EXIT_UNSATISFIED,
         )
-    return {**out, "action": "provisioned", **facts(rec), "python": interpreter(manifest, profile, dest)}
+    rec.pop("ok", None)
+    return rec
 
 
 def doctor(project: Path, dest: Path | None, cenv: dict, run: Run, python: str | None = None) -> dict:
@@ -522,9 +439,14 @@ def setup(
                 cfg, env=base
             )  # verify-then-execute: a private snapshot whose digest equals the pin
             cenv = reexec_env(res, base)
+            try:
+                contract = bootstrap.select(res.root, res.version)
+            except bootstrap.ContractError as e:
+                raise Refused(str(e), EXIT_PLATFORM) from None
+            rec["release"]["contract"] = contract if contract is not None else "legacy"
             dest = None
             if profile:
-                rec["toolchain"] = ensure_toolchain(res, profile, root, loc, cenv, run)
+                rec["toolchain"] = ensure_toolchain(res, profile, root, loc, cenv, run, contract=contract)
                 dest = Path(rec["toolchain"]["path"])
             else:
                 rec["toolchain"] = {"action": "none declared"}

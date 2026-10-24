@@ -8,6 +8,7 @@ published release, by the homebrew workflow. The release, its verified snapshot 
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import unittest
@@ -15,9 +16,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from dev_platform import bootstrap
 from dev_platform import locations as L
 from dev_platform import projectsetup as S
-from dev_platform import release
+from dev_platform import prepare, release
 from dev_platform.digest import tree_digest
 from dev_platform.errors import ConfigError
 from dev_platform.resolve import default_store
@@ -74,12 +76,20 @@ def sha(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def build_release(test, version: str) -> tuple[Path, str]:
+def build_release(test, version: str, contract: int | None = None) -> tuple[Path, str]:
+    """A release of the current source labelled `version`. `contract` is what it declares (bootstrap.py):
+    None leaves it undeclared, as the releases before 0.15.0 are."""
     out = tmpdir(test)
     test.addCleanup(rmtree_rw, out)
     tc = out / "toolchains.json"
     tc.write_text(json.dumps(TOOLCHAINS))
-    vdir = release.build(ROOT / "src", tc, out / "built", version, strict_version=False)
+    src = out / "src"
+    shutil.copytree(ROOT / "src", src, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    decl = src / bootstrap.DECLARATION
+    decl.unlink()
+    if contract is not None:
+        decl.write_text(json.dumps({"contract": contract}))
+    vdir = release.build(src, tc, out / "built", version, strict_version=False)
     return vdir, tree_digest(vdir)
 
 
@@ -501,7 +511,7 @@ class UnsupportedHost(unittest.TestCase):
         )
         loc = L.locate({}, home=tmpdir(self))
         with (
-            mock.patch.object(S, "platform_key", return_value="linux-aarch64"),
+            mock.patch.object(prepare, "platform_key", return_value="linux-aarch64"),
             self.assertRaises(S.Refused) as e,
         ):
             S.ensure_toolchain(res, "rust-bazel-9", tmpdir(self), loc, {}, run=S.run_process)
@@ -519,7 +529,7 @@ class UnsupportedHost(unittest.TestCase):
         }
         res = SimpleNamespace(release={"toolchains": manifest}, version="0.10.0", cleanup=str(tmpdir(self)))
         with (
-            mock.patch.object(S, "platform_key", return_value="darwin-arm64"),
+            mock.patch.object(prepare, "platform_key", return_value="darwin-arm64"),
             self.assertRaises(S.Refused) as e,
         ):
             S.ensure_toolchain(res, "p", tmpdir(self), L.locate({}, home=tmpdir(self)), {}, run=S.run_process)

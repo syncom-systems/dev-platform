@@ -170,6 +170,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also verify the provisioned tools (exit 1 unless conformant and certifiable)",
     )
+    tr = tsub.add_parser(
+        "prepare",
+        help="verify or provision the project's profile with the pinned release (bootstrap contract 1)",
+    )
+    tr.add_argument("--project", type=Path, default=Path("."))
+    tr.add_argument("--profile", help="default: the project's profile")
+    tr.add_argument("--dest", type=Path, required=True)
     tz = tsub.add_parser(
         "materialize",
         help="write the Bazel configuration the release generates (--check: verify it, read-only)",
@@ -1016,7 +1023,42 @@ def _cmd_materialize(args) -> int:
     return EXIT_UNSATISFIED if rep["refused"] or rep["conflicts"] else EXIT_OK
 
 
+def _cmd_prepare(args) -> int:
+    """Contract 1 of the bootstrap (`dev_platform.bootstrap`): this release validates its own manifest and
+    prepares the profile directory; one JSON record on stdout."""
+    from . import prepare
+
+    project = args.project.resolve()
+    cfg = load(project)
+    profile = args.profile or cfg.platform.profile
+    if not profile:
+        raise ConfigError(["no profile: pass --profile or set [platform].profile in dev-platform.toml"])
+    res = _resolve_and_delegate(cfg, args)  # a launcher runs the pinned release; the release runs on
+    try:
+        if not res.release:
+            raise ConfigError(["no pinned release resolved (override or self-hosted mode has none)"])
+        try:
+            rec = prepare.prepare(
+                res.release["toolchains"],
+                res.version or __version__,
+                profile,
+                project,
+                args.dest.resolve(),
+                dict(os.environ),
+                lambda argv, **kw: subprocess.run(argv, capture_output=True, text=True, check=False, **kw),
+            )
+        except prepare.PrepareError as e:
+            print(json.dumps({"ok": False, "problem": str(e), "exit": e.exit_code}, sort_keys=True))
+            return e.exit_code
+    finally:
+        res.dispose()
+    print(json.dumps({"ok": True, **rec}, sort_keys=True))
+    return EXIT_OK
+
+
 def cmd_toolchain(args) -> int:
+    if args.tcmd == "prepare":
+        return _cmd_prepare(args)
     if args.tcmd == "provision" and args.pinned:
         from . import provision
 
