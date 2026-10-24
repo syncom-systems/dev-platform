@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 0.16.0
 Changed (Python type checking):
 - Ty is the only type checker. The profiles `python-bazel-9.3` and `rust-python-bazel-9.3`, their templates and tool
   pins, and the `bazel.type_checker` setting are removed; `python-ty-bazel-9.3` and `rust-python-ty-bazel-9.3` are the
