@@ -104,7 +104,9 @@ def make_project(fixture: Path, version: str, profile: str, env: dict, py: list)
          "--sha256", pins["tree_digest_pin"], "--profile", profile], ROOT, env)  # fmt: skip
     for rel, line in (("MODULE.bazel", bazelconf.MODULE_HOOK), (".bazelrc", bazelconf.BAZELRC_HOOK)):
         f = project / rel
-        f.write_text((f.read_text() if f.is_file() else "") + line + "\n")
+        text = f.read_text() if f.is_file() else ""
+        if line not in text:
+            f.write_text(text + line + "\n")
     return project
 
 
