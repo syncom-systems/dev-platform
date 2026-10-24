@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 _EXT_LANG = {".py": "python", ".rs": "rust", ".sh": "shell", ".bzl": "starlark"}
-_SKIP = {".git", "node_modules", "target", ".venv", "venv", "__pycache__", ".mypy_cache"}
+_SKIP = {".git", "node_modules", "target", ".venv", "venv", "__pycache__"}
 _BAZEL_MARKERS = ("MODULE.bazel", "WORKSPACE", "WORKSPACE.bazel")
 _BAZEL_PACKAGE = ("BUILD", "BUILD.bazel")
 

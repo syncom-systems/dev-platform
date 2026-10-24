@@ -1,6 +1,13 @@
 # Changelog
 
 ## Unreleased
+Changed (Python type checking):
+- Ty is the only type checker. The profiles `python-bazel-9.3` and `rust-python-bazel-9.3`, their templates and tool
+  pins, and the `bazel.type_checker` setting are removed; `python-ty-bazel-9.3` and `rust-python-ty-bazel-9.3` are the
+  Python profiles (the aarch64-none profiles are unchanged). Projects pinned to an earlier release keep working; a
+  project moving to this release selects the `-ty-` profile of its languages (docs/rust-python-baseline.md).
+- Reading another installed release (`rollback select`, advisory impact, `init`) checks its integrity but no longer
+  judges its toolchain manifest with this release's schema.
 
 ## 0.15.0
 Changed (installation; [ADR 0026](docs/adr/0026-stable-bootstrap-contract.md)):

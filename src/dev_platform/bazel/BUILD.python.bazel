@@ -11,8 +11,8 @@ alias(
 )
 
 py_binary(
-    name = "mypy",
-    srcs = ["mypy_main.py"],
-    main = "mypy_main.py",
-    deps = ["@dp_pytools//mypy"],
+    name = "ty",
+    srcs = ["ty_main.py"],
+    main = "ty_main.py",
+    deps = ["@dp_pytools//ty"],
 )

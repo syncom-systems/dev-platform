@@ -28,10 +28,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "toolchains" / "manifest.json"
-LOCKS = {
-    "mypy": ROOT / "src" / "dev_platform" / "bazel" / "python_lock.txt",
-    "ty": ROOT / "src" / "dev_platform" / "bazel" / "python_lock.ty.txt",
-}
+LOCK = ROOT / "src" / "dev_platform" / "bazel" / "python_lock.txt"
 
 VERSIONS = {
     "rust": "1.99.1",
@@ -64,16 +61,14 @@ SYSTEM_LIBS = [
     "libutil.so.1",
     "libgcc_s.so.1",
 ]
-# profile -> (languages, type checker, profile whose measured host-tool closures it shares). The ty profiles
-# are added beside the mypy ones: a published profile is never changed.
+# profile -> (languages, profile whose measured host-tool closures it shares). A published profile is never
+# changed; the Python profiles' type checker is Ty.
 PROFILES = {
-    "rust-bazel-9.3": (("rust",), "mypy", None),
-    "python-bazel-9.3": (("python",), "mypy", None),
-    "rust-python-bazel-9.3": (("rust", "python"), "mypy", None),
-    "python-ty-bazel-9.3": (("python",), "ty", "python-bazel-9.3"),
-    "rust-python-ty-bazel-9.3": (("rust", "python"), "ty", "rust-python-bazel-9.3"),
-    "rust-aarch64-none-bazel-9.3": (("rust",), "mypy", "rust-bazel-9.3"),
-    "rust-python-ty-aarch64-none-bazel-9.3": (("rust", "python"), "ty", "rust-python-ty-bazel-9.3"),
+    "rust-bazel-9.3": (("rust",), None),
+    "python-ty-bazel-9.3": (("python",), None),
+    "rust-python-ty-bazel-9.3": (("rust", "python"), None),
+    "rust-aarch64-none-bazel-9.3": (("rust",), "rust-bazel-9.3"),
+    "rust-python-ty-aarch64-none-bazel-9.3": (("rust", "python"), "rust-python-ty-bazel-9.3"),
 }
 # Additional Rust target triples a profile cross-compiles for (the host-installed toolchain is unchanged: the
 # target's rust-std is pinned for Bazel only).
@@ -197,8 +192,8 @@ def module_pin(name: str, version: str) -> dict:
     return {"kind": "bazel_module", "name": name, "version": version, "source_json_sha256": sha(get(url))}
 
 
-def locked_versions(checker: str) -> dict[str, str]:
-    text = LOCKS[checker].read_text()
+def locked_versions() -> dict[str, str]:
+    text = LOCK.read_text()
     return {n: v for n, v in re.findall(r"^([a-z][a-z0-9_.-]*)==(\S+)", text, re.M)}
 
 
@@ -218,18 +213,17 @@ def build(prior: dict, measures: dict) -> dict:
     py = python_sources(v["python"], v["python_build"])
     ruff_src, ruff_bin = ruff_sources_and_binary(v["ruff"])
     bz, bl = bazel_pins(v["bazel"], v["bazelisk"])
-    locks = {c: locked_versions(c) for c in LOCKS}
     mods = {n: module_pin(n, v[n]) for n in ("rules_rust", "rules_python")}
     module_file = "dev-platform/toolchains.MODULE.bazel"
     old = prior.get("profiles", {})
 
     def prev(profile: str, tool: str) -> dict:
-        sibling = PROFILES[profile][2]
+        sibling = PROFILES[profile][1]
         found = old.get(profile, {}).get("tools", {}).get(tool, {})
         return found or old.get(sibling, {}).get("tools", {}).get(tool, {})
 
-    def tools_for(profile: str, langs: tuple[str, ...], checker: str) -> dict:
-        locked = locks[checker]
+    def tools_for(profile: str, langs: tuple[str, ...]) -> dict:
+        locked = locked_versions()
         lock_file = "dev-platform/python_lock.txt"
         t: dict = {
             "bazelisk": {
@@ -311,7 +305,7 @@ def build(prior: dict, measures: dict) -> dict:
                 "closure": file_closure(ruff_bin),
                 "source": ruff_src,
             }
-            for name in ("pytest", "pytest-cov", "coverage", checker):
+            for name in ("pytest", "pytest-cov", "coverage", "ty"):
                 t[name] = {
                     "version": locked[name],
                     "bazel_managed": True,
@@ -322,13 +316,11 @@ def build(prior: dict, measures: dict) -> dict:
         return dict(sorted(t.items()))
 
     profiles = {}
-    for name, (langs, checker, _) in PROFILES.items():
+    for name, (langs, _) in PROFILES.items():
         bazel = {"edition": v["edition"]} if "rust" in langs else {}
-        if checker != "mypy":
-            bazel["type_checker"] = checker
         if name in TARGETS:
             bazel["extra_target_triples"] = TARGETS[name]
-        profiles[name] = {"tools": tools_for(name, langs, checker), "bazel": bazel}
+        profiles[name] = {"tools": tools_for(name, langs), "bazel": bazel}
     return profiles
 
 

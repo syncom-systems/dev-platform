@@ -94,7 +94,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15]
-        profile: [python, rust-bazel, rust-bazel-9, rust-cargo, rust-cargo-1.99, rust-bazel-9.3, python-bazel-9.3, rust-python-bazel-9.3, python-ty-bazel-9.3, rust-python-ty-bazel-9.3, rust-aarch64-none-bazel-9.3, rust-python-ty-aarch64-none-bazel-9.3]
+        profile: [python, rust-bazel, rust-bazel-9, rust-cargo, rust-cargo-1.99, rust-bazel-9.3, python-ty-bazel-9.3, rust-python-ty-bazel-9.3, rust-aarch64-none-bazel-9.3, rust-python-ty-aarch64-none-bazel-9.3]
         include:
           - {profile: python, fixture: fixtures-real/python-locked}
           - {profile: rust-bazel, fixture: fixtures-real/rust-bazel}
@@ -102,8 +102,6 @@ jobs:
           - {profile: rust-cargo, fixture: fixtures-real/rust-cargo}
           - {profile: rust-cargo-1.99, fixture: fixtures-real/rust-cargo}
           - {profile: rust-bazel-9.3, fixture: fixtures-real/baseline-rust}
-          - {profile: python-bazel-9.3, fixture: fixtures-real/baseline-python}
-          - {profile: rust-python-bazel-9.3, fixture: fixtures-real/baseline-mixed}
           - {profile: python-ty-bazel-9.3, fixture: fixtures-real/baseline-python}
           - {profile: rust-python-ty-bazel-9.3, fixture: fixtures-real/baseline-mixed}
           - {profile: rust-aarch64-none-bazel-9.3, fixture: fixtures-real/baseline-rust}

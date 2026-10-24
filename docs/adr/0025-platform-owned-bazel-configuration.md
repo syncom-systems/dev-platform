@@ -14,7 +14,7 @@ version string, and an editor, an agent and CI could each see a different policy
 1. **A profile can own the Bazel configuration.** A manifest profile with a `bazel` section (`edition` for Rust) and
    Bazel-managed `rust-toolchain` and/or `python-runtime` tools is rendered by `src/dev_platform/bazelconf.py` into the
    files Bazel and its language rules need. Every version, url and hash in the rendering comes from the manifest (one
-   pin, two uses: the host tool and the Bazel declaration); the policy (rustfmt, clippy, ruff, mypy, coverage, test and
+   pin, two uses: the host tool and the Bazel declaration); the policy (rustfmt, clippy, ruff, ty, coverage, test and
    lint rules) is static files of the release under `src/dev_platform/bazel/`, so it is covered by the release's tree
    digest, SBOM and provenance.
 2. **Materialization is explicit and never overwrites.** `dev-platform toolchain materialize` writes the files. A file
@@ -27,8 +27,8 @@ version string, and an editor, an agent and CI could each see a different policy
    independently maintained settings that the platform owns must be absent: a second `rules_rust`/`rules_python` or
    toolchain declaration, a Rust or Python version chosen elsewhere (`rust-toolchain.toml`, `.python-version`,
    `.tool-versions`, `USE_BAZEL_VERSION`, flags in `.bazelrc`), and formatter, linter, type-checker, pytest or coverage
-   configuration (`rustfmt.toml`, `ruff.toml`, `mypy.ini`, `[tool.ruff]`, ...) that is not the generated one. The
-   Python tools (`pytest`, `pytest-cov`, `coverage`, and `mypy` or, in the `-ty-` profiles, `ty`) are Bazel-managed tools `bound_to` that item: their identity
+   configuration (`rustfmt.toml`, `ruff.toml`, `ty.toml`, `[tool.ruff]`, ...) that is not the generated one. The
+   Python tools (`pytest`, `pytest-cov`, `coverage`, and `ty`) are Bazel-managed tools `bound_to` that item: their identity
    is `config-locked` (the hash-locked file that declares them is proven equal to the release's), never stronger than
    what the check established.
 4. **Bazel remains the only orchestrator.** Formatting, lint, type checks, tests, documentation checks and coverage run

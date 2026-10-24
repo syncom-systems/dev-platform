@@ -136,8 +136,10 @@ def build(
     return dest
 
 
-def load(release_dir: Path) -> dict:
-    """Read and structurally verify release.json against the tree beside it."""
+def load(release_dir: Path, *, manifest: bool = True) -> dict:
+    """Read and structurally verify release.json against the tree beside it. `manifest=False` leaves the
+    toolchain manifest to the release itself: a release other than the running one (an installed older one,
+    read for its identity, SBOM or profile names) is not judged by this code's manifest schema."""
     d = Path(release_dir)
     try:
         doc = json.loads((d / "release.json").read_text())
@@ -145,7 +147,8 @@ def load(release_dir: Path) -> dict:
         raise ConfigError([f"{d}/release.json: {e}"]) from None
     if doc.get("schema") != RELEASE_SCHEMA:
         raise ConfigError([f"{d}/release.json: schema must be {RELEASE_SCHEMA!r}"])
-    toolchain.validate(doc.get("toolchains", {}))
+    if manifest:
+        toolchain.validate(doc.get("toolchains", {}))
     problems = []
     if tree_digest(d / "src") != doc["platform"]["source_digest"]:
         problems.append("src does not match platform.source_digest")
