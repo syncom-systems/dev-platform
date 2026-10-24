@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 0.15.0
 Changed (installation; [ADR 0026](docs/adr/0026-stable-bootstrap-contract.md)):
 - The CLI is only the bootstrap: it verifies the pinned release (trusted installer, archive, revision, provenance, SBOM,
   attestations, tree digest) and runs it from a verified snapshot. It no longer validates the release record or
