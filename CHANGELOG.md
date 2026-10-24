@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 0.14.0
 Added (cross-compilation; additive):
 - Profiles `rust-aarch64-none-bazel-9.3` and `rust-python-ty-aarch64-none-bazel-9.3`: the Rust (and Python/Ty) baseline plus
   the `aarch64-unknown-none-softfloat` target. A profile's `bazel.extra_target_triples` (approved triples only) requires a
@@ -32,7 +34,6 @@ Added (Ty as the platform type checker; additive, the published mypy profiles ar
   aspect, wrapper and lock; a stray `ty.toml` or `[tool.ty]` is a conformance conflict like the other tool policies.
   Qualified with the same real-execution, host-independence and must-be-rejected scenarios as the mypy profiles.
   Pyright is not used anywhere in the platform.
-
 
 ## 0.13.0
 Added (Bazel Rust and Python baseline, [ADR 0025](docs/adr/0025-platform-owned-bazel-configuration.md),
