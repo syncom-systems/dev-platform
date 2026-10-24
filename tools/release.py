@@ -292,10 +292,61 @@ def ready(a) -> dict:
         built = check("deterministic build (two clean builds)", lambda: build_twice(src, version, st["head"]))
         if built:
             info["build_at_head"] = built
+            check("bootstrap compatibility (contract; the built release installs and runs verified)",
+                  lambda: bootstrap_gate(src, Path(td) / "build1" / version, version, built["tree_digest"]))  # fmt: skip
         if not a.skip_continuity:
             check(f"continuity ({pred['version']} runs the full stage over this source)",
                   lambda: continuity(Path(td), src, st["head"], version, (built or {}).get("archive_sha256")))  # fmt: skip
     return {"ready": not problems, "problems": problems, "checks": checks, **info}
+
+
+def bootstrap_gate(src: Path, built: Path, version: str, tree: str) -> None:
+    """A release must be installable by the supported bootstrap (src/dev_platform/bootstrap.py): it declares a
+    contract that trust/bootstrap-compat.json says every supported bootstrap CLI implements, and the built
+    release, installed in a clean store and pinned by a project, is verified and run by the launcher, whose
+    own `toolchain prepare` then judges the release's manifest. Toolchain-schema evolution alone cannot fail
+    this; a contract change must be made explicit in the compat file first."""
+    compat = json.loads((src / "trust/bootstrap-compat.json").read_text())
+    from dev_platform import bootstrap as bs  # this checkout is the candidate's tree (HEAD, clean)
+
+    declared = bs.declared(src / "src")
+    if declared is None:
+        raise Stop(
+            f"{version} declares no bootstrap contract (src/dev_platform/{bs.DECLARATION.split('/')[-1]})"
+        )
+    if declared > compat["contract"]:
+        raise Stop(
+            f"{version} requires bootstrap contract {declared}, but the supported bootstrap CLIs "
+            f"(>= {compat['first_cli']}) implement {compat['contract']}: publish a bootstrap that implements "
+            f"{declared} with a documented migration path, then raise trust/bootstrap-compat.json"
+        )
+    if compat["contract"] > bs.CONTRACT:
+        raise Stop(
+            f"trust/bootstrap-compat.json promises contract {compat['contract']}; this code implements {bs.CONTRACT}"
+        )
+    with tempfile.TemporaryDirectory(prefix="bootstrap-gate-") as t:
+        t = Path(t)
+        store, project = t / "store", t / "project"
+        project.mkdir()
+        shutil.copytree(built, store / version)
+        (project / "dev-platform.toml").write_text(
+            f'schema_version = 1\n[platform]\nversion = "{version}"\nsha256 = "{tree}"\nprofile = "gate"\n'
+            '[project]\nname = "bootstrap-gate"\n[[check]]\nid = "t"\nadapter = "exec"\nargv = ["true"]\n'
+            'stages = ["pre-merge", "full"]\nobligation = "always"\n'
+        )
+        env = {"PATH": os.environ.get("PATH", ""), "HOME": str(t), "DEV_PLATFORM_STORE": str(store),
+               "PYTHONPATH": str(src / "src"), "PYTHONDONTWRITEBYTECODE": "1"}  # fmt: skip
+        r = subprocess.run([sys.executable, "-m", "dev_platform", "toolchain", "prepare", "--project",
+                            str(project), "--profile", "gate", "--dest", str(t / "env")],
+                           capture_output=True, text=True, env=env)  # fmt: skip
+        try:
+            rec = json.loads(r.stdout)
+        except ValueError:
+            raise Stop(
+                f"the built release did not answer `toolchain prepare`: {(r.stdout + r.stderr)[-300:]}"
+            ) from None
+        if r.returncode != 2 or rec.get("ok") or "is not in release" not in rec.get("problem", ""):
+            raise Stop(f"the built release was not verified and run by the launcher: {r.stdout[-300:]}")
 
 
 def continuity(td: Path, prepared: Path, rev: str, version: str, archive_sha: str | None) -> None:
