@@ -23,9 +23,12 @@ def calls(path, allowed_in=()):
     def walk(node, fn):
         for child in ast.iter_child_nodes(node):
             name = child.name if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) else fn
-            if isinstance(child, ast.Call) and isinstance(child.func, ast.Attribute):
-                if isinstance(child.func.value, ast.Name):
-                    found.append((child.func.value.id, child.func.attr, fn))
+            if (
+                isinstance(child, ast.Call)
+                and isinstance(child.func, ast.Attribute)
+                and isinstance(child.func.value, ast.Name)
+            ):
+                found.append((child.func.value.id, child.func.attr, fn))
             walk(child, name)
 
     walk(tree, None)

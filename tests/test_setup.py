@@ -16,10 +16,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-from dev_platform import bootstrap
+from dev_platform import bootstrap, prepare, release
 from dev_platform import locations as L
 from dev_platform import projectsetup as S
-from dev_platform import prepare, release
 from dev_platform.digest import tree_digest
 from dev_platform.errors import ConfigError
 from dev_platform.resolve import default_store
@@ -533,7 +532,7 @@ class BootstrapContract(unittest.TestCase):
         self.rev, self.tool_pins = rev, tool_pins
 
     def project(self, version, name):
-        vdir, tree, archive = self.releases[version]
+        _vdir, tree, archive = self.releases[version]
         pins = {
             "version": version,
             "source_revision": self.rev,

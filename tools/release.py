@@ -320,7 +320,7 @@ def bootstrap_gate(src: Path, built: Path, version: str, tree: str) -> None:
             f"(>= {compat['first_cli']}) implement {compat['contract']}: publish a bootstrap that implements "
             f"{declared} with a documented migration path, then raise trust/bootstrap-compat.json"
         )
-    if bs.CONTRACT < compat["contract"]:
+    if compat["contract"] > bs.CONTRACT:
         raise Stop(
             f"trust/bootstrap-compat.json promises contract {compat['contract']}; this code implements {bs.CONTRACT}"
         )

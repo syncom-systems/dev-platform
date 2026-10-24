@@ -66,7 +66,7 @@ class ResolveTest(unittest.TestCase):
         self.assertIsNone(res.release)
 
     def test_the_release_itself_validates_its_own_record_when_it_runs(self):
-        store, vdir = make_release(self, "0.0.1")
+        _store, vdir = make_release(self, "0.0.1")
         pin = PlatformPin("0.0.1", tree_digest(vdir), False, "p")
         env = {R.REEXEC_ENV: "0.0.1"}
         with (
