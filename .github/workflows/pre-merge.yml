@@ -68,7 +68,7 @@ jobs:
         release: ["0.14.0", "0.13.0"]
         include:
           - {release: "0.14.0", profile: rust-python-bazel-9.3, fixture: fixtures-real/baseline-mixed, old: "--old-cli 0.12.1 --old-cli 0.13.0"}
-          - {release: "0.13.0", profile: rust-bazel-9.3, fixture: fixtures-real/baseline-rust, old: "--old-cli 0.12.1"}
+          - {release: "0.13.0", profile: python-bazel-9.3, fixture: fixtures-real/baseline-python, old: "--old-cli 0.12.1"}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {persist-credentials: false}
