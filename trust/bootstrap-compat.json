@@ -1,0 +1,5 @@
+{
+  "contract": 1,
+  "first_cli": "0.15.0",
+  "note": "The bootstrap contract every supported bootstrap CLI (dev-platform >= first_cli) implements; releases declare theirs in src/dev_platform/bootstrap-contract.json. Raising contract is an intentional change: it needs a published bootstrap that implements it and a migration path (docs/distribution.md), in the same reviewed change."
+}

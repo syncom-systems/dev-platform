@@ -265,6 +265,22 @@ class FakeToolchains:
 
     def __call__(self, argv, **kw):
         self.calls.append((list(argv), kw.get("env") or {}))
+        if "prepare" in argv:  # a release implementing bootstrap contract 1 prepares the profile itself
+            dest = Path(argv[argv.index("--dest") + 1])
+            action = "reused" if (dest / "verified").is_file() else "provisioned"
+            (dest / "bin").mkdir(parents=True, exist_ok=True)
+            (dest / "verified").write_text("ok")
+            rec = {
+                "ok": True,
+                "profile": argv[argv.index("--profile") + 1],
+                "path": str(dest),
+                "action": action,
+                "conformant": True,
+                "assurance": "certifiable",
+                "identity_digest": "e" * 64,
+                "python": None,
+            }
+            return subprocess.CompletedProcess(argv, 0, json.dumps(rec), "")
         if "toolchain" in argv:
             dest = Path(argv[argv.index("--dest") + 1]) if "--dest" in argv else None
             rec = {"conformant": True, "assurance": "certifiable", "identity_digest": "e" * 64}
@@ -488,6 +504,230 @@ class Setup(unittest.TestCase):
         )
         self.assertEqual(r.stdout, str(self.loc.store))
         self.assertIn("ready", S.render(rec))
+
+
+class BootstrapContract(unittest.TestCase):
+    """The launcher verifies and runs the pinned release; the release judges its own manifest (bootstrap.py).
+    Releases 0.15.0 and later declare contract 1; earlier ones are driven by the frozen adapter."""
+
+    def setUp(self):
+        self.releases = {}
+        self.sources = {}
+        self.home = tmpdir(self)
+        self.addCleanup(rmtree_rw, self.home)
+        self.loc = L.locate({}, home=self.home)
+        bindir = tmpdir(self)
+        (bindir / "gh").write_text("#!/bin/sh\nexit 0\n")
+        (bindir / "gh").chmod(0o755)
+        self.env = {**os.environ, "PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}"}
+        for k in ("CI", "GITHUB_ACTIONS", "PYTHONPATH", "DEV_PLATFORM_OVERRIDE"):
+            self.env.pop(k, None)
+
+    def add(self, version, contract=1, letter="b"):
+        vdir, tree = build_release(self, version, contract)
+        self.releases[version] = (vdir, tree, letter * 64)
+        self.sources[version] = {"dir": str(vdir), "archive_sha256": letter * 64, "tree": tree}
+
+    def finish(self):
+        self.repo, rev, tool_pins = platform_repo(self, self.sources)
+        self.rev, self.tool_pins = rev, tool_pins
+
+    def project(self, version, name):
+        vdir, tree, archive = self.releases[version]
+        pins = {
+            "version": version,
+            "source_revision": self.rev,
+            "archive_sha256": archive,
+            "tree_digest_pin": tree,
+            "verifier_pins": self.tool_pins,
+        }
+        return write_project(tmpdir(self) / name, version, tree, pins)
+
+    def setup(self, project, run=None):
+        run = run or FakeToolchains()
+        rec, code = S.setup(
+            project, self.loc, allow_unaccepted=True, repo_url=str(self.repo), env=self.env, run=run
+        )
+        return rec, code, run
+
+    def test_a_declaring_release_prepares_its_own_profile(self):
+        self.add("0.15.0")
+        self.finish()
+        with mock.patch.object(prepare, "prepare", side_effect=AssertionError("launcher interpreted")):
+            rec, code, run = self.setup(self.project("0.15.0", "a"))
+        self.assertEqual(code, 0, rec.get("problem"))
+        self.assertEqual((rec["release"]["contract"], rec["toolchain"]["action"]), (1, "provisioned"))
+        self.assertEqual(run.ran("prepare"), 1)
+        self.assertEqual(run.ran("provision") + run.ran("verify"), 0)  # the release's own business
+        argv, env = next((a, e) for a, e in run.calls if "prepare" in a)
+        self.assertIn("-P", argv)
+        self.assertEqual(env["DEV_PLATFORM_REEXEC"], "0.15.0")
+        self.assertNotEqual(Path(env["PYTHONPATH"]), ROOT / "src")  # the verified private snapshot
+
+    def test_a_manifest_this_launcher_cannot_parse_does_not_stop_a_declaring_release(self):
+        """The launcher here rejects every manifest and record it is asked to validate, as an older CLI does a
+        newer format; the real release it runs (a child process) judges its own."""
+        self.add("0.16.0")
+        self.finish()
+        old_cli = ConfigError(["toolchain manifest: profiles.py.from_the_future: unknown key"])
+        with (
+            mock.patch.object(release, "load", side_effect=old_cli),
+            mock.patch("dev_platform.toolchain.validate", side_effect=old_cli),
+        ):
+            rec, code, _ = self.setup(self.project("0.16.0", "a"))
+        self.assertEqual(code, 0, rec.get("problem"))
+        self.assertEqual(rec["toolchain"]["action"], "provisioned")
+        self.assertEqual(rec["doctor"]["exit"], 0)
+
+    def test_the_prepare_command_runs_in_the_verified_release_and_reports_one_json_record(self):
+        self.add("0.15.0")
+        self.finish()
+        project = self.project("0.15.0", "a")
+        shutil.copytree(self.releases["0.15.0"][0], self.loc.store / "0.15.0")
+        env = {**self.env, S.STORE_ENV: str(self.loc.store), "PYTHONPATH": str(ROOT / "src")}
+        r = subprocess.run(
+            [sys.executable, "-m", "dev_platform", "toolchain", "prepare", "--project", str(project),
+             "--profile", "nope", "--dest", str(tmpdir(self) / "d")],
+            capture_output=True, text=True, cwd=project, env=env,
+        )  # fmt: skip
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        out = json.loads(r.stdout)
+        self.assertFalse(out["ok"])
+        self.assertIn("profile 'nope' is not in release 0.15.0", out["problem"])
+
+    def test_a_release_requiring_a_newer_contract_is_refused_before_it_runs(self):
+        self.add("0.17.0", contract=2)
+        self.finish()
+        rec, code, run = self.setup(self.project("0.17.0", "a"))
+        self.assertEqual(code, 3)
+        self.assertIn("requires bootstrap contract 2", rec["problem"])
+        self.assertIn("was not executed", rec["problem"])
+        self.assertEqual(run.ran("prepare") + run.ran("doctor"), 0)
+
+    def test_a_release_that_must_declare_a_contract_and_does_not_is_refused(self):
+        self.add("0.15.1", contract=None)
+        self.finish()
+        rec, code, run = self.setup(self.project("0.15.1", "a"))
+        self.assertEqual(code, 3)
+        self.assertIn("declares no bootstrap contract", rec["problem"])
+        self.assertEqual(run.ran("doctor"), 0)
+
+    def test_a_malformed_declaration_is_refused(self):
+        for text in ("{", '{"contract": 0}', '{"contract": true}', '{"contract": "1"}', "[]"):
+            d = tmpdir(self)
+            (d / "dev_platform").mkdir()
+            (d / bootstrap.DECLARATION).write_text(text)
+            with self.assertRaises(bootstrap.ContractError, msg=text):
+                bootstrap.select(d, "0.15.0")
+
+    def test_legacy_and_declaring_releases_coexist_each_with_its_own_adapter(self):
+        self.add("0.12.1", contract=None, letter="a")
+        self.add("0.14.0", contract=None, letter="c")
+        self.add("0.15.0", letter="d")
+        self.finish()
+        for version, adapter in (("0.12.1", "legacy"), ("0.15.0", 1), ("0.14.0", "legacy")):
+            rec, code, run = self.setup(self.project(version, f"p{version}"))
+            self.assertEqual(code, 0, (version, rec.get("problem")))
+            self.assertEqual(rec["release"]["contract"], adapter)
+            self.assertEqual(rec["toolchain"]["path"], str(self.loc.toolchains / version / "py"))
+            self.assertEqual(run.ran("prepare"), 0 if adapter == "legacy" else 1)
+        stored = sorted(p.name for p in self.loc.store.iterdir() if not p.name.startswith("."))
+        self.assertEqual(stored, ["0.12.1", "0.14.0", "0.15.0"])
+        for version, (_vdir, tree, _a) in self.releases.items():
+            self.assertEqual(tree_digest(self.loc.store / version), tree)
+
+    def test_repeating_setup_downloads_and_changes_nothing(self):
+        self.add("0.15.0")
+        self.finish()
+        project = self.project("0.15.0", "a")
+        first, code, _ = self.setup(project)
+        self.assertEqual(code, 0, first.get("problem"))
+        before = {p: p.stat().st_mtime_ns for p in self.loc.store.rglob("*")}
+        again, code, run = self.setup(project)
+        self.assertEqual(code, 0, again.get("problem"))
+        self.assertEqual((again["release"]["action"], again["toolchain"]["action"]), ("present", "reused"))
+        self.assertEqual(run.ran("install_release.py") + run.ran("git"), 0)
+        self.assertEqual(before, {p: p.stat().st_mtime_ns for p in self.loc.store.rglob("*")})
+        self.assertEqual(first["toolchain"]["identity_digest"], again["toolchain"]["identity_digest"])
+
+    def test_a_project_rolls_back_to_its_previous_release_untouched(self):
+        self.add("0.14.0", contract=None, letter="a")
+        self.add("0.15.0", letter="b")
+        self.finish()
+        project = self.project("0.14.0", "a")
+        self.assertEqual(self.setup(project)[1], 0)
+        write_project(project, "0.15.0", self.releases["0.15.0"][1], self.pins_of("0.15.0"))
+        self.assertEqual(self.setup(project)[1], 0)
+        write_project(project, "0.14.0", self.releases["0.14.0"][1], self.pins_of("0.14.0"))
+        rec, code, run = self.setup(project)
+        self.assertEqual(code, 0, rec.get("problem"))
+        self.assertEqual((rec["release"]["action"], rec["toolchain"]["action"]), ("present", "reused"))
+        self.assertEqual(run.ran("install_release.py"), 0)
+        for version in ("0.14.0", "0.15.0"):
+            self.assertEqual(tree_digest(self.loc.store / version), self.releases[version][1])
+
+    def pins_of(self, version):
+        _vdir, tree, archive = self.releases[version]
+        return {
+            "version": version,
+            "source_revision": self.rev,
+            "archive_sha256": archive,
+            "tree_digest_pin": tree,
+            "verifier_pins": self.tool_pins,
+        }
+
+    def test_an_installer_refusal_installs_nothing_and_leaves_other_releases_alone(self):
+        self.add("0.14.0", contract=None, letter="a")
+        self.add("0.15.0", letter="b")
+        self.finish()
+        self.assertEqual(self.setup(self.project("0.14.0", "ok"))[1], 0)
+        kept = tree_digest(self.loc.store / "0.14.0")
+        for field, value in (("archive_sha256", "0" * 64), ("tree_digest_pin", "1" * 64)):
+            pins = {**self.pins_of("0.15.0"), field: value}
+            project = write_project(tmpdir(self) / field, "0.15.0", pins["tree_digest_pin"], pins)
+            rec, code, run = self.setup(project)
+            self.assertEqual(code, 1, field)
+            self.assertIn("trusted installer refused", rec["problem"])
+            self.assertFalse((self.loc.store / "0.15.0").exists())
+            self.assertEqual(run.ran("prepare") + run.ran("doctor"), 0)
+        self.assertEqual(tree_digest(self.loc.store / "0.14.0"), kept)
+
+    def test_a_corrupted_installation_never_runs_and_its_neighbours_are_untouched(self):
+        self.add("0.14.0", contract=None, letter="a")
+        self.add("0.15.0", letter="b")
+        self.finish()
+        self.assertEqual(self.setup(self.project("0.14.0", "a"))[1], 0)
+        self.assertEqual(self.setup(self.project("0.15.0", "b"))[1], 0)
+        f = self.loc.store / "0.15.0" / "src" / "dev_platform" / "cli.py"
+        f.parent.chmod(0o700)
+        f.chmod(0o600)
+        f.write_text(f.read_text() + "\n# tampered\n")
+        rec, code, run = self.setup(self.project("0.15.0", "c"))
+        self.assertEqual(code, 3)
+        self.assertEqual(run.ran("prepare") + run.ran("doctor") + run.ran("install_release.py"), 0)
+        rec, code, _ = self.setup(self.project("0.14.0", "d"))
+        self.assertEqual(code, 0, rec.get("problem"))  # the other release still works
+
+    def test_release_bytes_changed_after_installation_are_never_executed(self):
+        self.add("0.15.0")
+        self.finish()
+        project = self.project("0.15.0", "a")
+        self.assertEqual(self.setup(project)[1], 0)
+        launcher = self.loc.store / "0.15.0" / "src" / "dev_platform" / "__main__.py"
+        launcher.parent.chmod(0o700)
+        launcher.chmod(0o600)
+        launcher.write_text("raise SystemExit('unverified code ran')\n")
+        res_env = {**self.env, S.STORE_ENV: str(self.loc.store)}
+        r = subprocess.run(
+            [sys.executable, "-m", "dev_platform", "doctor", "--project", str(project)],
+            capture_output=True,
+            text=True,
+            cwd=project,
+            env={**res_env, "PYTHONPATH": str(ROOT / "src")},
+        )
+        self.assertNotEqual(r.returncode, 0)
+        self.assertNotIn("unverified code ran", r.stdout + r.stderr)
+        self.assertIn("integrity failure", r.stdout + r.stderr)
 
 
 class UnsupportedHost(unittest.TestCase):

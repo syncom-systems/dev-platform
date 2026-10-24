@@ -138,3 +138,46 @@ class Verdict(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BootstrapGate(unittest.TestCase):
+    """A release must be installable by the supported bootstrap; a contract change must be explicit."""
+
+    def candidate(self, contract, compat=1):
+        from dev_platform import release as rel
+        from dev_platform.digest import tree_digest
+
+        d = tmpdir(self)
+        src = d / "checkout"
+        (src / "trust").mkdir(parents=True)
+        (src / "trust/bootstrap-compat.json").write_text(
+            json.dumps({"contract": compat, "first_cli": "0.15.0"})
+        )
+        shutil.copytree(ROOT / "src", src / "src", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        decl = src / "src/dev_platform/bootstrap-contract.json"
+        decl.unlink()
+        if contract is not None:
+            decl.write_text(json.dumps({"contract": contract}))
+        tc = d / "tc.json"
+        shutil.copyfile(ROOT / "toolchains/manifest.json", tc)
+        built = rel.build(src / "src", tc, d / "out", "0.15.0", strict_version=False)
+        return src, built, tree_digest(built)
+
+    def test_a_release_declaring_the_supported_contract_installs_and_runs_verified(self):
+        src, built, tree = self.candidate(1)
+        R.bootstrap_gate(src, built, "0.15.0", tree)
+
+    def test_a_missing_declaration_blocks(self):
+        src, built, tree = self.candidate(None)
+        with self.assertRaisesRegex(R.Stop, "declares no bootstrap contract"):
+            R.bootstrap_gate(src, built, "0.15.0", tree)
+
+    def test_a_contract_beyond_the_supported_bootstrap_blocks_until_a_migration_path_exists(self):
+        src, built, tree = self.candidate(2)
+        with self.assertRaisesRegex(R.Stop, "requires bootstrap contract 2.*implement 1.*migration path"):
+            R.bootstrap_gate(src, built, "0.15.0", tree)
+
+    def test_the_compat_file_cannot_promise_more_than_the_code_implements(self):
+        src, built, tree = self.candidate(1, compat=2)
+        with self.assertRaisesRegex(R.Stop, "promises contract 2"):
+            R.bootstrap_gate(src, built, "0.15.0", tree)
