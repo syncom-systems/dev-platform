@@ -1,4 +1,4 @@
-"""Python lint aspect owned by the platform: ruff (lint and format) and mypy over py_* targets.
+"""Python lint aspect owned by the platform: ruff (lint and format) and ty over py_* targets.
 
 Run with `bazel build --config=dp-lint //...` (see bazel.bazelrc); output group `dp_py_checks`.
 """
@@ -32,23 +32,23 @@ def _impl(target, ctx):
         progress_message = "ruff %s" % target.label,
     )
 
-    mypy_out = ctx.actions.declare_file(target.label.name + ".dp_mypy")
-    roots = ["."] + ["external/" + i for i in target[PyInfo].imports.to_list()]
+    ty_out = ctx.actions.declare_file(target.label.name + ".dp_ty")
+    imports = " ".join(target[PyInfo].imports.to_list())
     ctx.actions.run_shell(
-        inputs = depset([ctx.file._mypy_config], transitive = [target[PyInfo].transitive_sources]),
-        outputs = [mypy_out],
-        tools = [ctx.executable._mypy],
-        command = "MYPYPATH={mp} {m} --config-file {c} --cache-dir=/dev/null --explicit-package-bases {p} && touch {o}".format(
-            mp = ":".join(roots),
-            m = ctx.executable._mypy.path,
-            c = ctx.file._mypy_config.path,
+        inputs = depset([ctx.file._ty_config], transitive = [target[PyInfo].transitive_sources]),
+        outputs = [ty_out],
+        tools = [ctx.executable._ty],
+        command = "r=--extra-search-path=.; for i in {i}; do if [ -d external/$i ]; then r=\"$r --extra-search-path=external/$i\"; fi; done; {t} check --no-progress --config-file {c} $r {p} && touch {o}".format(
+            i = imports,
+            t = ctx.executable._ty.path,
+            c = ctx.file._ty_config.path,
             p = paths,
-            o = mypy_out.path,
+            o = ty_out.path,
         ),
-        mnemonic = "DpMypy",
-        progress_message = "mypy %s" % target.label,
+        mnemonic = "DpTy",
+        progress_message = "ty %s" % target.label,
     )
-    return [OutputGroupInfo(dp_py_checks = depset([ruff_out, mypy_out]))]
+    return [OutputGroupInfo(dp_py_checks = depset([ruff_out, ty_out]))]
 
 dp_py_lint_aspect = aspect(
     implementation = _impl,
@@ -56,7 +56,7 @@ dp_py_lint_aspect = aspect(
     attrs = {
         "_ruff": attr.label(default = "//dev-platform:ruff", executable = True, cfg = "exec"),
         "_ruff_config": attr.label(default = "//dev-platform:ruff.toml", allow_single_file = True),
-        "_mypy": attr.label(default = "//dev-platform:mypy", executable = True, cfg = "exec"),
-        "_mypy_config": attr.label(default = "//dev-platform:mypy.ini", allow_single_file = True),
+        "_ty": attr.label(default = "//dev-platform:ty", executable = True, cfg = "exec"),
+        "_ty_config": attr.label(default = "//dev-platform:ty.toml", allow_single_file = True),
     },
 )

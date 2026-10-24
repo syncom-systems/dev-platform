@@ -48,6 +48,18 @@ class ReleaseTest(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "SBOM"):
             release.load(d)
 
+    def test_another_releases_manifest_is_not_judged_by_this_codes_schema(self):
+        d = build(self)
+        doc = json.loads((d / "release.json").read_text())
+        del doc["toolchains"]["profiles"]["p"]["tools"]  # what a later schema may restructure
+        (d / "release.json").write_text(json.dumps(doc))
+        with self.assertRaises(ConfigError):
+            release.load(d)
+        self.assertEqual(release.load(d, manifest=False)["platform"]["version"], "1.0.0")
+        (d / "src" / "dev_platform" / "cli.py").write_text("# x\n")
+        with self.assertRaisesRegex(ConfigError, "source_digest"):  # integrity is still checked
+            release.load(d, manifest=False)
+
     def test_toolchain_change_is_a_new_release_identity(self):
         out = tmpdir(self)
         a = build(self, "1.0.0", out)

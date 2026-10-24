@@ -14,8 +14,7 @@ from tests.helpers import ROOT, tmpdir
 
 MANIFEST = T.validate(json.loads((ROOT / "toolchains" / "manifest.json").read_text()))
 VERSION = "9.9.9"
-MIXED, RUST, PYTHON = "rust-python-bazel-9.3", "rust-bazel-9.3", "python-bazel-9.3"
-PY_TY, MIXED_TY = "python-ty-bazel-9.3", "rust-python-ty-bazel-9.3"
+MIXED, RUST, PYTHON = "rust-python-ty-bazel-9.3", "rust-bazel-9.3", "python-ty-bazel-9.3"
 NONE, MIXED_NONE = "rust-aarch64-none-bazel-9.3", "rust-python-ty-aarch64-none-bazel-9.3"
 TRIPLE = "aarch64-unknown-none-softfloat"
 
@@ -104,7 +103,7 @@ class Rendering(unittest.TestCase):
 
     def test_the_python_lock_pins_what_the_manifest_declares_and_every_requirement_is_hashed(self):
         lock = render()["dev-platform/python_lock.txt"]
-        for name in ("pytest", "pytest-cov", "coverage", "mypy"):
+        for name in ("pytest", "pytest-cov", "coverage", "ty"):
             self.assertIn(f"{name}=={MANIFEST['profiles'][MIXED]['tools'][name]['version']}", lock)
         for block in re.split(r"\n(?=[A-Za-z])", lock):
             if re.match(r"[A-Za-z0-9_.-]+==", block):
@@ -196,39 +195,36 @@ class Materialize(unittest.TestCase):
         hooks = [c for c in B.check(MANIFEST, MIXED, owned, VERSION)["conflicts"] if c["kind"] == "hook"]
         self.assertEqual([c["path"] for c in hooks], ["MODULE.bazel"])
 
-    def test_ty_profiles_render_ty_policy_and_no_mypy(self):
-        for profile in (PY_TY, MIXED_TY):
+    def test_python_profiles_render_ty_policy(self):
+        for profile in (PYTHON, MIXED):
             files = B.render(MANIFEST, profile, VERSION)
             self.assertIn("ty.toml", files)
             self.assertIn("dev-platform/ty_main.py", files)
-            self.assertNotIn("mypy.ini", files)
-            self.assertNotIn("dev-platform/mypy_main.py", files)
             self.assertIn("ty==0.0.91", files["dev-platform/python_lock.txt"])
-            self.assertNotIn("mypy", files["dev-platform/python_lock.txt"])
             self.assertIn("DpTy", files["dev-platform/lint.bzl"])
-            self.assertNotIn("mypy", files["dev-platform/lint.bzl"].lower())
             self.assertIn('name = "ty"', files["dev-platform/BUILD.bazel"])
 
-    def test_the_published_mypy_profiles_still_render_mypy(self):
+    def test_ty_is_the_only_type_checker(self):
+        for name, prof in MANIFEST["profiles"].items():
+            self.assertNotIn("type_checker", prof.get("bazel", {}), name)
+            self.assertFalse({"mypy", "pyright"} & set(prof["tools"]), name)
         for profile in (PYTHON, MIXED):
-            files = B.render(MANIFEST, profile, VERSION)
-            self.assertIn("mypy.ini", files)
-            self.assertNotIn("ty.toml", files)
-            self.assertIn("DpMypy", files["dev-platform/lint.bzl"])
+            for path, text in B.render(MANIFEST, profile, VERSION).items():
+                self.assertNotRegex(text.lower(), "mypy|pyright", f"{profile}:{path}")
 
     def test_ty_and_ruff_target_the_pinned_python_minor(self):
-        files = B.render(MANIFEST, PY_TY, VERSION)
+        files = B.render(MANIFEST, PYTHON, VERSION)
         self.assertIn('python-version = "3.15"', files["ty.toml"])
         self.assertIn('target-version = "py315"', files["ruff.toml"])
 
     def test_a_stray_ty_config_conflicts_in_a_ty_profile(self):
-        root = materialized(self, PY_TY)
+        root = materialized(self, PYTHON)
         (root / "pyproject.toml").write_text("[tool.ty.rules]\nall = 'ignore'\n")
-        kinds = {c["kind"] for c in B.check(MANIFEST, PY_TY, root, VERSION)["conflicts"]}
+        kinds = {c["kind"] for c in B.check(MANIFEST, PYTHON, root, VERSION)["conflicts"]}
         self.assertIn("tool-config", kinds)
 
     def test_generated_files_never_declare_or_refer_to_platforms_or_skylib(self):
-        for profile in (RUST, PYTHON, MIXED, PY_TY, MIXED_TY):
+        for profile in (RUST, PYTHON, MIXED):
             for path, text in B.render(MANIFEST, profile, VERSION).items():
                 if path.endswith("python_lock.txt"):
                     continue
@@ -271,7 +267,7 @@ class Materialize(unittest.TestCase):
             self.assertIn('"@@platforms//os:none"', files["dev-platform/BUILD.bazel"])
 
     def test_profiles_without_extra_targets_are_unchanged(self):
-        for profile in (RUST, MIXED, PY_TY):
+        for profile in (RUST, MIXED, PYTHON):
             files = B.render(MANIFEST, profile, VERSION)
             self.assertNotIn(TRIPLE, "".join(files.values()))
         module = B.render(MANIFEST, RUST, VERSION)["dev-platform/toolchains.MODULE.bazel"]
@@ -442,21 +438,21 @@ pip.parse(hub_name = "mine", python_version = "3.12", requirements_lock = "//:r.
         (root / "rust-toolchain.toml").write_text('[toolchain]\nchannel = "1.80.0"\n')
         (root / "sub").mkdir()
         (root / "sub" / "rustfmt.toml").write_text("max_width = 80\n")
-        (root / "sub" / "mypy.ini").write_text("[mypy]\n")
+        (root / "sub" / "ty.toml").write_text("[rules]\n")
         (root / ".python-version").write_text("3.11\n")
         (root / "pytest.ini").write_text("[pytest]\n")
         (root / ".tool-versions").write_text("rust 1.80.0\nnodejs 20\n")
         (root / "pyproject.toml").write_text(
             "[tool.ruff]\nline-length = 79\n[tool.black]\nline-length = 79\n"
         )
-        (root / "tox.ini").write_text("[mypy]\nstrict = false\n")
+        (root / "tox.ini").write_text("[coverage:run]\nbranch = false\n")
         got = {c["path"] for c in self.check(root)["conflicts"]}
         self.assertEqual(
             got,
             {
                 "rust-toolchain.toml",
                 "sub/rustfmt.toml",
-                "sub/mypy.ini",
+                "sub/ty.toml",
                 ".python-version",
                 "pytest.ini",
                 ".tool-versions",
@@ -473,7 +469,7 @@ pip.parse(hub_name = "mine", python_version = "3.12", requirements_lock = "//:r.
     def test_only_the_profiles_languages_are_policed(self):
         root = materialized(self, RUST)
         (root / "ruff.toml").write_text("line-length = 79\n")
-        (root / "mypy.ini").write_text("[mypy]\n")
+        (root / "ty.toml").write_text("[rules]\n")
         self.assertEqual(self.check(root, RUST)["status"], "ok")
 
     def test_build_outputs_and_the_platform_directory_are_not_scanned_for_strays(self):
@@ -509,7 +505,7 @@ class VerifiedAsPartOfTheEnvironment(unittest.TestCase):
         cfg = self.entry(rec, "bazel-config")
         self.assertEqual((cfg["status"], cfg["identity"]), ("ok", "config-locked"))
         self.assertEqual(cfg["observed"], cfg["expected"])
-        for name in ("pytest", "pytest-cov", "coverage", "mypy"):
+        for name in ("pytest", "pytest-cov", "coverage", "ty"):
             t = self.entry(rec, name)
             self.assertEqual((t["status"], t["identity"]), ("ok", "config-locked"), name)
 
@@ -569,7 +565,7 @@ class Existing(unittest.TestCase):
 
     def test_the_new_profiles_are_exactly_the_baseline(self):
         got = {n for n, p in MANIFEST["profiles"].items() if "bazel" in p}
-        self.assertEqual(got, {MIXED, RUST, PYTHON, PY_TY, MIXED_TY, NONE, MIXED_NONE})
+        self.assertEqual(got, {MIXED, RUST, PYTHON, NONE, MIXED_NONE})
         t = MANIFEST["profiles"][MIXED]["tools"]
         self.assertEqual(
             {

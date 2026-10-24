@@ -590,7 +590,7 @@ def cmd_init(args) -> int:
     sha = args.sha256
     vrel = default_store() / args.platform_version
     if (vrel / "release.json").is_file():
-        profiles = release.load(vrel)["toolchains"]["profiles"]
+        profiles = release.load(vrel, manifest=False)["toolchains"]["profiles"]
         if args.profile not in profiles:
             raise ConfigError([f"profile {args.profile!r} not in release (have {sorted(profiles)})"])
     if not sha:
@@ -943,7 +943,7 @@ def cmd_affected(args) -> int:
     if store.is_dir():
         for d in sorted(store.iterdir()):
             if (d / "release.json").is_file():
-                doc = release.load(d)
+                doc = release.load(d, manifest=False)
                 doc["sbom_doc"] = json.loads((d / doc["sbom"]["path"]).read_text())
                 rels[d.name] = doc
     if args.impact:
@@ -1232,7 +1232,7 @@ def cmd_rollback(args) -> int:
     if args.advisory and store.is_dir():
         for d in sorted(store.iterdir()):
             if (d / "release.json").is_file():
-                doc = release.load(d)
+                doc = release.load(d, manifest=False)
                 doc["sbom_doc"] = json.loads((d / doc["sbom"]["path"]).read_text())
                 plat[d.name] = doc
     authenticate = None

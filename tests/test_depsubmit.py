@@ -27,8 +27,8 @@ class Snapshot(unittest.TestCase):
         self.assertTrue(comps["pkg:pypi/ruff@0.17.0"]["alert_capable"])
         self.assertFalse(comps["pkg:generic/cpython@3.14.7"]["alert_capable"])
         self.assertFalse(comps["pkg:github/bazelbuild/bazel@8.4.2"]["alert_capable"])
-        # PyPI packages: uv, ruff 0.17.0 and 0.17.2 (Bazel baseline), pytest, pytest-cov, coverage, mypy
-        self.assertEqual(self.snap()["metadata"]["alert_capable_components"], 8)
+        # PyPI packages: uv, ruff 0.17.0 and 0.17.2 (Bazel baseline), pytest, pytest-cov, coverage, ty
+        self.assertEqual(self.snap()["metadata"]["alert_capable_components"], 7)
 
     def test_profile_filter_and_unversioned_purls(self):
         s = self.snap(profiles=["rust-cargo"])
