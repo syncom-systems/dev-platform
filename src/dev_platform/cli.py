@@ -1569,7 +1569,8 @@ def cmd_install(args) -> int:
     else:
         if rec.get("created"):
             print(
-                f"created   {rec['project']['path']}/{CONFIG_FILENAME} (the only file written in the project)"
+                f"created   {rec.get('project', {}).get('path', args.project or '.')}/{CONFIG_FILENAME} "
+                "(the only file written in the project)"
             )
         print(projectsetup.render(rec))
         if "infra" in rec:

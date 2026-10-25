@@ -104,9 +104,11 @@ def legacy_pins(root: Path, cfg) -> dict:
     """The release identity of a project from before 0.17.0: `dev-platform.release-pins.json`, which must
     agree with dev-platform.toml. Only read; `read_pins` still refuses releases that write into projects."""
     try:
-        pins = json.loads((root / PINS_FILE).read_text())
-    except (OSError, json.JSONDecodeError) as e:
+        pins = json.loads((root / PINS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
         raise Refused(f"{PINS_FILE}: {e}", EXIT_USAGE) from None
+    if not isinstance(pins, dict):
+        raise Refused(f"{PINS_FILE}: not a JSON object", EXIT_USAGE)
     vp = pins.get("verifier_pins") if isinstance(pins.get("verifier_pins"), dict) else {}
     need = {
         "version": isinstance(pins.get("version"), str) and bool(_VER.match(pins["version"])),

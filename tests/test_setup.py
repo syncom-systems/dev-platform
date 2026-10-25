@@ -248,6 +248,15 @@ class Project(unittest.TestCase):
             self.assertIn(name, str(cm.exception))
             self.assertEqual(cm.exception.exit_code, 2)
 
+    def test_a_legacy_pins_file_that_is_not_an_object_is_refused(self):
+        d = write_project(tmpdir(self), "0.8.9", "a" * 64, PINS)
+        self.strip_identity(d)
+        for text in ("[]", "null", '"x"', "\xff"):
+            (d / S.PINS_FILE).write_bytes(text.encode("latin-1"))
+            with self.assertRaises(S.Refused) as cm:
+                S.read_pins(d)
+            self.assertEqual(cm.exception.exit_code, 2)
+
     def test_releases_that_write_into_projects_are_refused(self):
         for v in ("0.15.0", "0.16.0"):
             d = write_project(tmpdir(self), v, "a" * 64, {**PINS, "version": v})

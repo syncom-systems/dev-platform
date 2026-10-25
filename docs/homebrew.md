@@ -48,8 +48,8 @@ brew extract --version=0.9.0 syncom-systems/dev-platform/dev-platform local/dev-
 brew unlink dev-platform && brew install local/dev-platform-versions/dev-platform@0.9.0   # roll back
 brew uninstall dev-platform@0.9.0 && brew link dev-platform                               # forward again
 ```
-Upgrading a *project's* platform release is an edit of its two pin files in a reviewed change, never a Homebrew
-action. Several releases and their toolchains coexist; each project selects its own.
+Upgrading a *project's* platform release is an edit of its one pin file, `dev-platform.toml`, in a reviewed change
+(`dev-platform update` proposes it), never a Homebrew action. Several releases and their toolchains coexist; each project selects its own.
 
 ## Locations
 Precedence for each location: its flag, its variable, then the data root (`--home`, `DEV_PLATFORM_HOME`, in CI a
@@ -89,8 +89,9 @@ everything with `chmod -R u+w ~/.local/share/dev-platform && rm -rf ~/.local/sha
    The CLI is a launcher: it never certifies anything about itself, and a project's results name the pinned
    release, not the CLI.
 2. **`dev-platform setup`**, in order, stopping at the first refusal:
-   1. finds the project; `dev-platform.toml` must parse, must not be self-hosted, and must agree with the pins file
-      on version and tree digest; the pins must be well formed (exit 2 otherwise);
+   1. finds the project; `dev-platform.toml` must parse, must not be self-hosted, and its `[platform]` table must carry the
+      well-formed release identity (a project from before 0.17.0 has it in the pins file, which must agree with the toml
+      on version and tree digest; exit 2 otherwise);
    2. if `<store>/<version>` exists: its tree digest must equal the pin (otherwise exit 3, and the entry is left
       untouched for you to inspect and remove), and the installer's record beside it must name exactly this
       version, tree and archive (otherwise `--reverify`); the recorded state must be admitted (`verified` or `accepted`,

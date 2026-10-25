@@ -156,7 +156,14 @@ def infra_block(pin: dict) -> str:
     )
 
 
-_HEADER = re.compile(r"^\s*\[{1,2}\s*([A-Za-z0-9_.\"'-]+)\s*\]{1,2}\s*(#.*)?$")
+_KEY = r"""(?:[A-Za-z0-9_-]+|"(?:\\.|[^"\\])*"|'[^']*')"""
+_HEADER = re.compile(rf"^\s*\[{{1,2}}\s*({_KEY}(?:\s*\.\s*{_KEY})*)\s*\]{{1,2}}\s*(#.*)?$")
+
+
+def _top(dotted: str) -> str:
+    """The first key of a table header (`platform` of `platform.verifier_pins`), bare or quoted."""
+    m = re.match(r"""\s*(?:"((?:\\.|[^"\\])*)"|'([^']*)'|([A-Za-z0-9_-]+))""", dotted)
+    return m.group(1) or m.group(2) or m.group(3)
 
 
 def _region(lines: list[str], table: str) -> tuple[int, int] | None:
@@ -166,7 +173,7 @@ def _region(lines: list[str], table: str) -> tuple[int, int] | None:
     for i, line in enumerate(lines):
         m = _HEADER.match(line)
         if m:
-            inside = m.group(1) == table or m.group(1).startswith(table + ".")
+            inside = _top(m.group(1)) == table
             if not inside and start is not None:
                 break
             if inside and start is None:

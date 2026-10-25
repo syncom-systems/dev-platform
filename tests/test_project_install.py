@@ -110,7 +110,7 @@ class Edit(unittest.TestCase):
             for ln in pinning.diff(self.ORIGINAL, new).splitlines()
             if ln.startswith("-") and not ln.startswith("---")
         ]
-        self.assertTrue(all("version" in ln or "sha256" in ln for ln in gone) or gone, gone)
+        self.assertEqual(gone, ['-version = "0.17.0"'])
         self.assertEqual(new.split("# the project\n")[1], self.ORIGINAL.split("# the project\n")[1])
         self.assertTrue(new.startswith("# project policy\nschema_version = 1\n"))
 
@@ -130,6 +130,14 @@ class Edit(unittest.TestCase):
         self.assertEqual(
             pinning.apply(twice, infra=pinning.infra_block({**pin, "config_release": "2026.10.3"})), twice
         )
+
+    def test_owner_tables_with_quoted_names_survive_a_platform_replacement(self):
+        text = self.ORIGINAL + '\n[runner."owner table"]\nos = "linux"\n'
+        new = pinning.apply(text, platform=self.block())
+        self.assertIn('[runner."owner table"]\nos = "linux"', new)
+        self.assertIn('[runner."owner table"]', pinning.apply(new, infra=pinning.infra_block(
+            {"provider": "p", "config_release": "2026.10.2", "config_digest": "sha256:" + "e" * 64,
+             "config_digest_kind": "release-tree"})))  # fmt: skip
 
     def test_an_invalid_result_is_refused(self):
         with self.assertRaises(ConfigError):
