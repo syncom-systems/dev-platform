@@ -217,17 +217,36 @@ class Project(unittest.TestCase):
                 S.read_pins(d)
             self.assertIn(name, str(cm.exception))
 
-    def test_a_project_without_the_identity_is_pointed_at_update(self):
-        d = write_project(tmpdir(self), "0.8.9", "a" * 64, PINS)
+    def strip_identity(self, d):
         text = (d / "dev-platform.toml").read_text()
         (d / "dev-platform.toml").write_text(
             text[: text.index("source_revision")] + text[text.index("[project]") :]
         )
-        (d / S.PINS_FILE).write_text("{}")
+
+    def test_a_project_without_the_identity_is_pointed_at_update(self):
+        d = write_project(tmpdir(self), "0.8.9", "a" * 64, PINS)
+        self.strip_identity(d)
         with self.assertRaises(S.Refused) as cm:
             S.read_pins(d)
-        self.assertIn("dev-platform update --to 0.17.0 --write", str(cm.exception))
+        self.assertIn("dev-platform update --to", str(cm.exception))
         self.assertEqual(cm.exception.exit_code, 2)
+
+    def test_a_project_from_before_0_17_keeps_its_pins_file_which_must_agree(self):
+        d = write_project(tmpdir(self), "0.8.9", "a" * 64, PINS)
+        self.strip_identity(d)
+        (d / S.PINS_FILE).write_text(json.dumps(PINS))
+        self.assertEqual(S.read_pins(d)[1]["version"], "0.8.9")
+        for name, over in {
+            "version": {"version": "0.8.8"},
+            "tree_digest_pin": {"tree_digest_pin": "d" * 64},
+            "source_revision": {"source_revision": "main"},
+            "verifier_pins": {"verifier_pins": {}},
+        }.items():
+            (d / S.PINS_FILE).write_text(json.dumps({**PINS, **over}))
+            with self.assertRaises(S.Refused, msg=name) as cm:
+                S.read_pins(d)
+            self.assertIn(name, str(cm.exception))
+            self.assertEqual(cm.exception.exit_code, 2)
 
     def test_releases_that_write_into_projects_are_refused(self):
         for v in ("0.15.0", "0.16.0"):

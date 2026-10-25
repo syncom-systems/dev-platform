@@ -100,35 +100,60 @@ def find_project(start: Path, explicit: bool) -> Path:
     raise Refused(f"no {CONFIG_FILENAME} in {where}", EXIT_USAGE)
 
 
+def legacy_pins(root: Path, cfg) -> dict:
+    """The release identity of a project from before 0.17.0: `dev-platform.release-pins.json`, which must
+    agree with dev-platform.toml. Only read; `read_pins` still refuses releases that write into projects."""
+    try:
+        pins = json.loads((root / PINS_FILE).read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        raise Refused(f"{PINS_FILE}: {e}", EXIT_USAGE) from None
+    vp = pins.get("verifier_pins") if isinstance(pins.get("verifier_pins"), dict) else {}
+    need = {
+        "version": isinstance(pins.get("version"), str) and bool(_VER.match(pins["version"])),
+        "source_revision": bool(_REV.match(str(pins.get("source_revision")))),
+        "archive_sha256": bool(_SHA.match(str(pins.get("archive_sha256")))),
+        "tree_digest_pin": bool(_SHA.match(str(pins.get("tree_digest_pin")))),
+        **{f"verifier_pins.{name}": bool(_SHA.match(str(vp.get(name)))) for _, _, name in PINNED_TOOLS},
+    }
+    problems = [f"{PINS_FILE}: {k} missing or malformed" for k, ok in need.items() if not ok]
+    if pins.get("version") != cfg.platform.version:
+        problems.append(
+            f"{PINS_FILE} version {pins.get('version')} != {CONFIG_FILENAME} {cfg.platform.version}"
+        )
+    if pins.get("tree_digest_pin") != cfg.platform.sha256:
+        problems.append(f"{PINS_FILE} tree_digest_pin != {CONFIG_FILENAME} platform.sha256")
+    if problems:
+        raise Refused("; ".join(problems), EXIT_USAGE)
+    return pins
+
+
 def read_pins(root: Path):
-    """(Config, release pins) from dev-platform.toml alone: the project holds no other platform file."""
+    """(Config, release pins) from dev-platform.toml; a project from before 0.17.0 still has its pins file."""
     cfg = load(root)
     plat = cfg.platform
     if plat.self_hosted:
         raise Refused(
             f"{root / CONFIG_FILENAME} is self-hosted (the platform repository): not a consumer", EXIT_USAGE
         )
-    if plat.source_revision is None:
-        legacy = (
-            f"; {PINS_FILE} is no longer read: `dev-platform update --to 0.17.0 --write` moves the "
-            "identity into dev-platform.toml"
-            if (root / PINS_FILE).exists()
-            else "; `dev-platform update --to <version>` proposes them (docs/installation.md)"
-        )
+    if plat.source_revision is not None:
+        pins = {
+            "version": plat.version,
+            "source_revision": plat.source_revision,
+            "archive_sha256": plat.archive_sha256,
+            "tree_digest_pin": plat.sha256,
+            "verifier_pins": {
+                f"{name}_sha256" if name == "trust_policy" else f"{name}.py_sha256": plat.verifier_pins[name]
+                for name in VERIFIER_PINS
+            },
+        }
+    elif (root / PINS_FILE).is_file():
+        pins = legacy_pins(root, cfg)  # releases before 0.17.0: read, never written
+    else:
         raise Refused(
-            f"{CONFIG_FILENAME} [platform] lacks source_revision, archive_sha256 and verifier_pins" + legacy,
+            f"{CONFIG_FILENAME} [platform] lacks source_revision, archive_sha256 and verifier_pins; "
+            "`dev-platform update --to <version>` proposes them (docs/installation.md)",
             EXIT_USAGE,
         )
-    pins = {
-        "version": plat.version,
-        "source_revision": plat.source_revision,
-        "archive_sha256": plat.archive_sha256,
-        "tree_digest_pin": plat.sha256,
-        "verifier_pins": {
-            f"{name}_sha256" if name == "trust_policy" else f"{name}.py_sha256": plat.verifier_pins[name]
-            for name in VERIFIER_PINS
-        },
-    }
     m = _VER.match(pins["version"])
     version = tuple(int(x) for x in m.groups()[:3])
     if version < MIN_VERSION:
@@ -405,7 +430,10 @@ def setup(
         root = find_project(project or Path.cwd(), explicit=project is not None)
         cfg, pins = read_pins(root)
         profile = cfg.platform.profile
-        rec["project"] = {"path": str(root), "files": [CONFIG_FILENAME]}
+        rec["project"] = {
+            "path": str(root),
+            "files": [CONFIG_FILENAME, *([PINS_FILE] if cfg.platform.source_revision is None else [])],
+        }
         rec["pinned"] = {
             "version": pins["version"],
             "tree_digest": pins["tree_digest_pin"],

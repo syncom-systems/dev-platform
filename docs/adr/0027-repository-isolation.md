@@ -15,7 +15,8 @@ reading several platform-generated files.
    `profile`, `source_revision`, `archive_sha256` and `[platform.verifier_pins]` (`verify_release`, `trust_policy`,
    `install_release`: sha256 of the three tools the installer trusts); the optional `[infra]` carries the exact
    configuration release and its release-tree digest (unchanged from ADR 0021/0023). The three identity keys
-   are all or none; `release-pins.json` is no longer read.
+   are all or none. `dev-platform.release-pins.json` is read only for a project whose toml lacks them (a pin before
+   0.17.0), never written.
 2. **Everything else is external.** Releases, toolchains, caches and the infrastructure store live under the user's
    data directory (`~/.local/share/dev-platform`, `~/.cache/dev-platform`; ADR 0022). `setup`, `doctor`, `check`
    and `explain` write nothing into the project tree.
@@ -37,6 +38,9 @@ reading several platform-generated files.
 
 ## Consequences
 - A reviewer sees the complete pin in one file; an update is a diff of that file.
+- The `bootstrap` job of `pre-merge.yml` (older published releases with Bazel profiles installed by the current
+  launcher) is retired: it required `setup` to write Bazel files into the project. The bootstrap-compatibility gate of
+  `tools/release.py ready` still installs and runs the candidate through the launcher.
 - The CI path (`consumer-pilot.yml`, `tools/consumer_run.py`) still reads `dev-platform.release-pins.json` and
   needs a workflow in the repository, so it is outside the isolation contract until it is reworked.
 - Bazel-profile projects lose platform-managed Bazel integration until it is delivered externally.
