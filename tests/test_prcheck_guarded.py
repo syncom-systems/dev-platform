@@ -26,11 +26,11 @@ PROFILE = {
     "admission": {"forbidden_triggers": [], "protected_environments": ["org-protected"]},
 }  # fmt: skip
 GUARD = "github.event.pull_request.head.repo.full_name == github.repository"
-TRUSTED = 'fromJSON(\'["self-hosted", "org-trusted"]\')'
+SELF_LABELS = 'fromJSON(\'["self-hosted", "org-trusted"]\')'
 SENTINEL = "'dp-no-runner'"
 
 
-def expr(guard=GUARD, a=TRUSTED, b=SENTINEL):
+def expr(guard=GUARD, a=SELF_LABELS, b=SENTINEL):
     return f"${{{{ {guard} && {a} || {b} }}}}"
 
 
@@ -110,7 +110,7 @@ class Refused(unittest.TestCase):
         out = check(wf(expr()), facts=True)
         self.assertEqual(out["facts"][0]["jobs"][0]["guard"]["on_false"], ["dp-no-runner"])
         # a fallback that would run a fork's code on a privileged runner is refused
-        self.failed(wf(expr(b=TRUSTED)))
+        self.failed(wf(expr(b=SELF_LABELS)))
         self.failed(wf(expr(b="'org-trusted'")))
 
     def test_the_fallback_must_select_no_runner_or_an_admitted_one(self):
@@ -159,14 +159,14 @@ class Refused(unittest.TestCase):
             f"{GUARD} && github.actor == 'someone'",
         ):
             self.unavailable(wf(expr(guard=guard)))
-        self.unavailable(wf(f"${{{{ {GUARD} && {TRUSTED} || {SENTINEL} || {TRUSTED} }}}}"))
+        self.unavailable(wf(f"${{{{ {GUARD} && {SELF_LABELS} || {SENTINEL} || {SELF_LABELS} }}}}"))
 
     def test_nested_computed_and_user_controlled_expressions_are_not_interpreted(self):
-        inner = f"{GUARD} && {TRUSTED} || {SENTINEL}"
+        inner = f"{GUARD} && {SELF_LABELS} || {SENTINEL}"
         for e in (
-            f"${{{{ {GUARD} && ({GUARD} && {TRUSTED} || {SENTINEL}) || {SENTINEL} }}}}",
-            f"${{{{ {GUARD} && {GUARD} && {TRUSTED} || {SENTINEL} || {SENTINEL} }}}}",
-            f"${{{{ {GUARD} && {TRUSTED} || ({inner}) }}}}",
+            f"${{{{ {GUARD} && ({GUARD} && {SELF_LABELS} || {SENTINEL}) || {SENTINEL} }}}}",
+            f"${{{{ {GUARD} && {GUARD} && {SELF_LABELS} || {SENTINEL} || {SENTINEL} }}}}",
+            f"${{{{ {GUARD} && {SELF_LABELS} || ({inner}) }}}}",
             expr(a='fromJSON(format(\'["self-hosted", "{0}"]\', github.head_ref))'),
             expr(a="fromJSON(github.event.pull_request.title)"),
             expr(a="fromJSON(vars.RUNNERS)"),
@@ -183,10 +183,10 @@ class Refused(unittest.TestCase):
             expr(a='fromJSON(\'{"labels": ["x"]}\')'),
             expr(a="toJSON(github)"),
             expr(a="format('{0}', github.actor)"),
-            "${{ " + GUARD + " && " + TRUSTED + " }}",
+            "${{ " + GUARD + " && " + SELF_LABELS + " }}",
             "${{ " + GUARD + " ? 'a' : 'b' }}",
-            "${{ " + GUARD + " && " + TRUSTED + " || " + SENTINEL + " }} extra",
-            "extra ${{ " + GUARD + " && " + TRUSTED + " || " + SENTINEL + " }}",
+            "${{ " + GUARD + " && " + SELF_LABELS + " || " + SENTINEL + " }} extra",
+            "extra ${{ " + GUARD + " && " + SELF_LABELS + " || " + SENTINEL + " }}",
         ):
             self.unavailable(wf(e))
 
