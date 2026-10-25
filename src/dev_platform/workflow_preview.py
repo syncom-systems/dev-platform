@@ -12,7 +12,7 @@ import json
 import re
 from pathlib import Path
 
-from dev_platform.config import CONFIG_FILENAME
+from dev_platform.config import CONFIG_FILENAME, load
 from dev_platform.errors import ConfigError
 from dev_platform.infra_config import GITHUB_HOSTED, looks_hosted
 
@@ -26,8 +26,14 @@ PROVISIONABLE = {("linux", "x86_64"), ("macos", "arm64")}  # platforms toolchain
 
 def _pins(project: Path) -> dict:
     p = project / PINS_FILENAME
+    pin = load(project).platform
     try:
-        pins = json.loads(p.read_text())
+        # the identity lives in dev-platform.toml from 0.17.0; the pins file is the older place
+        pins = (
+            {"version": pin.version, "source_revision": pin.source_revision}
+            if pin.source_revision
+            else json.loads(p.read_text())
+        )
     except OSError:
         raise ConfigError([f"no {p}: pin a platform release first (docs/consumer-integration.md)"]) from None
     except ValueError as e:

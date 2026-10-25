@@ -494,6 +494,46 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help='print only shell exports, for eval "$(dev-platform setup --print-env)"; report on stderr',
     )
+    ins = sub.add_parser(
+        "install",
+        help="first installation: write the project's pin file (dev-platform.toml) and install what it pins",
+    )
+    ins.add_argument(
+        "--project",
+        type=Path,
+        help="project root (default: nearest directory upwards with dev-platform.toml, else here)",
+    )
+    ins.add_argument(
+        "--version", help="platform release to pin on first installation (default: this CLI's version)"
+    )
+    ins.add_argument("--profile", help="toolchain profile to pin on first installation")
+    ins.add_argument("--infra-source", metavar="OWNER/NAME", help="configuration repository (no default)")
+    ins.add_argument("--infra-release", help="configuration release to pin on first installation (YYYY.MM.N)")
+    ins.add_argument("--infra-provider", help="provider name written to the [infra] pin")
+    ins.add_argument("--home", type=Path, help="data root (env DEV_PLATFORM_HOME)")
+    ins.add_argument("--store", type=Path)
+    ins.add_argument("--toolchains", type=Path)
+    ins.add_argument("--cache", type=Path)
+    ins.add_argument("--allow-prerelease", action="store_true", help="use a pinned pre-release")
+    ins.add_argument("--reverify", action="store_true", help="verify an installed release again")
+    ins.add_argument("--platform-repo", default="https://github.com/syncom-systems/dev-platform")
+    ins.add_argument("--dry-run", action="store_true", help="report what would be done; writes nothing")
+    ins.add_argument("--json", action="store_true", help="machine-readable record")
+    upd = sub.add_parser(
+        "update",
+        help="propose a change to the pins in dev-platform.toml (a diff; nothing is written without --write)",
+    )
+    upd.add_argument("--project", type=Path)
+    upd.add_argument(
+        "--to", metavar="VERSION", help="the platform release to pin (exact; there is no 'latest')"
+    )
+    upd.add_argument("--profile", help="change the toolchain profile")
+    upd.add_argument("--infra-source", metavar="OWNER/NAME")
+    upd.add_argument("--infra-release", help="the configuration release to pin (exact)")
+    upd.add_argument("--infra-provider")
+    upd.add_argument("--platform-repo", default="https://github.com/syncom-systems/dev-platform")
+    upd.add_argument("--write", action="store_true", help="apply the proposal to dev-platform.toml")
+    upd.add_argument("--json", action="store_true")
     dg = sub.add_parser("digest", help="print the release tree digest of a directory")
     dg.add_argument("path", type=Path)
     wf = sub.add_parser(
@@ -600,6 +640,21 @@ def cmd_init(args) -> int:
                 [f"no installed release {args.platform_version} in {vdir.parent}; pass --sha256 explicitly"]
             )
         sha = tree_digest(vdir)
+    platform_lines = [
+        "[platform]",
+        f'version = "{args.platform_version}"',
+        f'sha256 = "{sha}"',
+        f'profile = "{args.profile}"',
+    ]
+    text, bazel = starter_config(root, platform_lines)
+    target.write_text(text)
+    _emit(args, {"written": str(target), "bazel_only": bazel}, f"wrote {target}")
+    return EXIT_OK
+
+
+def starter_config(root: Path, platform_lines: list[str]) -> tuple[str, bool]:
+    """(dev-platform.toml text, bazel_only) for `root`: checks come from its build-system markers and real
+    test layout. `platform_lines` is the [platform] table."""
     facts = detect(root)
     bazel = is_bazel_workspace(facts)
     # Checks come from build-system markers and real test layout, never from stray files with a language
@@ -614,10 +669,7 @@ def cmd_init(args) -> int:
     lines = [
         f"schema_version = {SCHEMA_VERSION}",
         "",
-        "[platform]",
-        f'version = "{args.platform_version}"',
-        f'sha256 = "{sha}"',
-        f'profile = "{args.profile}"',
+        *platform_lines,
         "",
         "[project]",
         f'name = "{root.resolve().name}"',
@@ -701,9 +753,7 @@ def cmd_init(args) -> int:
         raise ConfigError(
             ["no supported build system or test layout detected; write dev-platform.toml by hand"]
         )
-    target.write_text("\n".join(lines))
-    _emit(args, {"written": str(target), "bazel_only": bazel}, f"wrote {target}")
-    return EXIT_OK
+    return "\n".join(lines), bazel
 
 
 def cmd_doctor(args) -> int:
@@ -1491,6 +1541,75 @@ def cmd_setup(args) -> int:
     return code
 
 
+def cmd_install(args) -> int:
+    from dev_platform import locations, project_install, projectsetup
+
+    loc = locations.locate(
+        os.environ, home=args.home, store=args.store, toolchains=args.toolchains, cache=args.cache
+    )
+    rec, code = project_install.install(
+        args.project,
+        loc,
+        version=args.version,
+        profile=args.profile,
+        infra_source=args.infra_source,
+        infra_release=args.infra_release,
+        infra_provider=args.infra_provider,
+        repo=_repo_slug(args.platform_repo),
+        dry_run=args.dry_run,
+        infra_store_dir=args.home / "infra" if args.home else None,
+        allow_prerelease=args.allow_prerelease,
+        reverify=args.reverify,
+        repo_url=args.platform_repo,
+    )
+    if args.json:
+        print(json.dumps(rec, indent=2, sort_keys=True))
+    elif "would_create" in rec:
+        print(f"would create {rec['would_create']}:\n{rec['text']}")
+    else:
+        if rec.get("created"):
+            print(
+                f"created   {rec['project']['path']}/{CONFIG_FILENAME} (the only file written in the project)"
+            )
+        print(projectsetup.render(rec))
+        if "infra" in rec:
+            i = rec["infra"]
+            print(f"infra      {i['action']}: {i['release']} {i['digest']} in {i['store']}")
+    return code
+
+
+def cmd_update(args) -> int:
+    from dev_platform import project_install
+
+    rec = project_install.propose(
+        args.project,
+        to=args.to,
+        profile=args.profile,
+        infra_source=args.infra_source,
+        infra_release=args.infra_release,
+        infra_provider=args.infra_provider,
+        repo=_repo_slug(args.platform_repo),
+        write=args.write,
+    )
+    if args.json:
+        print(json.dumps(rec, indent=2, sort_keys=True))
+    elif not rec["changed"]:
+        print(f"{rec['file']}: already pins this; nothing to change")
+    else:
+        print(rec["diff"], end="")
+        note = (
+            "written"
+            if rec["written"]
+            else "proposal only: apply with --write, then run `dev-platform install`"
+        )
+        print(f"{note}: {rec['file']}")
+    return EXIT_OK
+
+
+def _repo_slug(url: str) -> str:
+    return url.removeprefix("https://github.com/").removesuffix("/")
+
+
 def cmd_digest(args) -> int:
     print(tree_digest(args.path))
     return EXIT_OK
@@ -1508,6 +1627,8 @@ _COMMANDS = {
     "provenance": cmd_provenance,
     "rollback": cmd_rollback,
     "evidence": cmd_evidence,
+    "install": cmd_install,
+    "update": cmd_update,
     "dependency-snapshot": cmd_dependency_snapshot,
     "release": cmd_release,
     "plan": cmd_plan,

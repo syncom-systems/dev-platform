@@ -1,8 +1,8 @@
 """`dev-platform setup`: make a consumer project ready on this machine from the project's own committed pins.
 
 It composes the existing mechanisms; it is not a second release-management system (ADR 0022):
-  1. find the project (`dev-platform.toml` and `dev-platform.release-pins.json`, from the working directory
-     upwards) and require the two files to agree;
+  1. find the project (`dev-platform.toml`, from the working directory upwards); its `[platform]` table
+     holds the whole release identity (version, tree digest, source revision, archive digest, verifier pins);
   2. the pinned platform release. If the store holds that version, its tree digest must equal the pin (any
      other tree is refused and left untouched) and the trusted installer's verification record must be beside
      it. Otherwise the trusted installer, verifier and policy are taken from the public platform repository at
@@ -13,8 +13,10 @@ It composes the existing mechanisms; it is not a second release-management syste
   3. the pinned release itself, run from a verified private snapshot exactly as the launcher runs it,
      verifies the provisioned toolchain profile, or provisions it (`toolchain provision --pinned --verify`);
   4. the pinned release's `doctor` checks the environment.
-The project's files are only read. Setup never writes or changes a pin, so it cannot upgrade a project, and
-the CLI that runs it is only the launcher: its own version never selects the project's release.
+The project's files are only read (repository isolation, ADR 0027): the only platform-managed file in a
+project is dev-platform.toml, and setup writes nothing into the project tree. Setup never writes or changes
+a pin, so it cannot upgrade a project, and the CLI that runs it is only the launcher: its own version
+never selects the project's release.
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from dev_platform import __version__, bootstrap, prepare
-from dev_platform.config import CONFIG_FILENAME, load
+from dev_platform.config import CONFIG_FILENAME, VERIFIER_PINS, load
 from dev_platform.digest import tree_digest
 from dev_platform.errors import (
     EXIT_OK,
@@ -58,6 +60,7 @@ from dev_platform.resolve import OVERRIDE_ENV, PACKAGE_ROOT, PYTHON_ENV, REEXEC_
 
 PINS_FILE = "dev-platform.release-pins.json"
 DEFAULT_REPO = "https://github.com/syncom-systems/dev-platform"
+ISOLATION_GAP = ((0, 15, 0), (0, 17, 0))  # releases whose own toolchain preparation writes into the project
 MIN_VERSION = (0, 8, 0)  # the first release with `toolchain provision --pinned --verify`
 TOKEN_VARS = ("GH_TOKEN", "GITHUB_TOKEN")  # for the installer's `gh attestation verify` only
 PINNED_TOOLS = (
@@ -98,46 +101,48 @@ def find_project(start: Path, explicit: bool) -> Path:
 
 
 def read_pins(root: Path):
-    """(Config, release pins). The two files must agree on the version and the tree digest."""
+    """(Config, release pins) from dev-platform.toml alone: the project holds no other platform file."""
     cfg = load(root)
-    if cfg.platform.self_hosted:
+    plat = cfg.platform
+    if plat.self_hosted:
         raise Refused(
             f"{root / CONFIG_FILENAME} is self-hosted (the platform repository): not a consumer", EXIT_USAGE
         )
-    try:
-        pins = json.loads((root / PINS_FILE).read_text())
-    except FileNotFoundError:
-        raise Refused(
-            f"no {PINS_FILE} beside {CONFIG_FILENAME}: copy the release identity from the platform's "
-            "releases/<version>/identity.json (version, source_revision, archive_sha256, tree_digest_pin, "
-            "verifier_pins) and commit it",
-            EXIT_USAGE,
-        ) from None
-    except (OSError, json.JSONDecodeError) as e:
-        raise Refused(f"{PINS_FILE}: {e}", EXIT_USAGE) from None
-    vp = pins.get("verifier_pins") if isinstance(pins.get("verifier_pins"), dict) else {}
-    need = {
-        "version": isinstance(pins.get("version"), str) and bool(_VER.match(pins["version"])),
-        "source_revision": bool(_REV.match(str(pins.get("source_revision")))),
-        "archive_sha256": bool(_SHA.match(str(pins.get("archive_sha256")))),
-        "tree_digest_pin": bool(_SHA.match(str(pins.get("tree_digest_pin")))),
-        **{f"verifier_pins.{name}": bool(_SHA.match(str(vp.get(name)))) for _, _, name in PINNED_TOOLS},
-    }
-    problems = [f"{PINS_FILE}: {k} missing or malformed" for k, ok in need.items() if not ok]
-    if pins.get("version") != cfg.platform.version:
-        problems.append(
-            f"{PINS_FILE} version {pins.get('version')} != {CONFIG_FILENAME} {cfg.platform.version}"
+    if plat.source_revision is None:
+        legacy = (
+            f"; {PINS_FILE} is no longer read: `dev-platform update --to 0.17.0 --write` moves the "
+            "identity into dev-platform.toml"
+            if (root / PINS_FILE).exists()
+            else "; `dev-platform update --to <version>` proposes them (docs/installation.md)"
         )
-    if pins.get("tree_digest_pin") != cfg.platform.sha256:
-        problems.append(f"{PINS_FILE} tree_digest_pin != {CONFIG_FILENAME} platform.sha256")
-    if problems:
-        raise Refused("; ".join(problems), EXIT_USAGE)
+        raise Refused(
+            f"{CONFIG_FILENAME} [platform] lacks source_revision, archive_sha256 and verifier_pins" + legacy,
+            EXIT_USAGE,
+        )
+    pins = {
+        "version": plat.version,
+        "source_revision": plat.source_revision,
+        "archive_sha256": plat.archive_sha256,
+        "tree_digest_pin": plat.sha256,
+        "verifier_pins": {
+            f"{name}_sha256" if name == "trust_policy" else f"{name}.py_sha256": plat.verifier_pins[name]
+            for name in VERIFIER_PINS
+        },
+    }
     m = _VER.match(pins["version"])
-    if tuple(int(x) for x in m.groups()[:3]) < MIN_VERSION:
+    version = tuple(int(x) for x in m.groups()[:3])
+    if version < MIN_VERSION:
         raise Refused(
             f"the pinned release {pins['version']} predates `toolchain provision --pinned --verify` "
             f"({'.'.join(map(str, MIN_VERSION))}); install it with tools/install_release.py "
             "(docs/consumer-quickstart.md)",
+            EXIT_USAGE,
+        )
+    if ISOLATION_GAP[0] <= version < ISOLATION_GAP[1]:
+        first = ".".join(map(str, ISOLATION_GAP[1]))
+        raise Refused(
+            f"the pinned release {pins['version']} predates repository isolation ({first}): its toolchain "
+            f"preparation writes Bazel files into the project. Run `dev-platform update --to {first}`",
             EXIT_USAGE,
         )
     return cfg, pins
@@ -194,7 +199,7 @@ def pinned_tools(pins: dict, cache: Path, out: Path, repo_url: str, run: Run, en
             raise Refused(f"cannot read {rel} at the pinned revision {rev}")
         if sha256(r.stdout) != pins["verifier_pins"][pin_name]:
             raise Refused(
-                f"{rel} at the pinned revision {rev} does not equal {PINS_FILE} verifier_pins.{pin_name}: "
+                f"{rel} at the pinned revision {rev} does not equal [platform] verifier_pins.{pin_name}: "
                 "the release pins and the platform repository disagree; nothing was installed",
                 EXIT_PLATFORM,
             )
@@ -400,7 +405,7 @@ def setup(
         root = find_project(project or Path.cwd(), explicit=project is not None)
         cfg, pins = read_pins(root)
         profile = cfg.platform.profile
-        rec["project"] = {"path": str(root), "files": [CONFIG_FILENAME, PINS_FILE]}
+        rec["project"] = {"path": str(root), "files": [CONFIG_FILENAME]}
         rec["pinned"] = {
             "version": pins["version"],
             "tree_digest": pins["tree_digest_pin"],

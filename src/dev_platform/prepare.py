@@ -9,7 +9,8 @@ validated by the launcher; that adapter is frozen and applies to those releases 
 
 `prepare` verifies the profile's directory with the release (`toolchain verify --require-certifiable`: closure
 identity against the release's manifest); provisions it (bytes only) and verifies again if that fails.
-Verification is the authority: a directory is reused only when it passes.
+Verification is the authority: a directory is reused only when it passes. Nothing here writes into the
+project (ADR 0027).
 """
 
 from __future__ import annotations
@@ -131,28 +132,17 @@ def _prepare(manifest, version, profile, project, dest, cenv, run, mf) -> dict:
     def facts(rec: dict) -> dict:
         return {k: rec.get(k) for k in ("conformant", "assurance", "identity_digest")}
 
-    if "bazel" in manifest["profiles"][profile]:
-        # The release generates the project's Bazel configuration. Generated files are written or updated;
-        # a foreign file is refused, and an existing MODULE.bazel/.bazelrc is never edited (verification
-        # reports its missing entry line with the correction).
-        argv = ["toolchain", "materialize", "--manifest", str(mf), "--profile", profile, "--project",
-                str(project), "--create-hooks", "--json"]  # fmt: skip
-        r = run(child(*argv), env=cenv, cwd=str(project))  # rendering needs no provisioned tool
-        mrec = first_json(r.stdout or "")
-        refused = "; ".join(f"{c['path']}: {c['detail']} -> {c['action']}" for c in mrec.get("refused", []))
-        conflicts = "; ".join(
-            f"{c['path']}: {c['detail']} -> {c['action']}" for c in mrec.get("conflicts", [])
+    if (
+        "bazel" in manifest["profiles"][profile]
+        and not (project / "dev-platform" / "generated.json").is_file()
+    ):
+        # Repository isolation (ADR 0027): preparing a profile never writes into the project. A Bazel profile
+        # is verified against the platform's generated Bazel files in the project, which nothing may install,
+        # so it is unsupported until the project already holds them (placed there by its owner, never here).
+        raise PrepareError(
+            f"profile {profile!r} needs the platform's Bazel configuration (dev-platform/) inside the "
+            "repository; repository isolation forbids installing it, so this profile cannot be prepared"
         )
-        if conflicts and not refused:
-            raise PrepareError(
-                f"the project's Bazel configuration conflicts with release {version}: {conflicts}"
-            )
-        if r.returncode:
-            raise PrepareError(
-                f"release {version} could not write the Bazel configuration of {profile}: "
-                f"{refused or tail(r, 300)}"
-            )
-        out["bazel_config"] = {k: mrec.get(k, []) for k in ("written", "unchanged", "added_hooks")}
 
     if dest.is_dir():
         r, rec = verify()
