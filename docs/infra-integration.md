@@ -77,6 +77,40 @@ Two further per-job fields (issue #128; first released in 0.9.0):
   `null`) and `incomplete`, because the profile has no runner-group concept to judge it by. A provider that can resolve the group
   against its own authorization evidence decides pass/fail itself; an unresolved group must not be treated as admitted.
 
+## Guarded `runs-on` expressions
+The checker reads exactly one guarded `runs-on` shape and never evaluates an expression:
+
+```yaml
+runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && fromJSON('["self-hosted", "org-trusted"]') || 'dp-no-runner' }}
+```
+
+The guard is that exact comparison (that operand order, `==`, `github.repository`); each branch is `'label'` or
+`fromJSON('["label", ...]')` of plain labels (`A-Za-z0-9._-`, no `${{`). The checker proves, from the workflow's
+triggers, which events can reach each branch:
+
+| Branch | Reached by | Admitted when |
+|---|---|---|
+| after `&&` (guard true) | `pull_request` and `pull_request_target` with head repository equal to the base repository; no other trigger of this workflow can make the guard true (their payloads carry no `pull_request.head.repo`), and a workflow without those triggers never reaches it | the labels are admitted for every event that reaches it: hosted, or a subset of a `trust: public` runner, or the protected-environment exemption; or, for a trusted event, a subset of a runner the supplied profile declares |
+| after `\|\|` (guard false) | every event, fork pull requests included | admitted for untrusted events as above, or a **sentinel**: one plain label that no runner of the profile carries and that no runner has by default (not `self-hosted`, `linux`, `windows`, `macos`, `x64`, `x86`, `arm`, `arm64`, not a hosted label) |
+
+The true branch is trusted by the platform's event-trust derivation (`runners.event_trust`), not by the expression:
+`pull_request_target` is never trusted, and a same-repository `pull_request` is trusted only on the operator's explicit
+statement, `--same-repo-pr-opt-in` (`pr-check`, `infra check`, `infra validate --workflows`), the same input as `infra
+event-trust`. It is never read from a workflow, profile or configuration; without it the true branch is judged as for
+an untrusted event, so a privileged label set there is a policy violation. A sentinel is a claim about the profile: the
+profile must list every runner the organization operates; a runner registered with the sentinel label and not declared
+defeats it.
+
+Facts for such a job list both branches in `runs_on`, `guard` (`on_true`, `on_false`, `true_reachable_by`,
+`true_event_trust`, `not_admitted`) and the branches that are not admitted in `non_public_label_sets`.
+
+Everything else stays `unresolved`/`incomplete` (admission `unavailable`): `!=`, `fork == false` (a missing head
+repository coerces to equal `false`), swapped operands, a literal repository name, `||` or `&&` widening, parentheses,
+nesting, a ternary, `format`, `contains`, `vars`, `inputs`, `matrix`, `github.head_ref` or any other context, labels
+that are not plain strings, a `runs-on` group mapping, and a workflow with a trigger that may carry a `pull_request`
+payload (`issue_comment`, `pull_request_review`, `repository_dispatch`, ...). Static `runs-on` lists and
+`matrix.<key>` are read as before.
+
 ## Consumer-owned pin of the configuration release (ADR 0021)
 The consumer declares which configuration release it expects; the platform never takes a path on faith.
 ```toml
@@ -149,3 +183,12 @@ silent downgrade. The platform never accepts trust from project configuration.
 - Credentials appear as class names only, never values; inventory, hostnames and secrets stay private.
 - Enforcement is GitHub settings (runner groups, environments, fork approval); the platform informs (ADR 0005).
 - Anything the checker cannot resolve is `incomplete` (blocks admission), never silently passed.
+
+## Remaining gaps in the `dev-platform infra` experience (proposal, not implemented)
+- `--same-repo-pr-opt-in` must be repeated on every command; a consumer-visible place for the operator's statement
+  (outside project configuration, which may never confer trust) would avoid drift between CI and local checks.
+- `infra check`, `infra validate --workflows` and `pr-check` are three entry points to one checker with different output
+  shapes; one `infra check --workflows` shape would be simpler to document and to consume.
+- There is no `infra explain <workflow>` that prints, per job, which events reach which branch and why a set was or was
+  not admitted; the facts hold the data but not the rendering.
+- Setup of the optional capability (profile, configuration repository, pin, resolver) is spread over several documents.
