@@ -9,7 +9,7 @@ push, enable a workflow, register a runner, bind a credential or change a GitHub
 separate change you make through your own review (committing a workflow, registering a runner, changing a setting).
 
 ## GitHub-hosted CI only (no infrastructure repository)
-A project that has pinned a platform release (`dev-platform.toml` and `dev-platform.release-pins.json`,
+A project that has pinned a platform release (`dev-platform.toml`,
 [consumer integration](consumer-integration.md)) needs nothing else for GitHub-hosted CI:
 ```sh
 dev-platform workflow                         # print the proposed workflow (stdout only)

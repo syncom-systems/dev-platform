@@ -25,8 +25,9 @@ trusted implicitly. No sudo, nothing global: the CLI lives in the Homebrew prefi
 Toolchain profiles have sources for macOS on Apple silicon and Linux x86_64; on an Intel Mac the CLI works but
 `setup` cannot provision a profile.
 
-In a project that commits `dev-platform.toml` and `dev-platform.release-pins.json` (the pins file is the release
-identity from `releases/<version>/identity.json`; see [consumer integration](consumer-integration.md)):
+In a project that commits `dev-platform.toml` (its `[platform]` table holds the release identity; the only platform file in
+a project, [ADR 0027](adr/0027-repository-isolation.md); `dev-platform install` writes it on first installation,
+[installation](installation.md#2-a-projects-pinned-release)):
 ```sh
 cd my-project                      # or any subdirectory: setup looks upwards for dev-platform.toml
 dev-platform setup                 # releases up to 0.11.0 are verified-unaccepted: add --allow-unaccepted (your decision)

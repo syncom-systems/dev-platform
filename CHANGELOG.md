@@ -1,6 +1,17 @@
 # Changelog
 
 ## Unreleased
+Changed (repository isolation; [ADR 0027](docs/adr/0027-repository-isolation.md)):
+- A project holds one platform file, `dev-platform.toml`. `[platform]` now carries the release identity (`source_revision`,
+  `archive_sha256`, `[platform.verifier_pins]`); `setup` no longer reads `dev-platform.release-pins.json`. Releases, toolchains
+  and the infrastructure store stay under the user's data directory; `setup`, `doctor` and `check` write nothing into the project.
+- New `dev-platform install` (creates `dev-platform.toml` on first installation from the published release identity and,
+  optionally, the exact Infra configuration release; then installs and verifies what the file pins; never changes an existing
+  file, so repeating it is idempotent) and `dev-platform update` (proposes a diff of the same file; `--write` applies it).
+- `toolchain prepare` no longer writes the Bazel configuration into the project. A Bazel profile is refused unless the project
+  already holds `dev-platform/generated.json`; `setup` refuses pins of 0.15.0 to 0.16.x. Not yet supported under isolation:
+  platform-managed Bazel integration, the `consumer-pilot` CI path, workflows.
+
 
 ## 0.16.0
 Changed (Python type checking):

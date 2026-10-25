@@ -35,16 +35,47 @@ Installing creates no service, launch agent, scheduled job, store, configuration
 setting ([what installing never does](homebrew.md#what-installing-never-does)).
 
 ## 2. A project's pinned release
-A consumer commits two files. Take the values from the release's published identity record,
-`releases/<version>/identity.json` in this repository (re-derive them yourself; [consumer integration](consumer-integration.md)):
+The project holds exactly one platform file, `dev-platform.toml` (repository isolation, [ADR 0027](adr/0027-repository-isolation.md)):
+the exact releases it runs. Installing writes nothing else into the repository; releases, toolchains and the
+infrastructure store live under `~/.local/share/dev-platform` and `~/.cache/dev-platform`. A project can pin 0.17.0 or later.
 
-- `dev-platform.release-pins.json`: the identity record itself (at least `version`, `source_revision`, `archive_sha256`,
-  `tree_digest_pin`, `verifier_pins`);
-- `dev-platform.toml` `[platform]`: `version`, `sha256` = `tree_digest_pin`, `profile` (a toolchain profile of that release).
-  `dev-platform init --platform-version <v> --sha256 <tree digest> --profile <profile>` writes a starter file.
+**First installation** (creates `dev-platform.toml`, then installs and verifies what it pins):
+```sh
+cd my-project
+dev-platform install --version 0.17.0 --profile <toolchain profile>
+# with an infrastructure configuration release (exact; there is no "latest"):
+dev-platform install --version 0.17.0 --profile <profile> \
+  --infra-source OWNER/CONFIG-REPO --infra-provider <name> --infra-release 2026.10.2
+```
+`--version` defaults to the CLI's own version. The identity is read from the platform's published
+`releases/<version>/identity.json` (which must name the commit its tag names), the infrastructure identity from the
+configuration repository's release index (the received release is checked against its digest). `install` never changes an
+existing `dev-platform.toml`: run again it verifies and reuses (idempotent), and `--dry-run` writes nothing.
 
-Then, in the project root (`setup` also finds the project from a subdirectory; `doctor` and `check` default to the
-current directory, so run them from the root or pass `--project <root>`):
+Format of the pin (the three `[platform]` identity keys are all present or all absent; `[infra]` is optional):
+```toml
+[platform]
+version = "0.17.0"
+sha256 = "<tree digest>"            # releases/<version>/identity.json tree_digest_pin
+profile = "<toolchain profile>"
+source_revision = "<40 hex>"        # the release commit
+archive_sha256 = "<64 hex>"
+
+[platform.verifier_pins]            # sha256 of the tools the trusted installer takes at source_revision
+verify_release = "<64 hex>"
+trust_policy = "<64 hex>"
+install_release = "<64 hex>"
+
+[infra]                             # optional; exact, no ranges
+provider = "<name>"
+config_release = "2026.10.2"
+config_digest = "sha256:<release-tree digest>"
+config_digest_kind = "release-tree"
+```
+
+Then, in the project root (`install` and `setup` also find the project from a subdirectory; `doctor` and `check` default to the
+current directory, so run them from the root or pass `--project <root>`). `install` already ran `setup`; run it directly to
+re-verify without any of the creation options:
 ```sh
 dev-platform setup --dry-run                                  # what it would do: no network, no writes
 dev-platform setup                                           # installs exactly the pinned release, provisions, runs its doctor
@@ -76,9 +107,17 @@ dev-platform CLI` (0.14.0). From 0.15.0 the CLI only verifies and runs the pinne
 ([distribution](distribution.md#bootstrap-contract-and-upgrading-the-cli)), so no later release can strand it.
 
 ## 4. Upgrading a project's release
-Edit both pin files to the new release's identity in one reviewed change, then `dev-platform setup`
-(it installs the new release beside the old one). A toolchain change is always a new release. A release that adds a configuration key (for example
-`[infra] config_digest_kind`, 0.10.0) is required before the project may use that key.
+`dev-platform update` proposes the change to the same file and never writes without `--write`:
+```sh
+dev-platform update --to 0.17.1                              # prints the diff of dev-platform.toml; nothing written
+dev-platform update --to 0.17.1 --infra-source OWNER/CONFIG-REPO --infra-release 2026.10.3
+dev-platform update --to 0.17.1 --write                      # apply it (review and commit the file)
+dev-platform install                                         # install and verify what the file now pins
+```
+Only the `[platform]` and `[infra]` tables are replaced; every other line is kept. A project still pinned to a release before
+0.17.0 (with `dev-platform.release-pins.json`) moves with `dev-platform update --to 0.17.0 --write`, after which the pins
+file is deleted by the project. A toolchain change is always a new release. A release that adds a configuration key (for
+example `[infra] config_digest_kind`, 0.10.0) is required before the project may use that key.
 
 ## 5. Rollback
 **CLI** (Homebrew keeps no old versions; the tap's history does):
@@ -89,7 +128,7 @@ brew unlink dev-platform && brew install local/dev-platform-versions/dev-platfor
 # forward again:
 brew uninstall dev-platform@<old> && brew link dev-platform
 ```
-**Project release:** revert the pin change. The previous release is still in the store, so `setup` uses it without a download
+**Project release:** revert the pin change (to 0.17.0 or later; earlier releases write into the repository and are refused). The previous release is still in the store, so `setup` uses it without a download
 (`release: present`). Infrastructure rollback is pinning the previous configuration release and digest; the current
 authorization policy still applies, so a rollback never reinstates anything revoked or withdrawn since.
 
@@ -99,7 +138,9 @@ unsatisfied, 2 configuration or usage, 3 integrity.
 
 | Symptom | Meaning | Action |
 |---|---|---|
-| exit 2, `tree_digest_pin != ... platform.sha256` or a version mismatch | the two pin files disagree | fix the pins (copy the identity record again) |
+| exit 2, `[platform] lacks source_revision, archive_sha256 and verifier_pins` | `dev-platform.toml` predates 0.17.0 (the identity was in `dev-platform.release-pins.json`) | `dev-platform update --to 0.17.0 --write` |
+| exit 2, `predates repository isolation` | the pin is 0.15.0 or 0.16.x, whose toolchain preparation writes into the project | `dev-platform update --to 0.17.0` |
+| exit 1, `needs the platform's Bazel configuration (dev-platform/) inside the repository` | a Bazel profile: its verification needs generated files that repository isolation forbids installing | [unsupported until the configuration is delivered externally](adr/0027-repository-isolation.md) |
 | exit 3, `does not equal` a pinned digest | the installer, verifier or policy at the pinned revision is not what the pins name | the pins are wrong or tampered with; nothing was installed |
 | exit 1, `trusted installer refused` | archive digest, attestations or admission failed | read the installer's reason; `acceptance state 'verified-unaccepted' is not admitted` (a release up to 0.11.0) means `--allow-unaccepted` is missing |
 | exit 1, mentions `gh auth login` | `gh` is missing or not authenticated | `gh auth login` |
