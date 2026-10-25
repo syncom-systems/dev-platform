@@ -20,7 +20,7 @@ from dev_platform import bootstrap, prepare, release
 from dev_platform import locations as L
 from dev_platform import projectsetup as S
 from dev_platform.digest import tree_digest
-from dev_platform.errors import ConfigError
+from dev_platform.errors import ConfigError, DevPlatformError
 from dev_platform.resolve import default_store
 from tests.helpers import ROOT, tmpdir
 from tests.test_cli_e2e import TOOLCHAINS
@@ -116,12 +116,18 @@ def platform_repo(test, sources: dict) -> tuple[Path, str, dict]:
 
 def write_project(d: Path, version: str, tree: str, pins: dict) -> Path:
     d.mkdir(parents=True, exist_ok=True)
+    vp = pins.get("verifier_pins", {})
+    ident = (
+        f'source_revision = "{pins["source_revision"]}"\narchive_sha256 = "{pins["archive_sha256"]}"\n'
+        f'[platform.verifier_pins]\nverify_release = "{vp.get("verify_release.py_sha256")}"\n'
+        f'trust_policy = "{vp.get("trust_policy_sha256")}"\n'
+        f'install_release = "{vp.get("install_release.py_sha256")}"\n'
+    )
     (d / "dev-platform.toml").write_text(
-        f'schema_version = 1\n[platform]\nversion = "{version}"\nsha256 = "{tree}"\nprofile = "py"\n'
+        f'schema_version = 1\n[platform]\nversion = "{version}"\nsha256 = "{tree}"\nprofile = "py"\n{ident}'
         '[project]\nname = "consumer"\n[[check]]\nid = "t"\nadapter = "exec"\nargv = ["true"]\n'
         'stages = ["pre-merge", "full"]\nobligation = "always"\n'
     )
-    (d / S.PINS_FILE).write_text(json.dumps(pins, indent=2))
     return d
 
 
@@ -190,25 +196,75 @@ class Project(unittest.TestCase):
             S.find_project(d / "src", explicit=True)
         self.assertEqual(cm.exception.exit_code, 2)
 
-    def test_the_two_pin_files_must_agree(self):
+    def test_the_identity_is_read_from_dev_platform_toml_alone(self):
         d = write_project(tmpdir(self), "0.8.9", "a" * 64, PINS)
-        cfg, pins = S.read_pins(d)
-        self.assertEqual((cfg.platform.version, pins["version"]), ("0.8.9", "0.8.9"))
+        _cfg, pins = S.read_pins(d)
+        self.assertEqual(pins, PINS)
+        self.assertEqual(sorted(p.name for p in d.iterdir()), ["dev-platform.toml"])
+
+    def test_malformed_or_partial_identity_is_refused(self):
+        d = write_project(tmpdir(self), "0.8.9", "a" * 64, PINS)
+        good = (d / "dev-platform.toml").read_text()
+        for name, bad in {
+            "source_revision": good.replace("c" * 40, "main"),
+            "archive_sha256": good.replace("b" * 64, "x"),
+            "verifier_pins": good.replace(
+                "[platform.verifier_pins]\n", '[platform.verifier_pins]\nextra = "1"\n'
+            ),
+        }.items():
+            (d / "dev-platform.toml").write_text(bad)
+            with self.assertRaises(DevPlatformError, msg=name) as cm:
+                S.read_pins(d)
+            self.assertIn(name, str(cm.exception))
+
+    def strip_identity(self, d):
+        text = (d / "dev-platform.toml").read_text()
+        (d / "dev-platform.toml").write_text(
+            text[: text.index("source_revision")] + text[text.index("[project]") :]
+        )
+
+    def test_a_project_without_the_identity_is_pointed_at_update(self):
+        d = write_project(tmpdir(self), "0.8.9", "a" * 64, PINS)
+        self.strip_identity(d)
+        with self.assertRaises(S.Refused) as cm:
+            S.read_pins(d)
+        self.assertIn("dev-platform update --to", str(cm.exception))
+        self.assertEqual(cm.exception.exit_code, 2)
+
+    def test_a_project_from_before_0_17_keeps_its_pins_file_which_must_agree(self):
+        d = write_project(tmpdir(self), "0.8.9", "a" * 64, PINS)
+        self.strip_identity(d)
+        (d / S.PINS_FILE).write_text(json.dumps(PINS))
+        self.assertEqual(S.read_pins(d)[1]["version"], "0.8.9")
         for name, over in {
             "version": {"version": "0.8.8"},
             "tree_digest_pin": {"tree_digest_pin": "d" * 64},
             "source_revision": {"source_revision": "main"},
             "verifier_pins": {"verifier_pins": {}},
         }.items():
-            write_project(d, "0.8.9", "a" * 64, {**PINS, **over})
+            (d / S.PINS_FILE).write_text(json.dumps({**PINS, **over}))
             with self.assertRaises(S.Refused, msg=name) as cm:
                 S.read_pins(d)
             self.assertIn(name, str(cm.exception))
             self.assertEqual(cm.exception.exit_code, 2)
-        (d / S.PINS_FILE).unlink()
-        with self.assertRaises(S.Refused) as cm:
-            S.read_pins(d)
-        self.assertIn("identity.json", str(cm.exception))
+
+    def test_a_legacy_pins_file_that_is_not_an_object_is_refused(self):
+        d = write_project(tmpdir(self), "0.8.9", "a" * 64, PINS)
+        self.strip_identity(d)
+        for text in ("[]", "null", '"x"', "\xff"):
+            (d / S.PINS_FILE).write_bytes(text.encode("latin-1"))
+            with self.assertRaises(S.Refused) as cm:
+                S.read_pins(d)
+            self.assertEqual(cm.exception.exit_code, 2)
+
+    def test_releases_that_write_into_projects_are_refused(self):
+        for v in ("0.15.0", "0.16.0"):
+            d = write_project(tmpdir(self), v, "a" * 64, {**PINS, "version": v})
+            with self.assertRaises(S.Refused) as cm:
+                S.read_pins(d)
+            self.assertIn("predates repository isolation", str(cm.exception))
+        d = write_project(tmpdir(self), "0.17.0", "a" * 64, {**PINS, "version": "0.17.0"})
+        S.read_pins(d)
 
     def test_releases_before_pinned_provisioning_are_refused(self):
         d = write_project(tmpdir(self), "0.7.0", "a" * 64, {**PINS, "version": "0.7.0"})
@@ -550,39 +606,39 @@ class BootstrapContract(unittest.TestCase):
         return rec, code, run
 
     def test_a_declaring_release_prepares_its_own_profile(self):
-        self.add("0.15.0")
+        self.add("0.17.0")
         self.finish()
         with mock.patch.object(prepare, "prepare", side_effect=AssertionError("launcher interpreted")):
-            rec, code, run = self.setup(self.project("0.15.0", "a"))
+            rec, code, run = self.setup(self.project("0.17.0", "a"))
         self.assertEqual(code, 0, rec.get("problem"))
         self.assertEqual((rec["release"]["contract"], rec["toolchain"]["action"]), (1, "provisioned"))
         self.assertEqual(run.ran("prepare"), 1)
         self.assertEqual(run.ran("provision") + run.ran("verify"), 0)  # the release's own business
         argv, env = next((a, e) for a, e in run.calls if "prepare" in a)
         self.assertIn("-P", argv)
-        self.assertEqual(env["DEV_PLATFORM_REEXEC"], "0.15.0")
+        self.assertEqual(env["DEV_PLATFORM_REEXEC"], "0.17.0")
         self.assertNotEqual(Path(env["PYTHONPATH"]), ROOT / "src")  # the verified private snapshot
 
     def test_a_manifest_this_launcher_cannot_parse_does_not_stop_a_declaring_release(self):
         """The launcher here rejects every manifest and record it is asked to validate, as an older CLI does a
         newer format; the real release it runs (a child process) judges its own."""
-        self.add("0.16.0")
+        self.add("0.18.0")
         self.finish()
         old_cli = ConfigError(["toolchain manifest: profiles.py.from_the_future: unknown key"])
         with (
             mock.patch.object(release, "load", side_effect=old_cli),
             mock.patch("dev_platform.toolchain.validate", side_effect=old_cli),
         ):
-            rec, code, _ = self.setup(self.project("0.16.0", "a"))
+            rec, code, _ = self.setup(self.project("0.18.0", "a"))
         self.assertEqual(code, 0, rec.get("problem"))
         self.assertEqual(rec["toolchain"]["action"], "provisioned")
         self.assertEqual(rec["doctor"]["exit"], 0)
 
     def test_the_prepare_command_runs_in_the_verified_release_and_reports_one_json_record(self):
-        self.add("0.15.0")
+        self.add("0.17.0")
         self.finish()
-        project = self.project("0.15.0", "a")
-        shutil.copytree(self.releases["0.15.0"][0], self.loc.store / "0.15.0")
+        project = self.project("0.17.0", "a")
+        shutil.copytree(self.releases["0.17.0"][0], self.loc.store / "0.17.0")
         env = {**self.env, S.STORE_ENV: str(self.loc.store), "PYTHONPATH": str(ROOT / "src")}
         r = subprocess.run(
             [sys.executable, "-m", "dev_platform", "toolchain", "prepare", "--project", str(project),
@@ -592,7 +648,7 @@ class BootstrapContract(unittest.TestCase):
         self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
         out = json.loads(r.stdout)
         self.assertFalse(out["ok"])
-        self.assertIn("profile 'nope' is not in release 0.15.0", out["problem"])
+        self.assertIn("profile 'nope' is not in release 0.17.0", out["problem"])
 
     def test_a_release_requiring_a_newer_contract_is_refused_before_it_runs(self):
         self.add("0.17.0", contract=2)
@@ -604,9 +660,9 @@ class BootstrapContract(unittest.TestCase):
         self.assertEqual(run.ran("prepare") + run.ran("doctor"), 0)
 
     def test_a_release_that_must_declare_a_contract_and_does_not_is_refused(self):
-        self.add("0.15.1", contract=None)
+        self.add("0.17.1", contract=None)
         self.finish()
-        rec, code, run = self.setup(self.project("0.15.1", "a"))
+        rec, code, run = self.setup(self.project("0.17.1", "a"))
         self.assertEqual(code, 3)
         self.assertIn("declares no bootstrap contract", rec["problem"])
         self.assertEqual(run.ran("doctor"), 0)
@@ -617,28 +673,28 @@ class BootstrapContract(unittest.TestCase):
             (d / "dev_platform").mkdir()
             (d / bootstrap.DECLARATION).write_text(text)
             with self.assertRaises(bootstrap.ContractError, msg=text):
-                bootstrap.select(d, "0.15.0")
+                bootstrap.select(d, "0.17.0")
 
     def test_legacy_and_declaring_releases_coexist_each_with_its_own_adapter(self):
         self.add("0.12.1", contract=None, letter="a")
         self.add("0.14.0", contract=None, letter="c")
-        self.add("0.15.0", letter="d")
+        self.add("0.17.0", letter="d")
         self.finish()
-        for version, adapter in (("0.12.1", "legacy"), ("0.15.0", 1), ("0.14.0", "legacy")):
+        for version, adapter in (("0.12.1", "legacy"), ("0.17.0", 1), ("0.14.0", "legacy")):
             rec, code, run = self.setup(self.project(version, f"p{version}"))
             self.assertEqual(code, 0, (version, rec.get("problem")))
             self.assertEqual(rec["release"]["contract"], adapter)
             self.assertEqual(rec["toolchain"]["path"], str(self.loc.toolchains / version / "py"))
             self.assertEqual(run.ran("prepare"), 0 if adapter == "legacy" else 1)
         stored = sorted(p.name for p in self.loc.store.iterdir() if not p.name.startswith("."))
-        self.assertEqual(stored, ["0.12.1", "0.14.0", "0.15.0"])
+        self.assertEqual(stored, ["0.12.1", "0.14.0", "0.17.0"])
         for version, (_vdir, tree, _a) in self.releases.items():
             self.assertEqual(tree_digest(self.loc.store / version), tree)
 
     def test_repeating_setup_downloads_and_changes_nothing(self):
-        self.add("0.15.0")
+        self.add("0.17.0")
         self.finish()
-        project = self.project("0.15.0", "a")
+        project = self.project("0.17.0", "a")
         first, code, _ = self.setup(project)
         self.assertEqual(code, 0, first.get("problem"))
         before = {p: p.stat().st_mtime_ns for p in self.loc.store.rglob("*")}
@@ -651,18 +707,18 @@ class BootstrapContract(unittest.TestCase):
 
     def test_a_project_rolls_back_to_its_previous_release_untouched(self):
         self.add("0.14.0", contract=None, letter="a")
-        self.add("0.15.0", letter="b")
+        self.add("0.17.0", letter="b")
         self.finish()
         project = self.project("0.14.0", "a")
         self.assertEqual(self.setup(project)[1], 0)
-        write_project(project, "0.15.0", self.releases["0.15.0"][1], self.pins_of("0.15.0"))
+        write_project(project, "0.17.0", self.releases["0.17.0"][1], self.pins_of("0.17.0"))
         self.assertEqual(self.setup(project)[1], 0)
         write_project(project, "0.14.0", self.releases["0.14.0"][1], self.pins_of("0.14.0"))
         rec, code, run = self.setup(project)
         self.assertEqual(code, 0, rec.get("problem"))
         self.assertEqual((rec["release"]["action"], rec["toolchain"]["action"]), ("present", "reused"))
         self.assertEqual(run.ran("install_release.py"), 0)
-        for version in ("0.14.0", "0.15.0"):
+        for version in ("0.14.0", "0.17.0"):
             self.assertEqual(tree_digest(self.loc.store / version), self.releases[version][1])
 
     def pins_of(self, version):
@@ -677,42 +733,42 @@ class BootstrapContract(unittest.TestCase):
 
     def test_an_installer_refusal_installs_nothing_and_leaves_other_releases_alone(self):
         self.add("0.14.0", contract=None, letter="a")
-        self.add("0.15.0", letter="b")
+        self.add("0.17.0", letter="b")
         self.finish()
         self.assertEqual(self.setup(self.project("0.14.0", "ok"))[1], 0)
         kept = tree_digest(self.loc.store / "0.14.0")
         for field, value in (("archive_sha256", "0" * 64), ("tree_digest_pin", "1" * 64)):
-            pins = {**self.pins_of("0.15.0"), field: value}
-            project = write_project(tmpdir(self) / field, "0.15.0", pins["tree_digest_pin"], pins)
+            pins = {**self.pins_of("0.17.0"), field: value}
+            project = write_project(tmpdir(self) / field, "0.17.0", pins["tree_digest_pin"], pins)
             rec, code, run = self.setup(project)
             self.assertEqual(code, 1, field)
             self.assertIn("trusted installer refused", rec["problem"])
-            self.assertFalse((self.loc.store / "0.15.0").exists())
+            self.assertFalse((self.loc.store / "0.17.0").exists())
             self.assertEqual(run.ran("prepare") + run.ran("doctor"), 0)
         self.assertEqual(tree_digest(self.loc.store / "0.14.0"), kept)
 
     def test_a_corrupted_installation_never_runs_and_its_neighbours_are_untouched(self):
         self.add("0.14.0", contract=None, letter="a")
-        self.add("0.15.0", letter="b")
+        self.add("0.17.0", letter="b")
         self.finish()
         self.assertEqual(self.setup(self.project("0.14.0", "a"))[1], 0)
-        self.assertEqual(self.setup(self.project("0.15.0", "b"))[1], 0)
-        f = self.loc.store / "0.15.0" / "src" / "dev_platform" / "cli.py"
+        self.assertEqual(self.setup(self.project("0.17.0", "b"))[1], 0)
+        f = self.loc.store / "0.17.0" / "src" / "dev_platform" / "cli.py"
         f.parent.chmod(0o700)
         f.chmod(0o600)
         f.write_text(f.read_text() + "\n# tampered\n")
-        rec, code, run = self.setup(self.project("0.15.0", "c"))
+        rec, code, run = self.setup(self.project("0.17.0", "c"))
         self.assertEqual(code, 3)
         self.assertEqual(run.ran("prepare") + run.ran("doctor") + run.ran("install_release.py"), 0)
         rec, code, _ = self.setup(self.project("0.14.0", "d"))
         self.assertEqual(code, 0, rec.get("problem"))  # the other release still works
 
     def test_release_bytes_changed_after_installation_are_never_executed(self):
-        self.add("0.15.0")
+        self.add("0.17.0")
         self.finish()
-        project = self.project("0.15.0", "a")
+        project = self.project("0.17.0", "a")
         self.assertEqual(self.setup(project)[1], 0)
-        launcher = self.loc.store / "0.15.0" / "src" / "dev_platform" / "__main__.py"
+        launcher = self.loc.store / "0.17.0" / "src" / "dev_platform" / "__main__.py"
         launcher.parent.chmod(0o700)
         launcher.chmod(0o600)
         launcher.write_text("raise SystemExit('unverified code ran')\n")
@@ -780,70 +836,40 @@ class UnsupportedHost(unittest.TestCase):
         self.assertEqual(S.unsupported_tools(self.MANIFEST, "rust-bazel-9", "darwin-x86_64"), ["bazelisk"])
 
 
-class MaterializeInSetup(unittest.TestCase):
-    """Setup writes the release's Bazel configuration before verifying, and refuses what it must not touch."""
+class NothingIsWrittenInSetup(unittest.TestCase):
+    """Preparing a profile never writes into the project (ADR 0027); a Bazel profile is refused, not installed."""
 
     MANIFEST = {"profiles": {"p": {"bazel": {}, "tools": {"a": {"version": "1"}}}}}
 
-    def run_setup(self, run):
+    def run_setup(self, run, project):
         res = SimpleNamespace(
             release={"toolchains": self.MANIFEST}, version="0.13.0", cleanup=str(tmpdir(self))
         )
         loc = L.locate({}, home=tmpdir(self))
-        return S.ensure_toolchain(res, "p", tmpdir(self), loc, {}, run=run)
+        return S.ensure_toolchain(res, "p", project, loc, {}, run=run)
 
-    def test_materialize_runs_first_and_never_adds_hooks_to_existing_files(self):
-        calls = []
+    def test_a_bazel_profile_is_refused_without_running_anything(self):
+        project, calls = tmpdir(self), []
+        with mock.patch.object(S, "unsupported_tools", return_value=[]), self.assertRaises(S.Refused) as e:
+            self.run_setup(lambda argv, **kw: calls.append(argv), project)
+        self.assertIn("repository isolation forbids installing it", str(e.exception))
+        self.assertEqual((calls, list(project.iterdir())), ([], []))
+
+    def test_a_project_that_already_holds_the_configuration_is_verified_never_rewritten(self):
+        project, calls = tmpdir(self), []
+        (project / "dev-platform").mkdir()
+        (project / "dev-platform" / "generated.json").write_text("{}")
+        before = {p: p.read_bytes() for p in project.rglob("*") if p.is_file()}
 
         def run(argv, **kw):
             calls.append(list(argv))
             rec = {"conformant": True, "assurance": "certifiable", "identity_digest": "e" * 64}
-            out = {
-                "written": ["dev-platform/bazel.bazelrc"],
-                "unchanged": [],
-                "added_hooks": [],
-                "refused": [],
-            }
-            return subprocess.CompletedProcess(argv, 0, json.dumps(out if "materialize" in argv else rec), "")
+            return subprocess.CompletedProcess(argv, 0, json.dumps(rec), "")
 
         with mock.patch.object(S, "unsupported_tools", return_value=[]):
-            out = self.run_setup(run)
-        self.assertIn("materialize", calls[0])
-        self.assertIn("--create-hooks", calls[0])
-        self.assertNotIn("--add-hooks", calls[0])
-        self.assertEqual(out["bazel_config"]["written"], ["dev-platform/bazel.bazelrc"])
-
-    def test_a_mismatching_bazelversion_stops_setup_before_provisioning(self):
-        conflicts = [
-            {
-                "path": ".bazelversion",
-                "detail": "selects Bazel 9.2.0; the profile pins Bazel 9.3.1",
-                "action": "set .bazelversion to 9.3.1",
-            }
-        ]
-        calls = []
-
-        def run(argv, **kw):
-            calls.append(list(argv))
-            return subprocess.CompletedProcess(
-                argv, 1, json.dumps({"refused": [], "conflicts": conflicts}), ""
-            )
-
-        with mock.patch.object(S, "unsupported_tools", return_value=[]), self.assertRaises(S.Refused) as e:
-            self.run_setup(run)
-        self.assertIn(".bazelversion: selects Bazel 9.2.0; the profile pins Bazel 9.3.1", str(e.exception))
-        self.assertIn("set .bazelversion to 9.3.1", str(e.exception))
-        self.assertEqual(len(calls), 1)  # nothing was provisioned or verified
-
-    def test_a_foreign_file_is_refused_with_the_correction(self):
-        refused = [{"path": "ruff.toml", "detail": "not generated by dev-platform", "action": "remove it"}]
-
-        def run(argv, **kw):
-            return subprocess.CompletedProcess(argv, 1, json.dumps({"refused": refused}), "")
-
-        with mock.patch.object(S, "unsupported_tools", return_value=[]), self.assertRaises(S.Refused) as e:
-            self.run_setup(run)
-        self.assertIn("ruff.toml: not generated by dev-platform -> remove it", str(e.exception))
+            self.run_setup(run, project)
+        self.assertFalse([c for c in calls if "materialize" in c])
+        self.assertEqual({p: p.read_bytes() for p in project.rglob("*") if p.is_file()}, before)
 
 
 class Cli(unittest.TestCase):

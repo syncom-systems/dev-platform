@@ -23,6 +23,8 @@ _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _ID_RE = re.compile(r"^[a-z][a-z0-9_.-]*$")
 _INFRA_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 DIGEST_KINDS = ("release-tree", "profile-file")
+_REV_RE = re.compile(r"^[0-9a-f]{40}$")
+VERIFIER_PINS = ("verify_release", "trust_policy", "install_release")  # sha256 of the three trusted tools
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,11 @@ class PlatformPin:
     sha256: str | None
     self_hosted: bool
     profile: str | None = None
+    # The release identity the launcher verifies before it installs anything (0.17.0): with these the project
+    # needs no file but dev-platform.toml. All three, or none (a release before 0.17.0 does not know them).
+    source_revision: str | None = None
+    archive_sha256: str | None = None
+    verifier_pins: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)
@@ -155,7 +162,13 @@ def parse(data: dict) -> Config:
     if data.get("schema_version") != SCHEMA_VERSION:
         errs.append(f"schema_version: must be {SCHEMA_VERSION}, got {data.get('schema_version')!r}")
 
-    p = _table(data, "platform", {"version", "sha256", "self_hosted", "profile"}, "platform", errs)
+    p = _table(
+        data,
+        "platform",
+        {"version", "sha256", "self_hosted", "profile", "source_revision", "archive_sha256", "verifier_pins"},
+        "platform",
+        errs,
+    )
     self_hosted = p.get("self_hosted", False)
     version, sha = p.get("version"), p.get("sha256")
     if self_hosted is True:
@@ -168,6 +181,25 @@ def parse(data: dict) -> Config:
             errs.append("platform.version: required exact version like 1.2.3 (ranges are not allowed)")
         if not (isinstance(sha, str) and _SHA_RE.match(sha)):
             errs.append("platform.sha256: required, 64 lowercase hex characters")
+
+    rev, archive, vpins = p.get("source_revision"), p.get("archive_sha256"), p.get("verifier_pins")
+    identity = (rev, archive, vpins)
+    if self_hosted is True:
+        if any(x is not None for x in identity):
+            errs.append("platform: self_hosted excludes the release identity keys")
+    elif any(x is not None for x in identity):
+        if not (isinstance(rev, str) and _REV_RE.match(rev)):
+            errs.append(
+                "platform.source_revision: 40 lowercase hex characters (with archive_sha256, verifier_pins)"
+            )
+        if not (isinstance(archive, str) and _SHA_RE.match(archive)):
+            errs.append(
+                "platform.archive_sha256: 64 lowercase hex characters (with source_revision, verifier_pins)"
+            )
+        if not isinstance(vpins, dict) or set(vpins) != set(VERIFIER_PINS):
+            errs.append(f"platform.verifier_pins: a table with exactly {list(VERIFIER_PINS)}")
+        elif not all(isinstance(v, str) and _SHA_RE.match(v) for v in vpins.values()):
+            errs.append("platform.verifier_pins: 64 lowercase hex characters each")
 
     infra_pin = parse_pin(data.get("infra", {}) if isinstance(data.get("infra", {}), dict) else {}, errs)
     if not isinstance(data.get("infra", {}), dict):
@@ -347,7 +379,15 @@ def parse(data: dict) -> Config:
     if errs:
         raise ConfigError(errs)
     return Config(
-        platform=PlatformPin(version, sha, self_hosted is True, p.get("profile")),
+        platform=PlatformPin(
+            version,
+            sha,
+            self_hosted is True,
+            p.get("profile"),
+            rev,
+            archive,
+            dict(vpins) if isinstance(vpins, dict) else None,
+        ),
         project_name=name,
         bazel_only=bazel_only,
         assurance=assurance,

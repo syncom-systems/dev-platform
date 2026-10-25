@@ -32,3 +32,4 @@ revision). Superseded records stay in place.
 | [0024](0024-single-owner-release-authority.md) | Single-owner release authority: verified releases, no approval records | Proposed |
 | [0025](0025-platform-owned-bazel-configuration.md) | Platform-owned Bazel configuration for Rust and Python | Proposed |
 | [0026](0026-stable-bootstrap-contract.md) | Stable bootstrap contract: the launcher verifies and runs, the release validates and prepares itself | Proposed |
+| [0027](0027-repository-isolation.md) | Repository isolation: one pin file in the project, everything else external | Proposed |

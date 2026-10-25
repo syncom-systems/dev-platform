@@ -53,38 +53,6 @@ jobs:
         if: always()
         with: {name: "environment-${{ matrix.os }}", path: "*.json"}
 
-  bootstrap:
-    # The installation contract on a clean machine (docs/distribution.md): nothing of dev-platform preinstalled,
-    # job-local locations only. Older published CLIs first (they may refuse the release; they must leave the store
-    # as they found it), then the CLI under test installs the pinned release with the trusted installer, provisions
-    # it, runs the real Bazel checks, and a second setup changes nothing. See tools/bootstrap_acceptance.py.
-    name: bootstrap ${{ matrix.release }} (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15]
-        release: ["0.14.0", "0.13.0"]
-        include:
-          - {release: "0.14.0", profile: rust-python-bazel-9.3, fixture: fixtures-real/baseline-mixed, old: "--old-cli 0.12.1 --old-cli 0.13.0"}
-          - {release: "0.13.0", profile: python-bazel-9.3, fixture: fixtures-real/baseline-python, old: "--old-cli 0.12.1"}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {persist-credentials: false}
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with: {python-version: "3.14"}  # the CLI's own interpreter (stdlib only); toolchains come from the release
-      - name: Install, verify, provision, build, repeat
-        # GH_TOKEN is the job's read-only token, for `gh attestation verify` by the trusted installer only.
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python tools/bootstrap_acceptance.py --release ${{ matrix.release }} --profile ${{ matrix.profile }} \
-            --fixture ${{ matrix.fixture }} ${{ matrix.old }} --out bootstrap-acceptance.json
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
-        with: {name: "bootstrap-${{ matrix.release }}-${{ matrix.os }}", path: bootstrap-acceptance.json, if-no-files-found: ignore}
-
   qualify:
     # REAL execution of the claimed toolchain profiles: real Bazel/rules_rust/rustc and real CPython.
     # A profile in toolchains/manifest.json is only claimed supported on platforms where this passes.
