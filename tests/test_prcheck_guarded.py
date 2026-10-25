@@ -220,8 +220,9 @@ class Cli(unittest.TestCase):
         root = tmpdir(self)
         cfg = self_hosted()
         profile = C.profile_for(cfg, "app")
-        trusted = next(r["labels"] for r in profile["runners"] if r["trust"] == "trusted")
-        a = "fromJSON('" + json.dumps(trusted) + "')"
+        trusted = ["self-hosted", "linux", "x64", "build"]  # the template's trusted runner
+        self.assertIn(trusted, [r["labels"] for r in profile["runners"] if r["trust"] == "trusted"])
+        a = 'fromJSON(\'["self-hosted", "linux", "x64", "build"]\')'
         (root / "c.json").write_text(json.dumps(cfg))
         (root / "p.json").write_text(json.dumps(profile))
         wfs = root / "wf"
