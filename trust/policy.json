@@ -13,9 +13,9 @@
   "require_environment_evidence": true,
   "continuity": {
     "predecessor": {
-      "version": "0.15.0",
-      "archive_sha256": "8f6a662cb051cbfac0b6e6d7c1a55dfc3799ddacab4b6b95dffb75caf5a9bd9f",
-      "tree_digest": "2e572b0802935fc2b47bf00fe612b6d7d93bde942dd8456872a96bcf3371592e"
+      "version": "0.16.0",
+      "archive_sha256": "1b26322af31fba17be42c3282b9ad4445afcc068672c55ed83c0e108636aecd3",
+      "tree_digest": "db307a51b36b3ed3ebc8b681a4603491cea14f5c5938e375ccc2a100455aa7a0"
     }
   }
 }

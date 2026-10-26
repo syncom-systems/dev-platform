@@ -1,6 +1,8 @@
 # Changelog
 
 ## Unreleased
+
+## 0.17.0
 Changed (repository isolation; [ADR 0027](docs/adr/0027-repository-isolation.md)):
 - A project holds one platform file, `dev-platform.toml`. `[platform]` now carries the release identity (`source_revision`,
   `archive_sha256`, `[platform.verifier_pins]`); `setup` reads `dev-platform.release-pins.json` only for a pin before 0.17.0. Releases, toolchains
@@ -27,7 +29,6 @@ Changed (repository isolation, completion; [ADR 0027](docs/adr/0027-repository-i
 - `dev-platform infra resolve`: an untrusted event gets `public-default` without any installed policy (a trusted event
   without one still resolves nothing); a conformance case covers it. A resolution is not runner enforcement (documented).
 - Migration from a pin before 0.17.0 is `update --to 0.17.0 --write`, which writes only `dev-platform.toml`.
-
 
 ## 0.16.0
 Changed (Python type checking):
