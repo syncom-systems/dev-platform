@@ -8,7 +8,7 @@ What a real consumer owns, what it runs and what it can prove, using only public
 | `dev-platform.toml` `[platform]` | release version, release **tree sha256**, toolchain profile |
 | `dev-platform.toml` `[infra]` | infrastructure provider, **config release**, **config digest** (`sha256:`); absent = hosted runners only |
 | `dev-platform.toml` `[platform]` (0.17.0) | the release identity from `releases/<version>/identity.json`: `source_revision`, `archive_sha256`, `[platform.verifier_pins]` (digests of the trusted verifier, policy and installer at that revision). Until 0.16.x this was `dev-platform.release-pins.json`, which `setup` reads only for a pin before 0.17.0 and the CI path below still needs ([ADR 0027](adr/0027-repository-isolation.md)) |
-| `.dev-platform/infra-profile.json` | the vendored infrastructure profile; its sha256 must equal `[infra] config_digest` |
+| `.dev-platform/infra-profile.json` | legacy (until 0.16.x): the vendored infrastructure profile; its sha256 must equal `[infra] config_digest`. From 0.17.0 it is not read implicitly (`--infra-profile FILE` takes one explicitly), and it is reported as a legacy file ([ADR 0027](adr/0027-repository-isolation.md)) |
 
 Upgrading the platform or the infrastructure configuration is an explicit edit of these files. Nothing floats: the engine
 refuses a different release, a different configuration digest, or a provider that resolves anything but the pin.

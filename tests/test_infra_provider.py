@@ -157,9 +157,9 @@ class Denies(Base):
             res = self.go()
             self.assertEqual(self.code(res), "policy-invalid", content)
             self.assertEqual(self.judged(res).status, "unavailable")
-        # without a policy even an untrusted request is not answered with a default
+        # a trusted request without a policy still resolves nothing
         p.unlink()
-        self.assertEqual(self.code(self.go(trust="untrusted")), "policy-invalid")
+        self.assertEqual(self.code(self.go()), "policy-invalid")
 
     def test_selection_must_be_exact(self):
         for kw, code in (
@@ -230,6 +230,46 @@ class Untrusted(Base):
             pin, infra.request_for(pin, repo="o/r", event_trust="untrusted"), res["result"], None
         )
         self.assertEqual(r.status, "hosted-only")
+
+    def test_public_default_needs_no_installed_policy(self):
+        """The public contract: an untrusted event is answered with public-default whether the current
+        authorization policy is absent, unreadable, invalid or valid, and the answer is the same."""
+        policy_file = self.root / infra_provider.POLICY
+        answers = []
+        for content in (None, "", "{", "[]", json.dumps(policy(revision=0)), json.dumps(policy())):
+            if content is None:
+                policy_file.unlink(missing_ok=True)
+            else:
+                policy_file.write_text(content)
+            res = self.go(trust="untrusted")
+            self.assertEqual(res["result"]["decision"], "public-default", content)
+            self.assertEqual(self.code(res), "untrusted-event")
+            self.assertIsNone(res["profile_bytes"])
+            self.assertIsNone(res["result"]["resolved"])
+            self.assertIsNone(res["result"]["authorization_policy"])
+            pin = InfraPin("example-infra", VERSION, self.digest)
+            req = infra.request_for(pin, repo=f"{OWNER}/app", event_trust="untrusted")
+            self.assertEqual(infra.evaluate(pin, req, res["result"], None).status, "hosted-only")
+            answers.append(res["result"])
+        self.assertTrue(all(a == answers[0] for a in answers))
+
+    def test_untrusted_still_needs_a_well_formed_request(self):
+        write_policy(self.root)
+        for bad in (
+            {**request(trust="untrusted", digest=self.digest), "extra": 1},
+            request(trust="untrusted", digest=self.digest, repo="not a repo"),
+            request(trust="sometimes", digest=self.digest),
+        ):
+            self.assertEqual(self.code(infra_provider.resolve(self.root, bad)), "request-invalid")
+        self.assertEqual(self.code(infra_provider.resolve(self.root, "nonsense")), "request-invalid")
+
+    def test_untrusted_gets_nothing_private_even_for_a_revoked_or_unknown_release(self):
+        write_policy(self.root, revoked_releases=[{"version": VERSION, "reason": "unsafe"}])
+        for kw in (dict(), dict(version="2099.01.1"), dict(digest="sha256:" + "1" * 64)):
+            res = self.go(trust="untrusted", **kw)
+            self.assertEqual(res["result"]["decision"], "public-default")
+            self.assertIsNone(res["profile_bytes"])
+            self.assertIsNone(res["profile"])
 
 
 class Command(Base):

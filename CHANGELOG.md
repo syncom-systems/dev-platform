@@ -13,6 +13,21 @@ Changed (repository isolation; [ADR 0027](docs/adr/0027-repository-isolation.md)
   platform-managed Bazel integration, the `consumer-pilot` CI path, workflows. The `bootstrap` CI job (older Bazel
   releases installed by the current launcher) is retired.
 
+Changed (repository isolation, completion; [ADR 0027](docs/adr/0027-repository-isolation.md) §6-13):
+- Output-path guard: any destination the caller chooses (output flags, evidence and store locations, `toolchain provision
+  --dest`, installation roots, `DEV_PLATFORM_*` and XDG overrides) is resolved through symlinks and refused when it lies inside
+  a consuming project's working tree or Git metadata. The platform's own repository and `dev-platform.toml` are exempt.
+  Behavior change: `check --result` and `toolchain provision --dest` (default `.devenv`) can no longer point into a project.
+- `toolchain materialize` writes nothing into a project (`--check` and `--dry-run` remain). Legacy repository files
+  (`dev-platform.release-pins.json`, `.dev-platform/infra-profile.json`, `dev-platform/`, entry lines) are reported and never
+  consumed implicitly; `doctor` no longer reads the vendored profile.
+- `install` requires `--version` on a first installation (no default to the CLI's version) and `--infra-digest` with
+  `--infra-release`; `update` requires the digest too. Dry-run and update output name the bootstrap CLI and the release that
+  executes. New optional `[infra].source`. One infrastructure store location for `install` and `infra` commands.
+- `dev-platform infra resolve`: an untrusted event gets `public-default` without any installed policy (a trusted event
+  without one still resolves nothing); a conformance case covers it. A resolution is not runner enforcement (documented).
+- Migration from a pin before 0.17.0 is `update --to 0.17.0 --write`, which writes only `dev-platform.toml`.
+
 
 ## 0.16.0
 Changed (Python type checking):

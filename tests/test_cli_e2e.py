@@ -92,7 +92,7 @@ class MilestoneTest(unittest.TestCase):
         r = run(self.proj, self.store, "explain", "--changed", "app.py")
         self.assertIn("app.py matches input **/*.py", r.stdout)
 
-        out = self.proj / "result.json"
+        out = self.proj.parent / "result.json"  # outside the project: ADR 0027
         r = run(self.proj, self.store, "check", "--changed", "app.py", "--result", str(out))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         doc = json.loads(out.read_text())
@@ -108,7 +108,7 @@ class MilestoneTest(unittest.TestCase):
 
     def test_previous_record_applies_only_while_its_identity_matches(self):
         run(self.proj, self.store, "init", "--platform-version", "0.1.0", "--profile", "py")
-        prev = self.proj / "prev.json"
+        prev = self.proj.parent / "prev.json"  # outside the project: ADR 0027
         r = run(self.proj, self.store, "check", "--changed", "app.py", "--result", str(prev))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 

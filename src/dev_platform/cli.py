@@ -25,6 +25,7 @@ from dev_platform import (
     infra_cli,
     isolation,
     pack,
+    pathguard,
     provenance,
     records,
     release,
@@ -164,7 +165,12 @@ def build_parser() -> argparse.ArgumentParser:
     tp.add_argument("--pinned", action="store_true", help="use the manifest of the project's pinned release")
     tp.add_argument("--project", type=Path, default=Path("."))
     tp.add_argument("--profile", required=True)
-    tp.add_argument("--dest", type=Path, default=Path(".devenv"))
+    tp.add_argument(
+        "--dest",
+        type=Path,
+        default=Path(".devenv"),
+        help="directory of the provisioned tools (refused inside a consuming project: ADR 0027)",
+    )
     tp.add_argument(
         "--verify",
         action="store_true",
@@ -504,12 +510,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="project root (default: nearest directory upwards with dev-platform.toml, else here)",
     )
     ins.add_argument(
-        "--version", help="platform release to pin on first installation (default: this CLI's version)"
+        "--version",
+        help="platform release to pin: exact, required on first installation (never defaults to this CLI's "
+        "version: the CLI only verifies and launches the release that runs)",
     )
     ins.add_argument("--profile", help="toolchain profile to pin on first installation")
     ins.add_argument("--infra-source", metavar="OWNER/NAME", help="configuration repository (no default)")
     ins.add_argument("--infra-release", help="configuration release to pin on first installation (YYYY.MM.N)")
     ins.add_argument("--infra-provider", help="provider name written to the [infra] pin")
+    ins.add_argument(
+        "--infra-digest",
+        metavar="sha256:HEX",
+        help="the configuration release-tree digest, supplied independently of --infra-source (required "
+        "with --infra-release; the source is where to obtain the release, not who vouches for it)",
+    )
+    ins.add_argument(
+        "--infra-store", type=Path, help="infrastructure store (default <data root>/infra, as `infra store`)"
+    )
     ins.add_argument("--home", type=Path, help="data root (env DEV_PLATFORM_HOME)")
     ins.add_argument("--store", type=Path)
     ins.add_argument("--toolchains", type=Path)
@@ -531,6 +548,9 @@ def build_parser() -> argparse.ArgumentParser:
     upd.add_argument("--infra-source", metavar="OWNER/NAME")
     upd.add_argument("--infra-release", help="the configuration release to pin (exact)")
     upd.add_argument("--infra-provider")
+    upd.add_argument(
+        "--infra-digest", metavar="sha256:HEX", help="the configuration release-tree digest (independent)"
+    )
     upd.add_argument("--platform-repo", default="https://github.com/syncom-systems/dev-platform")
     upd.add_argument("--write", action="store_true", help="apply the proposal to dev-platform.toml")
     upd.add_argument("--json", action="store_true")
@@ -1052,6 +1072,15 @@ def _cmd_materialize(args) -> int:
             ]
             _emit(args, rec, "\n".join(lines))
             return EXIT_OK if rec["status"] == "ok" else EXIT_UNSATISFIED
+        if not args.dry_run and (why := pathguard.refusal(project, "toolchain materialize target", project)):
+            raise ConfigError(
+                [
+                    f"{why}. `toolchain materialize` would write Bazel files and entry lines into the "
+                    "repository: only --check and --dry-run are available for a project (the platform's "
+                    "Bazel configuration is not installed into repositories; delivering it from outside is "
+                    "a later milestone)"
+                ]
+            )
         rep = bazelconf.materialize(
             manifest,
             profile,
@@ -1452,6 +1481,7 @@ def cmd_infra(args) -> int:
             req = None
         res = infra_provider.resolve(args.root, req, args.policy)
         if res["profile_bytes"] is not None:
+            pathguard.guard(req["profile_out"], "profile_out of the request")
             infra_provider.write_private(req["profile_out"], res["profile_bytes"])
         if args.evidence_out:
             args.evidence_out.write_text(json.dumps(res["evidence"], indent=2, sort_keys=True) + "\n")
@@ -1519,7 +1549,12 @@ def cmd_setup(args) -> int:
     from dev_platform import locations, projectsetup
 
     loc = locations.locate(
-        os.environ, home=args.home, store=args.store, toolchains=args.toolchains, cache=args.cache
+        os.environ,
+        home=args.home,
+        store=args.store,
+        toolchains=args.toolchains,
+        cache=args.cache,
+        project=args.project,
     )
     rec, code = projectsetup.setup(
         args.project,
@@ -1542,10 +1577,18 @@ def cmd_setup(args) -> int:
 
 
 def cmd_install(args) -> int:
-    from dev_platform import locations, project_install, projectsetup
+    from dev_platform import infra_store, locations, project_install, projectsetup
 
     loc = locations.locate(
-        os.environ, home=args.home, store=args.store, toolchains=args.toolchains, cache=args.cache
+        os.environ,
+        home=args.home,
+        store=args.store,
+        toolchains=args.toolchains,
+        cache=args.cache,
+        project=args.project,
+    )
+    infra_dir, _ = infra_store.location(
+        os.environ, store=args.infra_store, project=args.project, home=args.home
     )
     rec, code = project_install.install(
         args.project,
@@ -1555,9 +1598,10 @@ def cmd_install(args) -> int:
         infra_source=args.infra_source,
         infra_release=args.infra_release,
         infra_provider=args.infra_provider,
+        infra_digest=args.infra_digest,
         repo=_repo_slug(args.platform_repo),
         dry_run=args.dry_run,
-        infra_store_dir=args.home / "infra" if args.home else None,
+        infra_store_dir=infra_dir,
         allow_prerelease=args.allow_prerelease,
         reverify=args.reverify,
         repo_url=args.platform_repo,
@@ -1565,6 +1609,7 @@ def cmd_install(args) -> int:
     if args.json:
         print(json.dumps(rec, indent=2, sort_keys=True))
     elif "would_create" in rec:
+        print("\n".join(project_install._text_identity(rec)))
         print(f"would create {rec['would_create']}:\n{rec['text']}")
     else:
         if rec.get("created"):
@@ -1589,6 +1634,7 @@ def cmd_update(args) -> int:
         infra_source=args.infra_source,
         infra_release=args.infra_release,
         infra_provider=args.infra_provider,
+        infra_digest=args.infra_digest,
         repo=_repo_slug(args.platform_repo),
         write=args.write,
     )
@@ -1598,6 +1644,16 @@ def cmd_update(args) -> int:
         print(f"{rec['file']}: already pins this; nothing to change")
     else:
         print(rec["diff"], end="")
+        if "executes_release" in rec:
+            print("\n".join(project_install_text(rec)))
+        if "migration" in rec:
+            m = rec["migration"]
+            print(
+                f"migration: {m['from']} -> {m['to']}; writes only {', '.join(m['writes'])}; "
+                f"kept: {m['kept']}"
+            )
+        for f in rec.get("legacy_integration", []):
+            print(f"legacy: {f['path']}: {f['note']} (reported; not changed or deleted)")
         note = (
             "written"
             if rec["written"]
@@ -1605,6 +1661,12 @@ def cmd_update(args) -> int:
         )
         print(f"{note}: {rec['file']}")
     return EXIT_OK
+
+
+def project_install_text(rec: dict) -> list[str]:
+    from dev_platform import project_install
+
+    return project_install._text_identity(rec)
 
 
 def _repo_slug(url: str) -> str:
@@ -1642,11 +1704,44 @@ _COMMANDS = {
 }
 
 
+def _write_sinks(args) -> list[tuple[Path | None, str]]:
+    """Every destination the invocation may write that the caller chooses (`dev-platform.toml` by `install`,
+    `update` and `init` is not one): refused when inside a consuming project or its Git metadata (ADR 0027).
+    Release, toolchain, cache and infrastructure-store locations are guarded where they are calculated."""
+    g = args.__dict__.get
+    cmd = args.cmd
+    if cmd == "check":
+        return [(g("result"), "--result")]
+    if cmd == "release":
+        if args.rcmd in ("build", "pack"):
+            return [(g("out"), "--out")]
+        if args.rcmd == "install":
+            return [(g("store") or default_store(), "release store")]
+    if cmd == "toolchain":
+        if args.tcmd in ("provision", "prepare"):
+            return [(g("dest"), "--dest")]
+        if args.tcmd == "prove-bazel-rust":
+            return [(g("out"), "--out")]
+    if cmd in ("provenance", "dependency-snapshot"):
+        return [(g("out"), "--out")]
+    if cmd == "evidence":
+        return [(g("out"), "--out")] if args.ecmd == "bundle" else [(g("store"), "--store")]
+    if cmd == "workflow":
+        return [(g("output"), "--output")]
+    if cmd == "infra":
+        if args.icmd == "init" or (args.icmd == "release" and args.ircmd == "build"):
+            return [(g("root"), "--root")]
+        if args.icmd == "resolve":
+            return [(g("evidence_out"), "--evidence-out")]
+    return []
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     args = build_parser().parse_args(argv)
     args._argv = list(argv)
     try:
+        pathguard.guard_all(_write_sinks(args), project=getattr(args, "project", None))
         return _COMMANDS[args.cmd](args)
     except _Delegated as d:
         return d.code

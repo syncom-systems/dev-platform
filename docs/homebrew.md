@@ -62,7 +62,8 @@ job-local `$RUNNER_TEMP/dev-platform`, else `${XDG_DATA_HOME:-~/.local/share}/de
 | Toolchains | `~/.local/share/dev-platform/toolchains/<version>/<profile>/` | `$RUNNER_TEMP/dev-platform/toolchains/` | `--toolchains`, `DEV_PLATFORM_TOOLCHAINS` |
 | Cache | `${XDG_CACHE_HOME:-~/.cache}/dev-platform/` (git objects of the pinned revision, lock) | `$RUNNER_TEMP/dev-platform/cache/` | `--cache`, `DEV_PLATFORM_CACHE` |
 
-`DEV_PLATFORM_HOME` moves all three (cache under it too). The launcher finds releases through `DEV_PLATFORM_STORE`,
+`DEV_PLATFORM_HOME` moves all three (cache under it too) and the infrastructure store (`<home>/infra`). None of them may lie
+inside a project's working tree or Git metadata: such a location is refused ([output-path guard](installation.md#repository-isolation-locations-output-paths-what-is-unavailable)). The launcher finds releases through `DEV_PLATFORM_STORE`,
 else `DEV_PLATFORM_HOME/versions`, else the user default, which is why `--print-env` exports the store. Remove
 everything with `chmod -R u+w ~/.local/share/dev-platform && rm -rf ~/.local/share/dev-platform ~/.cache/dev-platform`;
 `brew uninstall` never touches these.
@@ -145,7 +146,7 @@ CI runs **job-local verified releases**; a user-local CLI installation is a conv
       dev-platform setup --allow-unaccepted --print-env > "$RUNNER_TEMP/dp.env"
       unset GH_TOKEN GITHUB_TOKEN
       . "$RUNNER_TEMP/dp.env"
-      dev-platform check --stage pre-merge --base origin/main --result result.json
+      dev-platform check --stage pre-merge --base origin/main --result "$RUNNER_TEMP/result.json"
   ```
   Setting `DEV_PLATFORM_HOME` to a persistent directory on a runner shares releases and toolchains between jobs;
   integrity is still re-checked on every use, but only do it where the runner's user account is trusted.

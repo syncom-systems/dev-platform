@@ -22,9 +22,9 @@ These steps are exactly what `tools/pilot.py` runs against a real public consume
 4. **Realize the toolchain profile** the release ships for your project (for Rust/Cargo: `rust-cargo-1.99` for
    current dependency sets, `rust-cargo` for rustc 1.85) with the pinned release's own
    `DEV_PLATFORM_STORE=./store dev-platform toolchain provision --pinned --verify --project . --profile <profile>
-   --dest <dir>`, then put its directories on `PATH`; keep `DEV_PLATFORM_STORE=./store` for the commands below. Tool
+   --dest <dir outside the repository>`, then put its directories on `PATH`; keep `DEV_PLATFORM_STORE=./store` for the commands below. Tool
    identity is verified, not trusted. (`dev-platform setup` does steps 2 and 4 for you.)
-5. **Check**: `dev-platform doctor`, then `dev-platform check --stage full --result result.json`. Admission,
+5. **Check**: `dev-platform doctor`, then `dev-platform check --stage full --result <path outside the repository>`. Admission,
    certification and blockers are in the result. Certification means the checks passed under verified tool
    identity on a stated platform; it is not hermetic and not owner acceptance.
 6. **Bazel consumers: prove the Rust toolchain** (`rust-bazel*` profiles; Bazel only, Cargo is never run):

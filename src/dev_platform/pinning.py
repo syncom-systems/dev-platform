@@ -24,7 +24,8 @@ from collections.abc import Callable
 from dev_platform import infra_store
 from dev_platform.config import CONFIG_FILENAME, VERIFIER_PINS, parse
 from dev_platform.errors import ConfigError
-from dev_platform.infra_release import ReleaseError, digest_of
+from dev_platform.infra_release import WIRE_DIGEST_RE, ReleaseError, digest_of, manifest_of
+from dev_platform.runners import INFRA_SCHEMA
 
 PLATFORM_REPO = "syncom-systems/dev-platform"
 ISOLATION_FROM = (
@@ -121,25 +122,46 @@ def platform_block(pins: dict, profile: str) -> str:
     )
 
 
-def infra_pin(source: str, release: str, provider: str, ref: str = "main", run: Run = subprocess.run) -> dict:
-    """The exact pin of configuration release `release` from the configuration repository's index, with the
-    received release tree checked against the indexed digest."""
+def infra_pin(
+    source: str,
+    release: str,
+    provider: str,
+    digest: str,
+    ref: str = "main",
+    run: Run = subprocess.run,
+) -> dict:
+    """The exact pin of configuration release `release`. `digest` is the expected release-tree
+    digest, supplied independently of `source` (from the configuration owner's release notice): one read from
+    the same mutable source as the release proves only that the source agrees with itself. The received
+    release must equal it, the index must name it, and the release must implement a contract this platform
+    speaks. `source` is recorded as where to obtain it, never as an authority."""
+    if not isinstance(digest, str) or not WIRE_DIGEST_RE.fullmatch(digest):
+        raise ConfigError(["--infra-digest: 'sha256:' + 64 lowercase hex (the release-tree digest)"])
     try:
         src = infra_store.from_github(source, ref, release, runner=run)
         entry = next((r for r in src.index()["releases"] if r["version"] == release), None)
         if entry is None:
             raise ReleaseError("version-unknown", f"{source}: no release {release} in the index")
-        if digest_of(src.release(release)) != entry["digest"]:
+        files = src.release(release)
+        if digest_of(files) != digest.removeprefix("sha256:"):
             raise ReleaseError(
-                "release-tampered", f"{release}: received content does not have the indexed digest"
+                "digest-mismatch", f"{release}: received content does not have the supplied digest {digest}"
             )
+        if entry["digest"] != digest.removeprefix("sha256:"):
+            raise ReleaseError(
+                "digest-mismatch", f"{release}: the index of {source} names another digest than {digest}"
+            )
+        if entry["contract"] != INFRA_SCHEMA:
+            raise ReleaseError("unsupported-contract", f"{release} implements {entry['contract']}")
+        manifest_of(files, release, INFRA_SCHEMA)  # the release itself must speak the contract
     except ReleaseError as e:
         raise ConfigError([f"infra {release}: {e}"]) from None
     return {
         "provider": provider,
         "config_release": release,
-        "config_digest": "sha256:" + entry["digest"],
+        "config_digest": digest,
         "config_digest_kind": "release-tree",
+        "source": source,
         "contract": entry["contract"],
     }
 
@@ -152,6 +174,7 @@ def infra_block(pin: dict) -> str:
             f'config_release = "{pin["config_release"]}"',
             f'config_digest = "{pin["config_digest"]}"',
             f'config_digest_kind = "{pin["config_digest_kind"]}"',
+            *([f'source = "{pin["source"]}"'] if pin.get("source") else []),
         ]
     )
 

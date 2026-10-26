@@ -15,6 +15,7 @@ from dev_platform import locations as L
 from dev_platform.errors import ConfigError
 from tests import infra_fixtures as F
 from tests.helpers import ROOT, tmpdir
+from tests.repo_snapshot import changed, snapshot
 from tests.test_cli_e2e import make_store, run
 from tests.test_pack import rmtree_rw
 from tests.test_setup import FakeToolchains, build_release, platform_repo, write_project
@@ -144,7 +145,7 @@ class Edit(unittest.TestCase):
             pinning.apply(self.ORIGINAL, infra="[infra]\nprovider = 'x'")
 
 
-class Isolation(unittest.TestCase):
+class InstallBase(unittest.TestCase):
     """The whole project tree before and after, through install, a repeated install, update and verification."""
 
     def setUp(self):
@@ -162,7 +163,7 @@ class Isolation(unittest.TestCase):
                 "install_release": tool_pins["install_release.py_sha256"],
             },
         }
-        home = tmpdir(self)
+        home = self.home = tmpdir(self)
         self.addCleanup(rmtree_rw, home)
         self.loc = L.locate({}, home=home)
         bindir = tmpdir(self)
@@ -178,7 +179,7 @@ class Isolation(unittest.TestCase):
     def install(self, project, **kw):
         return project_install.install(
             project, self.loc, repo_url=str(self.repo), env=self.env, run=FakeToolchains(),
-            allow_unaccepted=True, **kw,
+            allow_unaccepted=True, infra_store_dir=self.home / "infra", **kw,
         )  # fmt: skip
 
     def python_project(self):
@@ -188,6 +189,8 @@ class Isolation(unittest.TestCase):
         (d / "README.md").write_text("hello\n")
         return d
 
+
+class Isolation(InstallBase):
     def test_first_installation_creates_only_the_pin_file_and_repeating_it_changes_nothing(self):
         d = self.python_project()
         before = tree(d)
@@ -279,6 +282,7 @@ class Isolation(unittest.TestCase):
             rec, code = self.install(
                 d, version="0.8.9", profile="py", infra_source="example-org/infra",
                 infra_release="2026.01.1", infra_provider="example-infra",
+                infra_digest=digests["2026.01.1"],
             )  # fmt: skip
             self.assertEqual(code, 0, rec.get("problem"))
             pin = config.load(d).infra
@@ -313,12 +317,13 @@ class VerificationIsReadOnly(unittest.TestCase):
         self.assertEqual(
             run(proj, store, "init", "--platform-version", "0.1.0", "--profile", "py").returncode, 0
         )
-        before = tree(proj)
+        before, bytes_before = snapshot(proj), tree(proj)
         for argv in (("doctor",), ("explain", "--changed", "app.py"), ("check", "--changed", "app.py"),
                      ("check", "--stage", "full", "--changed", "app.py")):  # fmt: skip
             r = run(proj, store, *argv)
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-            self.assertEqual(tree(proj), before, argv)
+            self.assertEqual(tree(proj), bytes_before, argv)
+            self.assertEqual(changed(before, snapshot(proj)), {}, argv)  # modes, mtimes and links too
 
 
 if __name__ == "__main__":
