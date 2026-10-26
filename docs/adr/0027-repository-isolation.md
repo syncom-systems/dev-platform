@@ -1,7 +1,7 @@
 # 0027 Repository isolation
 
-Status: Proposed (owner directive, 2026-10-25: Dev Platform and Infra are installed externally; the only
-platform-managed file in a consuming repository is `dev-platform.toml`; completion decisions 2026-10-26, below; the owner accepted the architecture, ratification is a separate owner act).
+Status: Ratified (owner directive, 2026-10-25: Dev Platform and Infra are installed externally; the only
+platform-managed file in a consuming repository is `dev-platform.toml`; completion decisions 2026-10-26, below; ratified by the owner's release instruction for 0.17.0, 2026-10-26).
 
 ## Context
 Until 0.16.0 a consuming project held, besides `dev-platform.toml`, `dev-platform.release-pins.json` (the release
