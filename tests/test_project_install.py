@@ -325,6 +325,26 @@ class VerificationIsReadOnly(unittest.TestCase):
             self.assertEqual(tree(proj), bytes_before, argv)
             self.assertEqual(changed(before, snapshot(proj)), {}, argv)  # modes, mtimes and links too
 
+    def test_consumer_commands_leave_git_metadata_untouched(self):
+        """A stale index is the case where `git status` would rewrite .git/index: the engine's git calls must not."""
+        store, _ = make_store(self)
+        proj = tmpdir(self) / "p"
+        shutil.copytree(ROOT / "fixtures" / "python-only", proj)
+        self.assertEqual(
+            run(proj, store, "init", "--platform-version", "0.1.0", "--profile", "py").returncode, 0
+        )
+        git = ["git", "-c", "user.name=t", "-c", "user.email=t@t"]
+        env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        for argv in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "i"]):
+            subprocess.run([*git, *argv], cwd=proj, check=True, capture_output=True, env=env)
+        os.utime(proj / "app.py", (1_000_000_000, 1_000_000_000))  # the index now holds stale stat data
+        before = snapshot(proj)
+        for argv in (("doctor",), ("explain", "--base", "HEAD"), ("check", "--base", "HEAD"),
+                     ("check", "--staged"), ("check", "--stage", "full")):  # fmt: skip
+            r = run(proj, store, *argv)
+            self.assertIn(r.returncode, (0, 1), r.stdout + r.stderr)
+            self.assertEqual(changed(before, snapshot(proj)), {}, argv)  # .git included
+
 
 if __name__ == "__main__":
     unittest.main()

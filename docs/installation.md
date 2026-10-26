@@ -228,8 +228,12 @@ is the directory of the nearest `dev-platform.toml` from `--project` and from th
 --root`, `infra resolve --evidence-out` and the request's `profile_out`; `infra store --store`; and the release, toolchain,
 cache and infrastructure-store locations, whether chosen by flag, by environment variable (a relative value is resolved
 against the working directory) or by default. Not guarded, because it is the contract itself: `dev-platform.toml`, written
-by `install`, `update --write` and `init`. The platform's own repository (`[platform] self_hosted = true`) is not a consumer,
-so its maintainer and build operations still write there. The check is made immediately before use; it does not defend
+by `install`, `update --write` and `init`. The platform's own repository is not a consumer, so its maintainer and build operations still write there; a
+repository is that only when its `dev-platform.toml` says `self_hosted = true` and it is the checkout the running platform
+code comes from, so claiming the mode in a consuming project grants nothing. The destination is judged as well: a command
+run from elsewhere cannot write into another project's tree, into any `.git` directory, or through a hard link of a project
+file, and containment is decided by file identity (letter case, links). Read-only commands do not touch `.git` either (the
+engine's `git diff` works on a private copy of the index). The check is made immediately before use; it does not defend
 against another process swapping a path in between.
 
 **Unavailable until the external CI, Bazel and hook architecture exists** (none of them can be installed into a repository):

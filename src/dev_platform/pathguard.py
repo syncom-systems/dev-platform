@@ -4,15 +4,26 @@ A consuming project's working tree and Git metadata are never a destination of p
 caller-chosen destination (an output flag, an evidence or store location, an installation root, an
 environment override) is resolved through symlinks and refused when it lies inside a protected tree.
 
-Protected: the directory of the nearest `dev-platform.toml` (from the explicit project and from the working
-directory), the Git working tree containing it, and the Git metadata directories (including a linked
-worktree's). Not protected: the platform's own repository (`[platform] self_hosted`), whose maintainer and
-build operations legitimately write there. The only writes into a project, `dev-platform.toml` by `install`,
-`update` and `init`, do not pass through this guard.
+Protected, judged two ways, so that neither the working directory nor the flags decide alone:
+- from where the command runs: the directory of the nearest `dev-platform.toml` (from `--project` and from
+  the working directory), the Git working tree containing it, and the Git metadata (a linked worktree's and
+  the main repository's included);
+- from the destination itself: any ancestor holding a `dev-platform.toml`, and any `.git` component. A
+  command run from elsewhere therefore cannot write into another project, or into any Git metadata.
 
-Resolution is `realpath` of the destination, which follows symlinks in every existing component, so a link
-that leads into the project is judged by its target. The check happens immediately before use; a path
-changed concurrently by another process between check and use is not defended against.
+Containment is decided by file identity (`samefile` on each existing ancestor), not by comparing path text,
+so a different spelling of the same directory (letter case on a case-insensitive volume, a bind or a link)
+cannot slip through. An existing file with several hard links is refused when another link lies in a
+protected tree.
+
+The one exemption is the platform's own repository: a `dev-platform.toml` that says `self_hosted = true` AND
+is the checkout the running platform code comes from (`<root>/src/dev_platform` is this very package, not a
+link to it). The claim alone grants nothing: a consuming project, or a cloned repository, that sets
+`self_hosted = true` is as protected as any other, because the code that runs is not in it. The only writes
+into a project, `dev-platform.toml` by `install`, `update` and `init`, do not pass through this guard.
+
+Resolution is `realpath`, which follows symlinks in every existing component. The check happens immediately
+before use; a path swapped concurrently by another process between check and use is not defended against.
 """
 
 from __future__ import annotations
@@ -25,12 +36,26 @@ from pathlib import Path
 from dev_platform.config import CONFIG_FILENAME
 from dev_platform.errors import ConfigError
 
+PACKAGE_DIR = Path(os.path.realpath(Path(__file__).resolve().parent))
+
 
 def _real(p: Path | str) -> Path:
     return Path(os.path.realpath(os.path.abspath(os.fspath(p))))
 
 
-def _self_hosted(toml: Path) -> bool:
+def _same(a: Path, b: Path) -> bool:
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return False
+
+
+def _inside(target: Path, root: Path) -> bool:
+    """Is `target` (which need not exist) `root` or below it, by identity of an existing ancestor?"""
+    return any(p.exists() and _same(p, root) for p in [target, *target.parents])
+
+
+def _claims_self_hosted(toml: Path) -> bool:
     try:
         platform = tomllib.loads(toml.read_text(encoding="utf-8")).get("platform", {})
     except (OSError, ValueError):
@@ -38,9 +63,21 @@ def _self_hosted(toml: Path) -> bool:
     return isinstance(platform, dict) and platform.get("self_hosted") is True
 
 
+def is_platform_repository(root: Path) -> bool:
+    """The platform's own checkout: it claims `self_hosted` and the running code is its `src/dev_platform`."""
+    toml = root / CONFIG_FILENAME
+    here = root / "src" / "dev_platform"
+    return (
+        toml.is_file()
+        and _claims_self_hosted(toml)
+        and not (root / "src").is_symlink()
+        and not here.is_symlink()
+        and _real(here) == PACKAGE_DIR
+    )
+
+
 def _git_dirs(root: Path) -> list[Path]:
     """The Git working tree containing `root` and its metadata (a `.git` file points at the real one)."""
-    out: list[Path] = []
     for d in [root, *root.parents]:
         g = d / ".git"
         if g.is_dir():
@@ -58,7 +95,7 @@ def _git_dirs(root: Path) -> list[Path]:
                 if common.is_file():
                     out.append(_real(target / common.read_text(encoding="utf-8").strip()))
             return out
-    return out
+    return []
 
 
 def protected_roots(project: Path | None = None, cwd: Path | None = None) -> list[Path]:
@@ -68,9 +105,8 @@ def protected_roots(project: Path | None = None, cwd: Path | None = None) -> lis
     for start in starts:
         start = _real(start)
         for d in [start, *start.parents]:
-            toml = d / CONFIG_FILENAME
-            if toml.is_file():
-                if not _self_hosted(toml):
+            if (d / CONFIG_FILENAME).is_file():
+                if not is_platform_repository(d):
                     roots += [d, *_git_dirs(d)]
                 break
     seen: list[Path] = []
@@ -80,16 +116,47 @@ def protected_roots(project: Path | None = None, cwd: Path | None = None) -> lis
     return seen
 
 
+def _hardlinked_into(target: Path, roots: list[Path]) -> Path | None:
+    """The root holding another hard link of the existing multiply-linked file `target`, if any."""
+    try:
+        st = target.stat()
+    except OSError:
+        return None
+    if not target.is_file() or st.st_nlink < 2:
+        return None
+    for root in roots:
+        for dirpath, _dirs, files in os.walk(root):
+            for name in files:
+                try:
+                    o = os.stat(os.path.join(dirpath, name), follow_symlinks=False)
+                except OSError:
+                    continue
+                if (o.st_dev, o.st_ino) == (st.st_dev, st.st_ino):
+                    return root
+    return None
+
+
 def refusal(path: Path | str, what: str, project: Path | None = None, cwd: Path | None = None) -> str | None:
     """Why `path` may not be written (None: it may)."""
     target = _real(path)
-    for root in protected_roots(project, cwd):
-        if target == root or root in target.parents:
-            return (
-                f"{what} {os.fspath(path)!r} resolves to {target}, inside the project tree or Git metadata "
-                f"{root}: repository isolation allows only {CONFIG_FILENAME} there (ADR 0027); choose a "
-                "location outside the repository"
-            )
+    roots = protected_roots(project, cwd)
+
+    def msg(where: str, root: Path | str) -> str:
+        return (
+            f"{what} {os.fspath(path)!r} resolves to {target}, {where} {root}: repository isolation allows "
+            f"only {CONFIG_FILENAME} there (ADR 0027); choose a location outside the repository"
+        )
+
+    for root in roots:
+        if _inside(target, root):
+            return msg("inside the project tree or Git metadata", root)
+    for anc in [target, *target.parents]:
+        if anc.name == ".git":
+            return msg("inside Git metadata", anc)
+        if (anc / CONFIG_FILENAME).is_file() and not is_platform_repository(anc):
+            return msg("inside the project tree", anc)
+    if root := _hardlinked_into(target, roots):
+        return msg("a hard link of a file in the project tree", root)
     return None
 
 

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from dev_platform import infra_store, locations, pathguard
 from dev_platform.errors import ConfigError
@@ -116,14 +117,67 @@ class Guard(unittest.TestCase):
         self.assertIsNotNone(pathguard.refusal(self.proj / ".git" / "x", "x", wt, cwd=self.base))
 
     def test_the_platform_repository_itself_is_not_protected(self):
-        _, own = make_project(
-            self,
-            TOML.replace(
-                TOML[TOML.index("[platform]") : TOML.index("[project]")],
-                '[platform]\nself_hosted = true\nprofile = "dev-platform"\n',
-            ),
+        self.assertTrue(pathguard.is_platform_repository(ROOT))
+        self.assertIsNone(pathguard.refusal(ROOT / "dist" / "x", "x", ROOT, cwd=ROOT))
+
+    def test_claiming_self_hosted_grants_nothing(self):
+        claim = TOML.replace(
+            TOML[TOML.index("[platform]") : TOML.index("[project]")],
+            '[platform]\nself_hosted = true\nprofile = "dev-platform"\n',
         )
-        self.assertIsNone(pathguard.refusal(own / "dist" / "x", "x", own, cwd=own))
+        _base, own = make_project(self, claim)
+        self.assertFalse(pathguard.is_platform_repository(own))
+        self.assertIsNotNone(pathguard.refusal(own / "dist" / "x", "x", own, cwd=own))
+        # ... also when the claimant links the running package into its tree
+        (own / "src").mkdir()
+        (own / "src" / "dev_platform").symlink_to(pathguard.PACKAGE_DIR)
+        self.assertFalse(pathguard.is_platform_repository(own))
+        self.assertIsNotNone(pathguard.refusal(own / "dist" / "x", "x", own, cwd=own))
+        (own / "src" / "dev_platform").unlink()
+        (own / "src").rmdir()
+        (own / "src").symlink_to(ROOT / "src")
+        self.assertFalse(pathguard.is_platform_repository(own))
+        self.assertIsNotNone(pathguard.refusal(own / "x", "x", own, cwd=own))
+        # only the checkout the running code comes from is the platform repository
+        (own / "src").unlink()
+        (own / "src" / "dev_platform").mkdir(parents=True)
+        with mock.patch.object(
+            pathguard, "PACKAGE_DIR", Path(os.path.realpath(own / "src" / "dev_platform"))
+        ):
+            self.assertTrue(pathguard.is_platform_repository(own))
+            self.assertIsNone(pathguard.refusal(own / "dist" / "x", "x", own, cwd=own))
+
+    def test_the_destination_alone_identifies_a_project_from_elsewhere(self):
+        elsewhere = self.base / "elsewhere"
+        elsewhere.mkdir()
+        for p in (self.proj / "sub" / "x", self.proj / ".git" / "x", self.proj / "new" / "deep" / "x"):
+            self.assertIsNotNone(pathguard.refusal(p, "x", None, cwd=elsewhere), p)
+        self.assertIsNone(pathguard.refusal(self.base / "fine", "x", None, cwd=elsewhere))
+
+    def test_any_git_metadata_is_refused_even_without_a_project(self):
+        repo = self.base / "plain"
+        git_init(repo)
+        for p in (repo / ".git" / "hooks" / "pre-commit", repo / ".git" / "config", repo / ".git"):
+            self.assertIsNotNone(pathguard.refusal(p, "x", None, cwd=self.base), p)
+        self.assertIsNone(
+            pathguard.refusal(repo / "out.json", "x", None, cwd=self.base)
+        )  # no toml: not a project
+
+    @unittest.skipUnless(sys.platform == "darwin", "needs a case-insensitive volume (the default on macOS)")
+    def test_another_letter_case_of_the_same_directory_is_the_same_directory(self):
+        upper = Path(str(self.proj).replace("/proj", "/PROJ"))
+        if not upper.exists():
+            self.skipTest("case-sensitive volume")
+        self.assertIsNotNone(pathguard.refusal(upper / "sub" / "x", "x", self.proj, cwd=self.base))
+        self.assertIsNotNone(pathguard.refusal(upper / ".GIT" / "x", "x", None, cwd=self.base))
+
+    def test_a_hard_link_to_a_project_file_is_refused(self):
+        outside = self.base / "linked.json"
+        os.link(self.proj / "README.md", outside)
+        self.assertIsNotNone(pathguard.refusal(outside, "x", self.proj, cwd=self.base))
+        lone = self.base / "lone.json"
+        lone.write_text("x")
+        self.assertIsNone(pathguard.refusal(lone, "x", self.proj, cwd=self.base))
 
     def test_an_invalid_pin_file_still_protects(self):
         base, proj = make_project(self, "this is not toml [")
@@ -292,12 +346,34 @@ class Sinks(unittest.TestCase):
             )
             self.assertNotIn("repository isolation", r.stderr, what)
 
-    def test_the_platform_repository_keeps_its_maintainer_operations(self):
-        own_toml = 'schema_version = 1\n[platform]\nself_hosted = true\nprofile = "dev-platform"\n[project]\nname = "own"\n'
-        _base, own = make_project(self, own_toml)
+    def test_a_project_claiming_self_hosted_is_still_guarded_through_the_cli(self):
+        claim = TOML.replace(
+            TOML[TOML.index("[platform]") : TOML.index("[project]")],
+            '[platform]\nself_hosted = true\nprofile = "dev-platform"\n',
+        )
+        base, own = make_project(self, claim)
+        before = snapshot(own)
         r = cli(["infra", "init", "--owner", "o", "--root", str(own / "cfg")], own)
-        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertTrue((own / "cfg").is_dir())
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertIn("repository isolation", r.stderr)
+        r = cli(["toolchain", "materialize", "--manifest", str(ROOT / "toolchains" / "manifest.json"),
+                 "--profile", "python-ty-bazel-9.3", "--project", str(own), "--add-hooks"], base)  # fmt: skip
+        self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+        self.assertEqual(changed(before, snapshot(own)), {})
+
+    def test_a_command_run_from_elsewhere_cannot_write_into_a_project(self):
+        before = snapshot(self.proj)
+        elsewhere = self.base / "elsewhere"
+        elsewhere.mkdir()
+        for argv in (
+            ["check", "--result", str(self.proj / "r.json")],
+            ["infra", "init", "--owner", "o", "--root", str(self.proj / "cfg")],
+            ["workflow", "--output", str(self.proj / ".git" / "hooks" / "pre-commit")],
+        ):
+            r = cli(argv, elsewhere)
+            self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+            self.assertIn("repository isolation", r.stderr)
+        self.assertEqual(changed(before, snapshot(self.proj)), {})
 
 
 class Materialize(unittest.TestCase):

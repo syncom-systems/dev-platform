@@ -1,7 +1,7 @@
 # 0027 Repository isolation
 
-Status: Accepted (owner directive, 2026-10-25: Dev Platform and Infra are installed externally; the only
-platform-managed file in a consuming repository is `dev-platform.toml`; completion decisions 2026-10-26, below).
+Status: Proposed (owner directive, 2026-10-25: Dev Platform and Infra are installed externally; the only
+platform-managed file in a consuming repository is `dev-platform.toml`; completion decisions 2026-10-26, below; the owner accepted the architecture, ratification is a separate owner act).
 
 ## Context
 Until 0.16.0 a consuming project held, besides `dev-platform.toml`, `dev-platform.release-pins.json` (the release
@@ -51,9 +51,17 @@ reading several platform-generated files.
    `toolchain provision --dest .devenv`) is resolved with `realpath` and refused, exit 2 and nothing written, when it lies
    inside the working tree or the Git metadata (linked worktrees included) of a consuming project: the directory of the
    nearest `dev-platform.toml` from `--project` and from the working directory, and the Git working tree containing it. A
-   pin file that cannot be parsed still protects. Exempt: the platform's own repository (`self_hosted = true`), so
-   maintainer and build operations work; and `dev-platform.toml` written by `install`, `update --write` and `init`.
-   A symbolic-link `dev-platform.toml` is never written through. Check-then-use only: a concurrent swap is not defended.
+   pin file that cannot be parsed still protects. The destination is judged too: any ancestor holding a
+   `dev-platform.toml`, and any `.git` component, is refused, so a command run from elsewhere cannot write into another
+   project or into Git metadata. Containment is decided by file identity (`samefile`), not path text (letter case on a
+   case-insensitive volume, links), and an existing file hard-linked into a protected tree is refused. The one exemption is
+   the platform's own repository, and `self_hosted = true` alone does not make a repository that: the `dev-platform.toml`
+   must also be the checkout the running code comes from (`<root>/src/dev_platform` is this very package, neither it nor
+   `src` a link), so a consuming project or a cloned repository claiming the mode gets no privilege. `dev-platform.toml`
+   written by `install`, `update --write` and `init` is the contract itself and does not pass the guard. A symbolic-link
+   `dev-platform.toml` is never written through. Check-then-use only: a concurrent swap is not defended.
+   Read-only consumer commands do not write Git metadata either: the engine's git calls use `--no-optional-locks` and
+   `git diff` runs on a private copy of the index outside the repository (it rewrites `.git/index` otherwise).
 7. **`toolchain materialize` writes nothing into a project.** `--check` and `--dry-run` remain; any writing mode is refused
    with the correction. A directory that is not a project (no `dev-platform.toml`, or the platform's own repository) can
    still be rendered into, which keeps the qualification tool working (it calls the library in process).

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -42,7 +44,9 @@ subprocess_executor = make_executor()
 
 def git_revision(root: Path) -> str | None:
     try:
-        r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True)
+        r = subprocess.run(
+            ["git", "--no-optional-locks", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True
+        )
     except FileNotFoundError:
         return None
     return r.stdout.strip() if r.returncode == 0 else None
@@ -51,7 +55,9 @@ def git_revision(root: Path) -> str | None:
 def git_dirty(root: Path) -> bool:
     """True when the tree differs from HEAD (or git state is unreadable: fail closed)."""
     try:
-        r = subprocess.run(["git", "status", "--porcelain"], cwd=root, capture_output=True, text=True)
+        r = subprocess.run(
+            ["git", "--no-optional-locks", "status", "--porcelain"], cwd=root, capture_output=True, text=True
+        )
     except FileNotFoundError:
         return True
     return r.returncode != 0 or bool(r.stdout.strip())
@@ -65,13 +71,38 @@ def git_changed(root: Path, *, base: str | None = None, staged: bool = False) ->
     omit changes. That relationship is not translated; it is unknown impact (ADR 0006 §3).
     """
 
+    # `git diff` refreshes (and rewrites) the index, with or without --no-optional-locks: a read-only command
+    # of the platform must not change Git metadata, so git works on a private copy of the index outside the
+    # repository.
+    scratch = tempfile.TemporaryDirectory(prefix="dp-git-")
+    env = dict(os.environ)
+    idx = subprocess.run(
+        ["git", "--no-optional-locks", "rev-parse", "--git-path", "index"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    if idx.returncode == 0 and idx.stdout.strip():
+        src = Path(root) / idx.stdout.strip()
+        copy = Path(scratch.name) / "index"
+        if src.is_file():
+            shutil.copyfile(src, copy)
+        env["GIT_INDEX_FILE"] = str(copy)
+
     def run(*args: str) -> list[str] | None:
         try:
-            r = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True)
+            r = subprocess.run(
+                ["git", "--no-optional-locks", *args], cwd=root, capture_output=True, text=True, env=env
+            )
         except (FileNotFoundError, NotADirectoryError):
             return None
         return r.stdout.splitlines() if r.returncode == 0 else None
 
+    try:
+        return _git_changed(run, base=base, staged=staged)
+    finally:
+        scratch.cleanup()
+
+
+def _git_changed(run, *, base: str | None, staged: bool) -> tuple[str, ...] | None:
     if run("rev-parse", "--show-prefix") != [""]:
         return None  # not a worktree, or a project below its root
     if staged:

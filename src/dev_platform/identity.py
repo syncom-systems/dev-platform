@@ -31,7 +31,7 @@ def tracked_files(root: Path) -> tuple[str, ...] | None:
     """Tracked plus untracked, not ignored, paths; None (unknown) without readable git state."""
     try:
         r = subprocess.run(
-            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            ["git", "--no-optional-locks", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
             cwd=root,
             capture_output=True,
         )
