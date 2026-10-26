@@ -57,7 +57,7 @@ reading several platform-generated files.
    case-insensitive volume, links), and an existing file hard-linked into a protected tree is refused. The one exemption is
    the platform's own repository, and `self_hosted = true` alone does not make a repository that: the `dev-platform.toml`
    must also be the checkout the running code comes from (`<root>/src/dev_platform` is this very package, neither it nor
-   `src` a link), so a consuming project or a cloned repository claiming the mode gets no privilege. `dev-platform.toml`
+   `src` a link), so a consuming project or a cloned repository claiming the mode gets no privilege. No environment variable or flag takes part: a release the checkout launches is not the checkout's code, so qualification writes under the platform cache directory, outside it. `dev-platform.toml`
    written by `install`, `update --write` and `init` is the contract itself and does not pass the guard. A symbolic-link
    `dev-platform.toml` is never written through. Check-then-use only: a concurrent swap is not defended.
    Read-only consumer commands do not write Git metadata either: the engine's git calls use `--no-optional-locks` and

@@ -18,9 +18,11 @@ protected tree.
 
 The one exemption is the platform's own repository: a `dev-platform.toml` that says `self_hosted = true` AND
 is the checkout the running platform code comes from (`<root>/src/dev_platform` is this very package, not a
-link to it). The claim alone grants nothing: a consuming project, or a cloned repository, that sets
-`self_hosted = true` is as protected as any other, because the code that runs is not in it. The only writes
-into a project, `dev-platform.toml` by `install`, `update` and `init`, do not pass through this guard.
+link to it). Only the code's own location decides, never an environment variable or a flag, so a release
+run by the checkout is not the checkout. The claim alone grants nothing: a consuming project, or a cloned
+repository, that sets `self_hosted = true` is as protected as any other, because the code that runs is not in
+it. The only writes into a project, `dev-platform.toml` by `install`, `update` and `init`, do not pass
+through this guard.
 
 Resolution is `realpath`, which follows symlinks in every existing component. The check happens immediately
 before use; a path swapped concurrently by another process between check and use is not defended against.
@@ -37,7 +39,6 @@ from dev_platform.config import CONFIG_FILENAME
 from dev_platform.errors import ConfigError
 
 PACKAGE_DIR = Path(os.path.realpath(Path(__file__).resolve().parent))
-LAUNCHER_ENV = "DEV_PLATFORM_LAUNCHER_PACKAGE"  # set by a launcher for the pinned release it re-executes into
 
 
 def _real(p: Path | str) -> Path:
@@ -64,19 +65,9 @@ def _claims_self_hosted(toml: Path) -> bool:
     return isinstance(platform, dict) and platform.get("self_hosted") is True
 
 
-def running_packages(env=os.environ) -> set[Path]:
-    """The platform code this process runs, and the code of the launcher that re-executed it into a pinned
-    release (a maintainer qualifying a built release runs the checkout as the launcher). The environment is
-    the caller's, never the repository's: a project cannot supply either."""
-    out = {PACKAGE_DIR}
-    if env.get(LAUNCHER_ENV):
-        out.add(_real(env[LAUNCHER_ENV]))
-    return out
-
-
 def is_platform_repository(root: Path) -> bool:
-    """The platform's own checkout: it claims `self_hosted` and the running code (or its launcher) is its
-    `src/dev_platform`."""
+    """The platform's own checkout: it claims `self_hosted` and the running code is its `src/dev_platform`.
+    Nothing the caller supplies (environment, flags) takes part: only where this code was loaded from."""
     toml = root / CONFIG_FILENAME
     here = root / "src" / "dev_platform"
     return (
@@ -84,7 +75,7 @@ def is_platform_repository(root: Path) -> bool:
         and _claims_self_hosted(toml)
         and not (root / "src").is_symlink()
         and not here.is_symlink()
-        and _real(here) in running_packages()
+        and _real(here) == PACKAGE_DIR
     )
 
 

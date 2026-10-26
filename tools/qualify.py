@@ -25,7 +25,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WORK = ROOT / ".devenv" / "qualify"
+# Outside the checkout (ADR 0027): the built release that runs the checks is not the checkout's own code, so it
+# may not write into the checkout; the platform's own cache directory is where its output belongs.
+WORK = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "dev-platform" / "qualify"
 
 
 def rmtree(path: Path) -> None:

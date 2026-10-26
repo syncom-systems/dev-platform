@@ -19,7 +19,6 @@ from dev_platform.config import Config
 from dev_platform.digest import snapshot, tree_digest
 from dev_platform.errors import ConfigError, PlatformResolutionError
 from dev_platform.locations import HOME_ENV, STORE_ENV
-from dev_platform.pathguard import LAUNCHER_ENV
 
 OVERRIDE_ENV = "DEV_PLATFORM_OVERRIDE"
 REEXEC_ENV = "DEV_PLATFORM_REEXEC"
@@ -155,7 +154,6 @@ def reexec_env(res: Resolution, env=os.environ) -> dict[str, str]:
     e["PYTHONPATH"] = str(res.root)
     e["PYTHONDONTWRITEBYTECODE"] = "1"  # keep the pinned tree byte-identical
     e[REEXEC_ENV] = res.version or res.mode
-    e.setdefault(LAUNCHER_ENV, str(PACKAGE_ROOT / "dev_platform"))  # the launcher's code, for the path guard
     return e
 
 
