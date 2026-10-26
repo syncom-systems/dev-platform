@@ -45,12 +45,17 @@ cd my-project
 dev-platform install --version 0.17.0 --profile <toolchain profile>
 # with an infrastructure configuration release (exact; there is no "latest"):
 dev-platform install --version 0.17.0 --profile <profile> \
-  --infra-source OWNER/CONFIG-REPO --infra-provider <name> --infra-release 2026.10.2
+  --infra-source OWNER/CONFIG-REPO --infra-provider <name> --infra-release 2026.10.2 \
+  --infra-digest sha256:<release-tree digest from the configuration owner's release notice>
 ```
-`--version` defaults to the CLI's own version. The identity is read from the platform's published
-`releases/<version>/identity.json` (which must name the commit its tag names), the infrastructure identity from the
-configuration repository's release index (the received release is checked against its digest). `install` never changes an
-existing `dev-platform.toml`: run again it verifies and reuses (idempotent), and `--dry-run` writes nothing.
+`--version` is required on a first installation and never defaults to the CLI's own version: the CLI is only the
+bootstrap that verifies and launches the release that runs, and `--dry-run` prints both (`bootstrap CLI` and
+`executes release`). The platform identity is read from the published `releases/<version>/identity.json` (which must name
+the commit its tag names). `--infra-digest` is supplied independently of `--infra-source`: a digest read from the same
+mutable source as the release would only prove that the source agrees with itself. The received release must equal it,
+the source's index must name it, and the release must implement `dev-platform.infra/v1`; anything else is refused and
+nothing is written. `install` never changes an existing `dev-platform.toml`: run again it verifies and reuses
+(idempotent), and `--dry-run` writes nothing.
 
 Format of the pin (the three `[platform]` identity keys are all present or all absent; `[infra]` is optional):
 ```toml
@@ -71,7 +76,10 @@ provider = "<name>"
 config_release = "2026.10.2"
 config_digest = "sha256:<release-tree digest>"
 config_digest_kind = "release-tree"
+source = "OWNER/CONFIG-REPO"        # optional: where to obtain the release; never an authority (the digest is)
 ```
+`source` only tells `install` where to fetch a release that is missing from the store; it is not part of any result's
+identity, and a held release is never fetched again by `install`.
 
 Then, in the project root (`install` and `setup` also find the project from a subdirectory; `doctor` and `check` default to the
 current directory, so run them from the root or pass `--project <root>`). `install` already ran `setup`; run it directly to
@@ -110,14 +118,39 @@ dev-platform CLI` (0.14.0). From 0.15.0 the CLI only verifies and runs the pinne
 `dev-platform update` proposes the change to the same file and never writes without `--write`:
 ```sh
 dev-platform update --to 0.17.1                              # prints the diff of dev-platform.toml; nothing written
-dev-platform update --to 0.17.1 --infra-source OWNER/CONFIG-REPO --infra-release 2026.10.3
+dev-platform update --to 0.17.1 --infra-source OWNER/CONFIG-REPO --infra-release 2026.10.3 \
+  --infra-digest sha256:<release-tree digest>
 dev-platform update --to 0.17.1 --write                      # apply it (review and commit the file)
 dev-platform install                                         # install and verify what the file now pins
 ```
-Only the `[platform]` and `[infra]` tables are replaced; every other line is kept. A project still pinned to a release before
-0.17.0 (with `dev-platform.release-pins.json`) moves with `dev-platform update --to 0.17.0 --write`, after which the pins
-file is deleted by the project. A toolchain change is always a new release. A release that adds a configuration key (for
-example `[infra] config_digest_kind`, 0.10.0) is required before the project may use that key.
+Only the `[platform]` and `[infra]` tables are replaced; every other line (the project's own configuration and its
+comments) is kept. A toolchain change is always a new release. A release that adds a configuration key (for example
+`[infra] config_digest_kind`, 0.10.0) is required before the project may use that key.
+
+### Migrating a pin from before 0.17.0
+A project pinned to 0.8.0 to 0.14.x (identity in `dev-platform.release-pins.json`, or in neither file) moves with one
+command; it writes `dev-platform.toml` and nothing else:
+```sh
+dev-platform update --to 0.17.0                # the diff, the bootstrap/executing identities and any legacy files; no write
+dev-platform update --to 0.17.0 --write        # writes dev-platform.toml only
+dev-platform install                           # installs and verifies what the file now pins
+```
+`--to` is required and must be 0.17.0 or later; 0.15.0 and 0.16.x are refused (their toolchain preparation writes into the
+project). The `[project]`, `[[check]]`, `[impact]`, `[runner.*]` tables and every comment stay byte for byte; an existing
+`[infra]` pin is kept. Until `--write` is run, a project still pinned before 0.17.0 keeps working from its pins file, which
+is read and never written. Afterwards `dev-platform.toml` alone is the pin and the legacy files are ignored.
+
+**Legacy repository files** (`dev-platform.release-pins.json`, `.dev-platform/infra-profile.json`, a `dev-platform/` Bazel
+directory, the platform's entry lines in `MODULE.bazel` and `.bazelrc`) are reported by `update`, `install` and `setup`
+and are never read as an operational input (except the pins file of a not yet migrated pin), changed or deleted.
+Removing them is the project owner's decision. A vendored infra profile is used only when passed explicitly with
+`--infra-profile`.
+
+**Blocked: a project whose profile is a Bazel profile** (for example `rust-aarch64-none-bazel-9.3`). Its pin migrates, but
+`setup` verifies the platform's generated Bazel files inside the repository, which can no longer be installed or refreshed
+by the platform; the project's existing `dev-platform/` files, written by an older release, are verified as they are and
+conflict with 0.17.0 unless regenerated. Regenerating them writes into the repository, which this milestone does not do
+(next section).
 
 ## 5. Rollback
 **CLI** (Homebrew keeps no old versions; the tap's history does):
@@ -173,6 +206,44 @@ self-hosted macOS runner (it writes to `/Users/runner`). On such a runner use `c
 Python 3.11+ (for profiles other than `python`, whose verification covers the running interpreter), or a GitHub-hosted
 runner; the platform's own toolchain is provisioned from the release's pins either way. Toolchain sources exist for
 macOS arm64 and Linux x86_64 only, so a Linux arm64 runner cannot run a pinned release.
+
+## Repository isolation: locations, output paths, what is unavailable
+Everything the platform installs or generates lives outside the project:
+```
+~/.local/share/dev-platform/        --home, DEV_PLATFORM_HOME (in CI $RUNNER_TEMP/dev-platform)
+  versions/<version>/               verified platform releases, write-once      --store, DEV_PLATFORM_STORE
+  toolchains/<version>/<profile>/   provisioned toolchains                      --toolchains, DEV_PLATFORM_TOOLCHAINS
+  infra/                            infrastructure store: releases/, authorization/   --infra-store (install), --store (infra store)
+~/.cache/dev-platform/              git objects of the pinned revision, lock    --cache, DEV_PLATFORM_CACHE
+```
+The infrastructure store has one calculation, `<data root>/infra`, for `install` and every `infra` command. Overriding the
+platform release store (`--store`, `DEV_PLATFORM_STORE`) never moves it; only `--infra-store` / `infra store --store` does.
+
+**Output-path guard.** A destination the caller chooses is resolved through symlinks and refused (exit 2, nothing written)
+when it lies inside a consuming project's working tree or its Git metadata (including a linked worktree's). The project
+is the directory of the nearest `dev-platform.toml` from `--project` and from the working directory. Guarded: `check --result`;
+`toolchain provision|prepare --dest` (the default `.devenv` is inside a project, so pass a directory outside it);
+`toolchain prove-bazel-rust --out`; `release build|pack --out`, `release install --store`; `provenance assemble --out`;
+`dependency-snapshot --out`; `evidence put --store`, `evidence bundle --out`; `workflow --output`; `infra init|release build
+--root`, `infra resolve --evidence-out` and the request's `profile_out`; `infra store --store`; and the release, toolchain,
+cache and infrastructure-store locations, whether chosen by flag, by environment variable (a relative value is resolved
+against the working directory) or by default. Not guarded, because it is the contract itself: `dev-platform.toml`, written
+by `install`, `update --write` and `init`. The platform's own repository is not a consumer, so its maintainer and build operations still write there; a
+repository is that only when its `dev-platform.toml` says `self_hosted = true` and it is the checkout the running platform
+code comes from, so claiming the mode in a consuming project grants nothing. The destination is judged as well: a command
+run from elsewhere cannot write into another project's tree, into any `.git` directory, or through a hard link of a project
+file, and containment is decided by file identity (letter case, links). Read-only commands do not touch `.git` either (the
+engine's `git diff` works on a private copy of the index). The check is made immediately before use; it does not defend
+against another process swapping a path in between.
+
+**Unavailable until the external CI, Bazel and hook architecture exists** (none of them can be installed into a repository):
+- `toolchain materialize` writes nothing into a project (`--check` and `--dry-run` remain); the platform-managed Bazel
+  configuration, and therefore Bazel profiles in a project that does not already hold `dev-platform/generated.json`
+  (`toolchain prepare` refuses them);
+- the central CI path: `dev-platform workflow` previews a caller workflow, and `consumer-pilot.yml` / `tools/consumer_run.py`
+  still read `dev-platform.release-pins.json`; no workflow is installed;
+- hooks of any kind, and runner configuration in a repository;
+- the implicit vendored infra profile (`.dev-platform/infra-profile.json`); `--infra-profile FILE` still takes one explicitly.
 
 ## Hosted-only mode (the default)
 No `[infra]` table, no configuration repository, no resolver. The engine offers GitHub-hosted runners only;

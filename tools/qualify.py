@@ -25,7 +25,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-WORK = ROOT / ".devenv" / "qualify"
+# Outside the checkout (ADR 0027): the built release that runs the checks is not the checkout's own code, so it
+# may not write into the checkout; the platform's own cache directory is where its output belongs.
+WORK = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "dev-platform" / "qualify"
 
 
 def rmtree(path: Path) -> None:
@@ -227,10 +229,12 @@ def prepare_baseline(consumer: Path, profile: str, env: dict, py: list) -> dict:
     """What a project does once per pinned release: materialize the platform's Bazel configuration, then
     resolve the module graph (the existing lockfile machinery, unchanged)."""
     manifest = json.loads((ROOT / "toolchains" / "manifest.json").read_text())
-    run([*py, "toolchain", "materialize", "--manifest", str(ROOT / "toolchains" / "manifest.json"),
-         "--project", str(consumer), "--profile", profile, "--add-hooks"], ROOT, env)  # fmt: skip
     sys.path.insert(0, str(ROOT / "src"))
-    from dev_platform import toolchain
+    from dev_platform import __version__, bazelconf, toolchain
+
+    # In process: the CLI's `toolchain materialize` writes nothing into a project (ADR 0027); this fixture is
+    # a throwaway qualification consumer, not a project.
+    bazelconf.materialize(manifest, profile, consumer, __version__, add_hooks=True)
 
     benv = {**env, **toolchain.runtime_env(manifest, profile)}
     run(["bazel", "mod", "deps", "--lockfile_mode=update"], consumer, benv)

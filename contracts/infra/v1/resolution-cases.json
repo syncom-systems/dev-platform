@@ -91,6 +91,31 @@
       }
     },
     {
+      "name": "public default for an untrusted event needs no authorization policy (none installed, none reported)",
+      "pin": {
+        "provider": "acme-infra",
+        "config_release": "1.4.0",
+        "config_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "result": {
+        "schema_version": "dev-platform.infra-resolve-result/v1",
+        "decision": "public-default",
+        "reasons": [
+          "untrusted-event: hosted-only public default; no private release loaded"
+        ],
+        "requested": {
+          "version": "1.4.0",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "resolved": null,
+        "authorization_policy": null
+      },
+      "profile": null,
+      "expect": {
+        "status": "hosted-only"
+      }
+    },
+    {
       "name": "denied: repository not authorized",
       "pin": {
         "provider": "acme-infra",

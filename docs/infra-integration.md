@@ -124,7 +124,7 @@ authorization/current.v1.json   the current authorization policy: narrows or rev
   `policy_id`, `revision`, `minimum_release`, `revoked_releases`, `repositories_enabled`, `withdrawn`,
   `repository_withdrawn`. Stale (below the floor) and revoked releases are denied; withdrawals remove runners or
   credential classes from the effective profile. Unknown keys make the policy invalid, and without a valid policy
-  nothing resolves.
+  no trusted event resolves. An untrusted event needs no policy at all (below).
 - **Generic provider:** `dev-platform infra resolve --root DIR` answers the resolver protocol from such a root; an
   operator names it as `--infra-resolver "dev-platform infra resolve --root DIR"` in a trusted job. Denial codes:
   `request-invalid`, `policy-invalid`, `unsupported-contract`, `selection-missing`, `version-unknown`,
@@ -137,6 +137,17 @@ authorization/current.v1.json   the current authorization policy: narrows or rev
   <the protected branch's index>`: every release matches its digest, nothing is unindexed, entries are only added.
 - **Engine:** a `resolved` result must carry the complete `authorization_policy {id, revision, digest}`; anything less
   is `unavailable` (incomplete authorization facts).
+- **Untrusted events (the public contract).** `public-default` for an untrusted event is independent of the policy: it is
+  returned whether the current authorization policy is absent, unreadable, invalid or valid, with `resolved: null`, no
+  profile and no private release read, because the policy only gates private releases. The request is still validated
+  strictly (a malformed request is `request-invalid`), and the engine never asks a provider about an untrusted event at all.
+  A provider that checks the policy first answers more strictly (`denied`, which the engine treats as unavailable) and is
+  harmless for the engine, but it is not what the contract asks of `dev-platform infra resolve`; the conformance kit has a
+  case for a `public-default` that carries no authorization facts. A trusted event without a valid policy resolves nothing.
+- **Resolved is not enforced.** `resolved` means the pin matched, the current policy admitted the release and the effective
+  profile validated. It does not show that GitHub runner groups, environment protections or fork-approval settings enforce
+  that profile on any runner: the platform informs and GitHub settings enforce (ADR 0005), and inspecting those settings is
+  not implemented (issue #141). No record, message or document may call a resolution "enforced".
 
 See [infrastructure](infrastructure.md) for the commands (init, validate, profile, release, store, doctor, discover, drift).
 

@@ -31,7 +31,7 @@ def tracked_files(root: Path) -> tuple[str, ...] | None:
     """Tracked plus untracked, not ignored, paths; None (unknown) without readable git state."""
     try:
         r = subprocess.run(
-            ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+            ["git", "--no-optional-locks", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
             cwd=root,
             capture_output=True,
         )
@@ -119,7 +119,7 @@ def compute(
         "execution": {k: execution.get(k) for k in ("environment", "variables")},
         "exec_env": sorted((exec_env or {}).items()),
         "runner": {k: runner.get(k) for k in ("id", "labels")} if runner else None,
-        "infra": asdict(cfg.infra) if cfg.infra else None,
+        "infra": {k: v for k, v in asdict(cfg.infra).items() if k != "source"} if cfg.infra else None,
     }
     components = {
         "definition": canonical_digest(definition),

@@ -35,7 +35,7 @@ import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
-from dev_platform import __version__, bootstrap, prepare
+from dev_platform import __version__, bootstrap, legacy, prepare
 from dev_platform.config import CONFIG_FILENAME, VERIFIER_PINS, load
 from dev_platform.digest import tree_digest
 from dev_platform.errors import (
@@ -366,9 +366,8 @@ def ensure_toolchain(
 
 
 def doctor(project: Path, dest: Path | None, cenv: dict, run: Run, python: str | None = None) -> dict:
-    infra = project / ".dev-platform" / "infra-profile.json"
-    extra = ["--infra-profile", str(infra)] if infra.is_file() else []
-    argv = child("doctor", "--project", str(project), "--json", *extra, python=python)
+    # A repository's `.dev-platform/infra-profile.json` is legacy (ADR 0027): never an implicit input.
+    argv = child("doctor", "--project", str(project), "--json", python=python)
     r = run(argv, env=with_path(cenv, dest) if dest else cenv, cwd=str(project))
     findings = first_json(r.stdout or "").get("findings") or []
     return {
@@ -436,6 +435,8 @@ def setup(
             "path": str(root),
             "files": [CONFIG_FILENAME, *([PINS_FILE] if cfg.platform.source_revision is None else [])],
         }
+        if legacy_files := legacy.integration_files(root):
+            rec["legacy_integration"] = legacy_files  # reported, never changed or deleted
         rec["pinned"] = {
             "version": pins["version"],
             "tree_digest": pins["tree_digest_pin"],
@@ -531,9 +532,15 @@ def render(rec: dict) -> str:
         p = rec["pinned"]
         out.append(f"project    {rec['project']['path']}")
         out.append(
+            f"executes   release {p['version']} (the pinned release runs; the CLI above only verifies "
+            "and launches it)"
+        )
+        out.append(
             f"pinned     {p['version']} tree {p['tree_digest']} archive {p['archive_sha256']} "
             f"revision {p['source_revision']} profile {p['profile']}"
         )
+    for f in rec.get("legacy_integration", []):
+        out.append(f"legacy     {f['path']}: {f['note']} (reported; not changed or deleted)")
     if "release" in rec:
         r = rec["release"]
         state = f"; state {r['state']}" if r.get("state") else ""

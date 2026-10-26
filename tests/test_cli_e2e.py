@@ -3,9 +3,12 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 
 from dev_platform import release
 from dev_platform.digest import tree_digest
@@ -92,7 +95,7 @@ class MilestoneTest(unittest.TestCase):
         r = run(self.proj, self.store, "explain", "--changed", "app.py")
         self.assertIn("app.py matches input **/*.py", r.stdout)
 
-        out = self.proj / "result.json"
+        out = self.proj.parent / "result.json"  # outside the project: ADR 0027
         r = run(self.proj, self.store, "check", "--changed", "app.py", "--result", str(out))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         doc = json.loads(out.read_text())
@@ -106,9 +109,43 @@ class MilestoneTest(unittest.TestCase):
         self.assertEqual(env["release"]["tree_digest"], tree_digest(self.vdir))
         self.assertEqual(len(env["identity_digest"]), 64)
 
+    def test_a_release_run_from_the_checkout_cannot_write_into_it(self):
+        """The qualification flow: cwd is the platform checkout (the launcher), the project is pinned to a built
+        release that runs as a re-executed child. That release is not the checkout's code, so the checkout is
+        as protected as any project; results go outside it. No environment variable changes that."""
+        run(self.proj, self.store, "init", "--platform-version", "0.1.0", "--profile", "py")
+        work = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, work, ignore_errors=True)
+        env = {k: v for k, v in os.environ.items() if k not in ("CI", "GITHUB_ACTIONS", "PYTHONPATH")}
+        env.update({"PYTHONPATH": str(ROOT / "src"), "DEV_PLATFORM_STORE": str(self.store)})
+        argv = [
+            sys.executable,
+            "-m",
+            "dev_platform",
+            "check",
+            "--project",
+            str(self.proj),
+            "--changed",
+            "app.py",
+        ]
+        out = work / "result.json"
+        r = subprocess.run([*argv, "--result", str(out)], cwd=ROOT, env=env, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(
+            json.loads(out.read_text())["platform"]["running_version"], "0.1.0+store"
+        )  # re-exec'd
+        for dest in (ROOT / ".devenv" / "refused.json", self.proj / "inside.json"):
+            for forged in (None, str(ROOT / "src" / "dev_platform")):
+                e = {**env, **({"DEV_PLATFORM_LAUNCHER_PACKAGE": forged} if forged else {})}
+                r = subprocess.run(
+                    [*argv, "--result", str(dest)], cwd=ROOT, env=e, capture_output=True, text=True
+                )
+                self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+                self.assertFalse(dest.exists())
+
     def test_previous_record_applies_only_while_its_identity_matches(self):
         run(self.proj, self.store, "init", "--platform-version", "0.1.0", "--profile", "py")
-        prev = self.proj / "prev.json"
+        prev = self.proj.parent / "prev.json"  # outside the project: ADR 0027
         r = run(self.proj, self.store, "check", "--changed", "app.py", "--result", str(prev))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 

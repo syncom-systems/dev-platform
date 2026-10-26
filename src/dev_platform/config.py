@@ -21,6 +21,7 @@ ADAPTERS = ("python", "bazel", "cargo", "exec")
 _VERSION_RE = re.compile(r"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _ID_RE = re.compile(r"^[a-z][a-z0-9_.-]*$")
+_SOURCE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
 _INFRA_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 DIGEST_KINDS = ("release-tree", "profile-file")
 _REV_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -48,6 +49,10 @@ class InfraPin:
     # What the digest identifies (ADR 0023): "release-tree" (a provider's configuration release, resolver
     # only) or "profile-file" (the exact bytes of one profile). None: either, as before 0.10.0.
     config_digest_kind: str | None = None
+    # Where the release can be obtained (`OWNER/NAME` of the configuration repository). A convenience for
+    # `install` and `update`, never an authority: authenticity is the pinned digest, and the source takes no
+    # part in the identity of a result.
+    source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -106,7 +111,7 @@ def parse_pin(table: dict, errs: list[str]) -> InfraPin | None:
     if not table:
         return None
     for k in table:
-        if k not in {"provider", "config_release", "config_digest", "config_digest_kind"}:
+        if k not in {"provider", "config_release", "config_digest", "config_digest_kind", "source"}:
             errs.append(f"infra.{k}: unknown key")
     provider, rel, dig = table.get("provider"), table.get("config_release"), table.get("config_digest")
     kind = table.get("config_digest_kind")
@@ -123,7 +128,11 @@ def parse_pin(table: dict, errs: list[str]) -> InfraPin | None:
     if not (isinstance(dig, str) and _INFRA_DIGEST_RE.match(dig)):
         errs.append("infra.config_digest: required 'sha256:' + 64 lowercase hex characters")
         ok = False
-    return InfraPin(str(provider), str(rel), str(dig), kind) if ok else None
+    source = table.get("source")
+    if source is not None and not (isinstance(source, str) and _SOURCE_RE.fullmatch(source)):
+        errs.append("infra.source: OWNER/NAME of the configuration repository")
+        ok = False
+    return InfraPin(str(provider), str(rel), str(dig), kind, source) if ok else None
 
 
 def _table(d: dict, key: str, allowed: set[str], where: str, errs: list[str]) -> dict:

@@ -34,6 +34,12 @@ type-checker configuration, and runs `dev-platform setup`.
 Supported hosts: macOS arm64 (`darwin-arm64`) and Linux x86-64 (`linux-x86_64`). A host without a pinned source is
 refused by `setup` with the hosts that are supported.
 
+> **Repository isolation (0.17.0, ADR 0027).** The materialization described in this section is not available in a project:
+> `setup` and `toolchain prepare` do not write the generated files, `toolchain materialize` refuses to write into a project
+> (only `--check` and `--dry-run` remain), and a Bazel profile is refused unless the project already holds
+> `dev-platform/generated.json`. Delivering the Bazel configuration from outside the repository is a later milestone; the
+> steps below describe the behavior of releases up to 0.14.x.
+
 ## Adopting a profile
 
 1. Pin the release and select the profile in `dev-platform.toml` (`[platform] profile = "rust-python-bazel-9.3"`).

@@ -400,14 +400,22 @@ def verify(store: Path) -> list[dict]:
     return out
 
 
-def location(env=os.environ, store: Path | None = None) -> tuple[Path, str]:
-    """(store, chosen by)."""
+def location(
+    env=os.environ, store: Path | None = None, project: Path | None = None, *, home: Path | None = None
+) -> tuple[Path, str]:
+    """(store, chosen by): `--store`, else <data root>/infra. The one calculation for `install` and every
+    `infra` command; the platform release store (`--store` of `setup`) is a different location and never
+    moves this one. A location inside the project or its Git metadata is refused (ADR 0027)."""
+    from dev_platform import pathguard
     from dev_platform.locations import data_root
 
     if store:
-        return Path(store).absolute(), "--store"
-    root, _scope, why = data_root(env)
-    return (root / "infra").absolute(), why
+        path, why = Path(store).absolute(), "--store"
+    else:
+        root, _scope, why = data_root(env, home)
+        path = (root / "infra").absolute()
+    pathguard.guard(path, f"infrastructure store (from {why})", project)
+    return path, why
 
 
 __all__ = [

@@ -8,8 +8,8 @@ DIR"`.
 
 Rules, all fail closed (a denial is a result, never an exception):
 - the selection is the consumer's exact version and release-tree digest; nothing defaults to "latest";
-- without a valid current authorization policy nothing resolves;
-- an untrusted event gets `public-default` and no release is read;
+- an untrusted event gets `public-default`: no policy is needed or read, and no release is read;
+- for a trusted event, without a valid current authorization policy nothing resolves;
 - the release is verified from the same bytes that are parsed, must be a supported format, must serve the
   requesting owner and repository, and must be admitted by the current policy (floor, revocation, enablement);
 - the effective profile is the release's profile narrowed by the policy, never widened.
@@ -120,7 +120,15 @@ def resolve(root: Path, request: object, policy_path: Path | None = None) -> dic
     ):
         return deny("request-invalid", "repo must be owner/name; event_trust trusted|untrusted")
     owner, name = request["repo"].split("/")
-    # 2. the current authorization policy is mandatory
+    # 2. untrusted events: public-default, with no policy and no release read (the engine never asks a
+    # provider for an untrusted event; this answers a direct caller the same way). The request is strict.
+    if request["event_trust"] == "untrusted":
+        ev["decision"] = "public-default"
+        ev["reasons"].append(
+            {"code": "untrusted-event", "detail": "hosted-only public default; no private release loaded"}
+        )
+        return _finish(ev)
+    # 3. a trusted event needs the current authorization policy: without a valid one nothing resolves
     try:
         pol = load_policy(policy_path or root / POLICY)
     except ReleaseError as e:
@@ -130,13 +138,6 @@ def resolve(root: Path, request: object, policy_path: Path | None = None) -> dic
         "revision": pol["revision"],
         "digest": infra_authz.policy_digest(pol),
     }
-    # 3. untrusted events: no release is read, ever
-    if request["event_trust"] == "untrusted":
-        ev["decision"] = "public-default"
-        ev["reasons"].append(
-            {"code": "untrusted-event", "detail": "hosted-only public default; no private release loaded"}
-        )
-        return _finish(ev)
     if request["contract"] != INFRA_SCHEMA:
         return deny("unsupported-contract", f"supported: {INFRA_SCHEMA}")
     req = request["requested"]

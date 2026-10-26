@@ -68,6 +68,7 @@ def locate(
     store: Path | None = None,
     toolchains: Path | None = None,
     cache: Path | None = None,
+    project: Path | None = None,
 ) -> Locations:
     chosen: dict[str, str] = {}
 
@@ -105,4 +106,15 @@ def locate(
     t = pick("toolchains", toolchains, TOOLCHAINS_ENV, under("toolchains"))
     c = pick("cache", cache, CACHE_ENV, cache_default)
     scope = root[1] if root else "explicit"  # the data root is consulted only when a location defaults to it
-    return Locations(s.absolute(), t.absolute(), c.absolute(), scope, chosen)
+    loc = Locations(s.absolute(), t.absolute(), c.absolute(), scope, chosen)
+    refuse_in_project(loc, project)
+    return loc
+
+
+def refuse_in_project(loc: Locations, project: Path | None = None) -> None:
+    """Releases, toolchains and caches are never kept in a consuming project (ADR 0027): a location that
+    resolves into its tree or Git metadata, by flag, variable or relative default, is refused."""
+    from dev_platform import pathguard
+
+    for name in ("store", "toolchains", "cache"):
+        pathguard.guard(getattr(loc, name), f"{name} location (from {loc.chosen_by[name]})", project)
