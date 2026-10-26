@@ -147,6 +147,36 @@ class Guard(unittest.TestCase):
             self.assertTrue(pathguard.is_platform_repository(own))
             self.assertIsNone(pathguard.refusal(own / "dist" / "x", "x", own, cwd=own))
 
+    def test_a_launcher_inside_the_checkout_keeps_the_maintainer_exemption_for_the_release_it_runs(self):
+        """Qualification runs the checkout as the launcher and a built release as the running code."""
+        self.assertIsNone(pathguard.refusal(ROOT / ".devenv" / "q" / "x", "x", None, cwd=ROOT))
+        with mock.patch.object(pathguard, "PACKAGE_DIR", Path("/somewhere/else/dev_platform")):
+            self.assertIsNotNone(pathguard.refusal(ROOT / ".devenv" / "q" / "x", "x", None, cwd=ROOT))
+            env = {pathguard.LAUNCHER_ENV: str(ROOT / "src" / "dev_platform")}
+            with mock.patch.dict(os.environ, env):
+                self.assertIsNone(pathguard.refusal(ROOT / ".devenv" / "q" / "x", "x", None, cwd=ROOT))
+            # a launcher elsewhere (an installed CLI) exempts no repository
+            _base, own = make_project(
+                self,
+                TOML.replace(
+                    TOML[TOML.index("[platform]") : TOML.index("[project]")],
+                    '[platform]\nself_hosted = true\nprofile = "dev-platform"\n',
+                ),
+            )
+            with mock.patch.dict(
+                os.environ, {pathguard.LAUNCHER_ENV: "/opt/homebrew/opt/dev-platform/libexec"}
+            ):
+                self.assertIsNotNone(pathguard.refusal(own / "x", "x", own, cwd=own))
+
+    def test_a_reexec_hands_the_launcher_package_down_once(self):
+        from dev_platform import resolve
+
+        res = resolve.Resolution("pinned", "0.1.0", Path("/store/0.1.0/src"), "d")
+        e = resolve.reexec_env(res, {})
+        self.assertEqual(Path(e[pathguard.LAUNCHER_ENV]), ROOT / "src" / "dev_platform")
+        again = resolve.reexec_env(res, {pathguard.LAUNCHER_ENV: "/first/launcher"})
+        self.assertEqual(again[pathguard.LAUNCHER_ENV], "/first/launcher")  # the outermost launcher stays
+
     def test_the_destination_alone_identifies_a_project_from_elsewhere(self):
         elsewhere = self.base / "elsewhere"
         elsewhere.mkdir()

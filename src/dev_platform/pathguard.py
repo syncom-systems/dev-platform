@@ -37,6 +37,7 @@ from dev_platform.config import CONFIG_FILENAME
 from dev_platform.errors import ConfigError
 
 PACKAGE_DIR = Path(os.path.realpath(Path(__file__).resolve().parent))
+LAUNCHER_ENV = "DEV_PLATFORM_LAUNCHER_PACKAGE"  # set by a launcher for the pinned release it re-executes into
 
 
 def _real(p: Path | str) -> Path:
@@ -63,8 +64,19 @@ def _claims_self_hosted(toml: Path) -> bool:
     return isinstance(platform, dict) and platform.get("self_hosted") is True
 
 
+def running_packages(env=os.environ) -> set[Path]:
+    """The platform code this process runs, and the code of the launcher that re-executed it into a pinned
+    release (a maintainer qualifying a built release runs the checkout as the launcher). The environment is
+    the caller's, never the repository's: a project cannot supply either."""
+    out = {PACKAGE_DIR}
+    if env.get(LAUNCHER_ENV):
+        out.add(_real(env[LAUNCHER_ENV]))
+    return out
+
+
 def is_platform_repository(root: Path) -> bool:
-    """The platform's own checkout: it claims `self_hosted` and the running code is its `src/dev_platform`."""
+    """The platform's own checkout: it claims `self_hosted` and the running code (or its launcher) is its
+    `src/dev_platform`."""
     toml = root / CONFIG_FILENAME
     here = root / "src" / "dev_platform"
     return (
@@ -72,7 +84,7 @@ def is_platform_repository(root: Path) -> bool:
         and _claims_self_hosted(toml)
         and not (root / "src").is_symlink()
         and not here.is_symlink()
-        and _real(here) == PACKAGE_DIR
+        and _real(here) in running_packages()
     )
 
 
