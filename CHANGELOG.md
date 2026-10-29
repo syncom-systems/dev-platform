@@ -1,6 +1,12 @@
 # Changelog
 
 ## Unreleased
+Added (infrastructure workflow analysis):
+- `pr-check`, `infra check` and `infra validate --workflows` read one guarded `runs-on` shape (same-repository guard,
+  fallback or unreachable sentinel) by proving which events reach each branch; they do not evaluate expressions. The
+  new `--same-repo-pr-opt-in` is the operator's statement that same-repository pull requests are trusted, as for
+  `infra event-trust`; without it, and for `pull_request_target` always, a privileged label set is a violation. Any
+  other expression stays `unavailable`. Facts carry a `guard` object. See docs/infra-integration.md.
 
 ## 0.17.0
 Changed (repository isolation; [ADR 0027](docs/adr/0027-repository-isolation.md)):

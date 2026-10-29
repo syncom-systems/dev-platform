@@ -37,6 +37,12 @@ def add_parsers(isub) -> None:
     )
     iv.add_argument("--workflows", type=Path, help="also check these workflows (with --repo)")
     iv.add_argument("--repo", help="repository whose projected profile the workflows are checked against")
+    iv.add_argument(
+        "--same-repo-pr-opt-in",
+        action="store_true",
+        help="pull requests from the same repository are trusted (the operator's statement, as for `infra "
+        "event-trust`): lets a guarded runs-on select a trusted runner for them",
+    )
     ip = isub.add_parser(
         "profile", help="preview the dev-platform.infra/v1 profile projected for a repository"
     )
@@ -227,7 +233,12 @@ def cmd_validate(args) -> int:
         if args.repo not in {r["name"] for r in cfg["repositories"]}:
             raise ConfigError([f"{cfg_path}: no repository {args.repo!r}"])
         files = {str(p): p.read_text() for p in sorted(args.workflows.glob("*.y*ml"))}
-        verdict = prcheck.check(files, infra_config.profile_for(cfg, args.repo), facts=True)
+        verdict = prcheck.check(
+            files,
+            infra_config.profile_for(cfg, args.repo),
+            facts=True,
+            same_repo_pr_opt_in=args.same_repo_pr_opt_in,
+        )
         groups = _runner_groups(verdict.get("facts", []), cfg)
         out["workflows"] = {
             "admission": verdict["admission"],

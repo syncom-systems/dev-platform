@@ -330,6 +330,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also print the parsed per-file triggers and per-job runner facts",
     )
+    pc.add_argument(
+        "--same-repo-pr-opt-in",
+        action="store_true",
+        help="pull requests from the same repository are trusted (the operator's statement, as for `infra "
+        "event-trust`): lets a guarded runs-on select a trusted runner for them",
+    )
     ic = sub.add_parser(
         "infra",
         help="optional infrastructure configuration: profiles, releases, resolution, authorization "
@@ -341,6 +347,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     icc.add_argument("profile", type=Path)
     icc.add_argument("--workflows", type=Path, help="directory of workflow files to run pr-check on")
+    icc.add_argument(
+        "--same-repo-pr-opt-in",
+        action="store_true",
+        help="pull requests from the same repository are trusted (the operator's statement, as for `infra "
+        "event-trust`): lets a guarded runs-on select a trusted runner for them",
+    )
     icc.add_argument(
         "--repo-visibility", choices=["public", "private"], help="warn on persistent runners if public"
     )
@@ -1526,7 +1538,7 @@ def cmd_infra(args) -> int:
             )
         if args.workflows:
             files = {str(p): p.read_text() for p in sorted(args.workflows.glob("*.y*ml"))}
-            out["pr_check"] = prcheck.check(files, doc)
+            out["pr_check"] = prcheck.check(files, doc, same_repo_pr_opt_in=args.same_repo_pr_opt_in)
     print(json.dumps(out, indent=2, sort_keys=True))
     bad = problems or (out.get("pr_check") or {}).get("admission") not in (None, "ok")
     return EXIT_UNSATISFIED if bad else EXIT_OK
@@ -1538,7 +1550,7 @@ def cmd_pr_check(args) -> int:
     files = {str(p): p.read_text() for p in sorted(args.workflows.glob("*.y*ml"))}
     profile = _j(args.infra_profile) if args.infra_profile else None
     try:
-        out = prcheck.check(files, profile, facts=args.facts)
+        out = prcheck.check(files, profile, facts=args.facts, same_repo_pr_opt_in=args.same_repo_pr_opt_in)
     except ValueError as e:
         raise ConfigError([str(e)]) from None
     print(json.dumps(out, indent=2, sort_keys=True))
