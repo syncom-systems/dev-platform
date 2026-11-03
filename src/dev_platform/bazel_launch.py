@@ -478,8 +478,8 @@ def bazel_env(manifest: dict, profile: str, base: dict | None = None) -> dict[st
 
 def lint_outcome(bep_lines: Iterable[str]) -> dict:
     """Per applicable Rust target and lint group: `checked` (a result file), `skipped` (not built in this
-    configuration), `opted-out` (a rules_rust skip tag), `failed`, or `empty` (completed with no result:
-    allowed for rustfmt only when the target has no hand-written source, which the caller establishes)."""
+    configuration), `opted-out` (a rules_rust skip tag), `failed`, `not-run`, or `empty` (completed with no
+    result: allowed for rustfmt only for a target without a hand-written source, which the caller checks)."""
     sets: dict[str, dict] = {}
     kinds: dict[str, str] = {}
     tags: dict[str, set[str]] = defaultdict(set)
@@ -539,7 +539,9 @@ def lint_outcome(bep_lines: Iterable[str]) -> dict:
                 row[group] = "opted-out"
             elif count(groups.get((label, group), []), set()):
                 row[group] = "checked"
-            elif done.get((label, group)) is False or (label, group) not in done:
+            elif (label, group) not in done:
+                row[group] = "not-run"  # the build stopped before this check (without --keep_going)
+            elif done[(label, group)] is False:
                 row[group] = "failed"
             else:
                 row[group] = "empty"
@@ -595,9 +597,12 @@ def audit_rustc(
     name: a replaced repository keeps its name (#190, the repository-override finding)."""
     from dev_platform import bazel_rust
 
-    run_rustc = run_rustc or (
-        lambda p: subprocess.run([str(p), "--version"], capture_output=True, text=True, check=False).stdout
-    )
+    def default_rustc(p: Path) -> str:
+        if not p.is_file():
+            return ""
+        return subprocess.run([str(p), "--version"], capture_output=True, text=True, check=False).stdout
+
+    run_rustc = run_rustc or default_rustc
     rec: dict = {"want": want, "rustc": [], "problems": []}
     expr = f'mnemonic("Rustc", deps(set({" ".join(targets)})))'
     aq = query(["aquery", expr, *option_args, "--output=jsonproto"])
@@ -614,7 +619,7 @@ def audit_rustc(
         m = re.search(r"(?:^|/)external/([^/]+)/", rel)
         repo = m.group(1) if m else None
         real = Path(os.path.realpath(root / rel))
-        out = run_rustc(real) if real.is_file() else ""
+        out = run_rustc(real)
         vm = re.match(r"rustc (\S+)", out.strip())
         row = {"path": rel, "repository": repo, "version": vm.group(1) if vm else None}
         rec["rustc"].append(row)

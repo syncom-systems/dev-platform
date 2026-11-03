@@ -1,6 +1,17 @@
 # Changelog
 
 ## Unreleased
+Added (experimental; [ADR 0028](docs/adr/0028-external-bazel-toolchain-delivery.md), not yet used by `check` or workflows):
+- `dev-platform bazel <command>` runs Bazel in a project that stays its own root module with the release's verified
+  rules_rust supplied from outside the repository (`--override_module`, re-derived from the pinned BCR source on every run,
+  declaring the release's Rust toolchain and failing closed on a conflicting root `rust.toolchain`), the platform's
+  toolchains first (`--extra_toolchains`), the committed `MODULE.bazel.lock` verified read-only (`--lockfile_mode=error`), and
+  options that could replace platform-owned modules, repositories or toolchains (`--override_repository`, `--override_module`,
+  `--extra_toolchains`, `--registry`, ...) refused in the project's `.bazelrc` chain and on the command line. `lint` proves from
+  the Build Event Protocol that clippy and rustfmt checked every applicable Rust target (or records why not); `--audit` reads
+  the version of every rustc the actions name; `--record` writes a `dev-platform.bazel-run/v1` record, and only a record with
+  `verified: true` is verified Dev Platform execution.
+
 Added (infrastructure workflow analysis):
 - `pr-check`, `infra check` and `infra validate --workflows` read one guarded `runs-on` shape (same-repository guard,
   fallback or unreachable sentinel) by proving which events reach each branch; they do not evaluate expressions. The
