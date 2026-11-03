@@ -582,6 +582,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="the pinned release is a pre-0.12.0 verified-unaccepted one",
     )
     wf.add_argument("--output", type=Path, help="write a new file instead of stdout (never replaces one)")
+    bz = sub.add_parser(
+        "bazel",
+        help="run Bazel in the project with the platform's verified rules_rust and toolchains (ADR 0028, "
+        "experimental); options go before the Bazel command",
+    )
+    bz.add_argument("--project", type=Path, default=Path("."), help="the project (its own Bazel root module)")
+    bz.add_argument(
+        "--manifest",
+        type=Path,
+        help="toolchain manifest (default: the manifest of the running release)",
+    )
+    bz.add_argument("--profile", help="default: [platform].profile of the project's dev-platform.toml")
+    bz.add_argument("--bazel", default="bazel", help="the Bazelisk launcher to run (default: bazel on PATH)")
+    bz.add_argument(
+        "--cache", type=Path, help="platform cache directory (default: the user's or job's cache)"
+    )
+    bz.add_argument(
+        "--audit",
+        action="store_true",
+        help="also check the version of every rustc the actions name (build, test, coverage, run, lint)",
+    )
+    bz.add_argument("--record", type=Path, help="write the run record (refused inside the project)")
+    bz.add_argument("--output-user-root", type=Path, help="Bazel's output user root (default: Bazel's)")
+    bz.add_argument("--repository-cache", type=Path, help="Bazel's repository cache (default: Bazel's)")
+    bz.add_argument(
+        "command", choices=["build", "test", "coverage", "run", "cquery", "aquery", "info", "query", "lint"]
+    )
+    bz.add_argument("args", nargs=argparse.REMAINDER, help="Bazel arguments and target patterns")
     return ap
 
 
@@ -1690,6 +1718,45 @@ def cmd_digest(args) -> int:
     return EXIT_OK
 
 
+def cmd_bazel(args) -> int:
+    """Verified Bazel execution (ADR 0028). Only a run whose record says `verified: true` is one."""
+    from dev_platform import bazel_launch, locations
+
+    project = args.project.resolve()
+    manifest_path = args.manifest or Path(__file__).resolve().parents[2] / "toolchains" / "manifest.json"
+    if not manifest_path.is_file():
+        raise ConfigError([f"no toolchain manifest at {manifest_path}: pass --manifest"])
+    manifest = toolchain.validate(json.loads(manifest_path.read_text()))
+    profile = args.profile or bazel_launch.project_profile(project)
+    if not profile:
+        raise ConfigError(["no profile: pass --profile or set [platform].profile in dev-platform.toml"])
+    cache = pathguard.guard(args.cache, "--cache", project) or locations.locate(project=project).cache
+    code, rec = bazel_launch.execute(
+        project=project,
+        command=args.command,
+        args=list(args.args),
+        manifest=manifest,
+        profile=profile,
+        release=__version__,
+        cache=cache,
+        bazel=args.bazel,
+        audit=args.audit,
+        places=bazel_launch.Places(args.output_user_root, args.repository_cache),
+    )
+    if args.record:
+        args.record.write_text(json.dumps(rec, indent=2, sort_keys=True) + "\n")
+    verdict = "verified" if rec["verified"] else "NOT verified"
+    print(f"dev-platform bazel {args.command}: {verdict} (exit {code})", file=sys.stderr)
+    if "lint" in rec:
+        print(f"  lint: {json.dumps(rec['lint']['summary'], sort_keys=True)}", file=sys.stderr)
+    if "audit" in rec:
+        seen = sorted({(r["repository"], r["version"]) for r in rec["audit"]["rustc"]}, key=str)
+        print(f"  rustc: {seen}", file=sys.stderr)
+    for p in rec["problems"]:
+        print(f"  problem: {p}", file=sys.stderr)
+    return code
+
+
 _COMMANDS = {
     "init": cmd_init,
     "detect": cmd_detect,
@@ -1713,6 +1780,7 @@ _COMMANDS = {
     "validate": cmd_validate,
     "affected": cmd_affected,
     "assurance": cmd_assurance,
+    "bazel": cmd_bazel,
 }
 
 
@@ -1740,6 +1808,13 @@ def _write_sinks(args) -> list[tuple[Path | None, str]]:
         return [(g("out"), "--out")] if args.ecmd == "bundle" else [(g("store"), "--store")]
     if cmd == "workflow":
         return [(g("output"), "--output")]
+    if cmd == "bazel":
+        return [
+            (g("record"), "--record"),
+            (g("cache"), "--cache"),
+            (g("output_user_root"), "--output-user-root"),
+            (g("repository_cache"), "--repository-cache"),
+        ]
     if cmd == "infra":
         if args.icmd == "init" or (args.icmd == "release" and args.ircmd == "build"):
             return [(g("root"), "--root")]
